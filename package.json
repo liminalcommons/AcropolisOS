@@ -13,6 +13,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.78",
+    "@ai-sdk/groq": "^3.0.39",
+    "@ai-sdk/openai": "^3.0.64",
+    "@mastra/core": "^1.35.0",
+    "ai": "^6.0.184",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -20,6 +25,7 @@
     "lucide-react": "^1.16.0",
     "next": "^16.0.0",
     "next-auth": "^5.0.0-beta.31",
+    "ollama-ai-provider-v2": "^3.5.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.6.0",
