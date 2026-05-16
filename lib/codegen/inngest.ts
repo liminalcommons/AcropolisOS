@@ -57,9 +57,20 @@ const IMPORTS =
   '  auditPreInvocation,\n' +
   '  auditPostInvocation,\n' +
   '} from "../actions/audit-middleware";\n' +
+  'import {\n' +
+  '  dispatchSideEffects,\n' +
+  '  loadSideEffectConfigFromEnv,\n' +
+  '  type SideEffectAdapters,\n' +
+  '} from "../actions/side-effects";\n' +
+  'import { resolveSideEffectAdapters } from "../actions/side-effects-runtime";\n' +
   'import type { Ontology } from "../ontology/schema";\n' +
   'import type { OntologyCtx } from "../ontology/ctx";\n' +
-  "\n";
+  "\n" +
+  '// US-028: side-effect adapters are resolved once per module — production\n' +
+  '// wires SMTP/Resend + fetch; tests can override via payload.sideEffectAdapters.\n' +
+  'const defaultAdapters: SideEffectAdapters = resolveSideEffectAdapters(\n' +
+  '  loadSideEffectConfigFromEnv(process.env),\n' +
+  ');\n\n';
 
 // Stringify the ontology so the generated module carries the same source of
 // truth the runner needs at execution time. JSON.parse keeps the generated
@@ -83,6 +94,7 @@ function emitFunction(actionName: string): string {
   const permStep = JSON.stringify(`permission-check.${actionName}`);
   const runStep = JSON.stringify(`declarative.${actionName}`);
   const postStep = JSON.stringify(`audit-post.${actionName}`);
+  const sideStep = JSON.stringify(`side-effects.${actionName}`);
   const nameLit = JSON.stringify(actionName);
   return (
     `export const ${constName} = inngest.createFunction(\n` +
@@ -105,6 +117,8 @@ function emitFunction(actionName: string): string {
     `    }\n` +
     `    const params = payload.params;\n` +
     `    const parentAuditId = payload.parentAuditId;\n` +
+    `    const sideEffectAdapters: SideEffectAdapters =\n` +
+    `      (payload as { sideEffectAdapters?: SideEffectAdapters }).sideEffectAdapters ?? defaultAdapters;\n` +
     `    const pre = await step.run(${preStep}, () =>\n` +
     `      auditPreInvocation({\n` +
     `        ctx,\n` +
@@ -144,6 +158,17 @@ function emitFunction(actionName: string): string {
     `          status: "ok",\n` +
     `          durationMs: Date.now() - startedAt,\n` +
     `          result,\n` +
+    `        }),\n` +
+    `      );\n` +
+    `      await step.run(${sideStep}, () =>\n` +
+    `        dispatchSideEffects({\n` +
+    `          ctx,\n` +
+    `          ontology,\n` +
+    `          actionName: ${nameLit},\n` +
+    `          params,\n` +
+    `          result,\n` +
+    `          auditId: pre.pendingAuditId ?? undefined,\n` +
+    `          adapters: sideEffectAdapters,\n` +
     `        }),\n` +
     `      );\n` +
     `      return result;\n` +

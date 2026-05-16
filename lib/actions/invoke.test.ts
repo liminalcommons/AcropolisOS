@@ -7,7 +7,7 @@
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InMemoryAuditStore } from "../audit/writer";
 import type { Actor } from "../ctx";
 import {
@@ -19,6 +19,7 @@ import {
 import type { Member } from "../ontology/types.generated";
 import type { Ontology } from "../ontology/schema";
 import { createActionsDispatcher, invokeAction } from "./invoke";
+import type { SideEffectAdapters } from "./side-effects";
 
 const steward: Actor = {
   userId: "u-steward",
@@ -423,5 +424,117 @@ describe("createActionsDispatcher — bare dispatcher (without parent invokeActi
 
     const rows = await audit.listActionAudit();
     expect(rows.every((r) => r.metadata.parent_action_audit_id === "synthetic-parent-id")).toBe(true);
+  });
+});
+
+describe("invokeAction — side-effects dispatch (US-028)", () => {
+  it("fires declared side effects after audit_post(ok)", async () => {
+    writeChangeTier();
+    await db.objects.Member.create(memberRow("m-1", { tier: "basic" }));
+
+    // change_tier declares [audit, notify_member] in our test ontology
+    // below — extend it now and re-validate by using the existing ontology
+    // var.
+    ontology.action_types.change_tier.side_effects = [
+      "audit",
+      "notify_member",
+      "webhook",
+    ];
+
+    const sendMail = vi.fn(async () => undefined);
+    const postWebhook = vi.fn(async () => ({ status: 200 }));
+    const adapters: SideEffectAdapters = {
+      sendMail,
+      postWebhook,
+      config: { webhook_url: "https://hooks.example.com/x" },
+    };
+
+    await invokeAction({
+      actionName: "change_tier",
+      params: { member: "m-1", new_tier: "sustaining" },
+      ctx,
+      ontology,
+      functionsDir,
+      sideEffectAdapters: adapters,
+    });
+
+    expect(sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "s@example.com" }),
+    );
+    expect(postWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "https://hooks.example.com/x",
+        body: expect.objectContaining({ action: "change_tier" }),
+      }),
+    );
+  });
+
+  it("does NOT fire side effects when the action errors", async () => {
+    writeFunction(
+      "change-tier",
+      `
+import { z } from "zod";
+import { defineAction } from "@acropolisos/sdk";
+export default defineAction({
+  schema: z.object({ member: z.string(), new_tier: z.enum(["basic","sustaining","lifetime"]) }),
+  handler: async () => { throw new Error("boom"); },
+});
+      `.trim(),
+    );
+    await db.objects.Member.create(memberRow("m-1"));
+    ontology.action_types.change_tier.side_effects = ["notify_member"];
+
+    const sendMail = vi.fn(async () => undefined);
+    const postWebhook = vi.fn(async () => ({ status: 200 }));
+    const adapters: SideEffectAdapters = {
+      sendMail,
+      postWebhook,
+      config: {},
+    };
+
+    await expect(
+      invokeAction({
+        actionName: "change_tier",
+        params: { member: "m-1", new_tier: "sustaining" },
+        ctx,
+        ontology,
+        functionsDir,
+        sideEffectAdapters: adapters,
+      }),
+    ).rejects.toThrow(/boom/);
+
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it("side-effect failures do not roll back the action (still returns result)", async () => {
+    writeChangeTier();
+    await db.objects.Member.create(memberRow("m-1", { tier: "basic" }));
+    ontology.action_types.change_tier.side_effects = ["notify_member"];
+
+    const sendMail = vi.fn(async () => {
+      throw new Error("SMTP unreachable");
+    });
+    const adapters: SideEffectAdapters = {
+      sendMail,
+      postWebhook: vi.fn(async () => ({ status: 200 })),
+      config: {},
+    };
+
+    const result = await invokeAction({
+      actionName: "change_tier",
+      params: { member: "m-1", new_tier: "sustaining" },
+      ctx,
+      ontology,
+      functionsDir,
+      sideEffectAdapters: adapters,
+    });
+
+    // Action result unaffected.
+    expect(result).toMatchObject({ ok: true, new_tier: "sustaining" });
+
+    // Audit envelope stays "ok" — side effects don't roll it back.
+    const rows = await audit.listActionAudit();
+    const post = rows.find((r) => r.metadata.result === "ok");
+    expect(post).toBeDefined();
   });
 });

@@ -12,4 +12,4 @@ change_tier:
       required: true
   permissions: [steward]
   agent_policy: always_confirm
-  side_effects: [audit, in_app_notification]
+  side_effects: [audit, notify_member]

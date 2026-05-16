@@ -159,4 +159,23 @@ describe("generateInngestActionsModule — runtime semantics", () => {
     expect(out).toMatch(/kind\s*===\s*"replay"/);
     expect(out).toContain("priorResult");
   });
+
+  it("emits a side-effects step after audit_post on the success path (US-028)", async () => {
+    const ontology = await loadOntology(SEED_DIR);
+    const out = generateInngestActionsModule(ontology);
+
+    expect(out).toContain("dispatchSideEffects");
+    expect(out).toMatch(/from\s+"\.\.\/actions\/side-effects"/);
+
+    for (const action of [
+      "add_member",
+      "add_meeting_minute",
+      "record_attendance",
+    ]) {
+      expect(out).toContain(`"side-effects.${action}"`);
+      const postIdx = out.indexOf(`"audit-post.${action}"`);
+      const sideIdx = out.indexOf(`"side-effects.${action}"`);
+      expect(sideIdx).toBeGreaterThan(postIdx);
+    }
+  });
 });

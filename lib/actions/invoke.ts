@@ -22,6 +22,10 @@ import {
 import { runDeclarativeAction } from "./declarative";
 import { runFunctionBackedAction } from "./function-backed";
 import { enforceActionPermission } from "./permission-check";
+import {
+  dispatchSideEffects,
+  type SideEffectAdapters,
+} from "./side-effects";
 
 export interface InvokeActionInput {
   actionName: string;
@@ -30,6 +34,9 @@ export interface InvokeActionInput {
   ontology: Ontology;
   functionsDir: string;
   parentAuditId?: string;
+  // US-028: optional side-effect adapters. When omitted, side-effect
+  // dispatch is skipped — keeps tests + bare invocations unchanged.
+  sideEffectAdapters?: SideEffectAdapters;
 }
 
 function isFunctionBacked(def: ActionType): def is ActionType & { function: string } {
@@ -44,6 +51,7 @@ export async function invokeAction(input: InvokeActionInput): Promise<unknown> {
     ontology,
     functionsDir,
     parentAuditId,
+    sideEffectAdapters,
   } = input;
 
   const def = ontology.action_types[actionName];
@@ -77,6 +85,7 @@ export async function invokeAction(input: InvokeActionInput): Promise<unknown> {
       ontology,
       functionsDir,
       parentAuditId: childParentId,
+      sideEffectAdapters,
     }) as unknown as OntologyCtx["actions"],
   };
 
@@ -107,6 +116,20 @@ export async function invokeAction(input: InvokeActionInput): Promise<unknown> {
       durationMs: Date.now() - startedAt,
       result,
     });
+    if (sideEffectAdapters) {
+      // Failures are captured per-channel inside the dispatcher; the
+      // returned summary intentionally is not surfaced from invokeAction
+      // so the action's contract stays tied to its handler's return value.
+      await dispatchSideEffects({
+        ctx,
+        ontology,
+        actionName,
+        params,
+        result,
+        auditId: pre.pendingAuditId ?? undefined,
+        adapters: sideEffectAdapters,
+      });
+    }
     return result;
   } catch (err) {
     await auditPostInvocation({
@@ -129,6 +152,7 @@ export interface CreateActionsDispatcherInput {
   ontology: Ontology;
   functionsDir: string;
   parentAuditId?: string;
+  sideEffectAdapters?: SideEffectAdapters;
 }
 
 export type ActionsDispatcher = Record<
@@ -142,7 +166,8 @@ export type ActionsDispatcher = Record<
 export function createActionsDispatcher(
   input: CreateActionsDispatcherInput,
 ): ActionsDispatcher {
-  const { ctx, ontology, functionsDir, parentAuditId } = input;
+  const { ctx, ontology, functionsDir, parentAuditId, sideEffectAdapters } =
+    input;
   const dispatcher: ActionsDispatcher = {};
   for (const actionName of Object.keys(ontology.action_types)) {
     dispatcher[actionName] = (params: unknown) =>
@@ -153,6 +178,7 @@ export function createActionsDispatcher(
         ontology,
         functionsDir,
         parentAuditId,
+        sideEffectAdapters,
       });
   }
   return dispatcher;

@@ -120,11 +120,22 @@ export type AgentPolicy = z.infer<typeof AgentPolicy>;
 
 export const SideEffectChannel = z.enum([
   "audit",
-  "email",
-  "in_app_notification",
+  "notify_member",
+  "notify_steward",
   "webhook",
 ]);
 export type SideEffectChannel = z.infer<typeof SideEffectChannel>;
+
+// Per-action override for side-effect channel config. Defaults come from
+// the environment (US-028); the YAML override is for action-specific
+// destinations (e.g. one webhook URL for add_member, another for change_tier).
+export const SideEffectsConfig = z
+  .object({
+    webhook_url: z.string().optional(),
+    steward_emails: z.array(z.string()).optional(),
+  })
+  .strict();
+export type SideEffectsConfig = z.infer<typeof SideEffectsConfig>;
 
 export const ActionType = z
   .object({
@@ -138,6 +149,7 @@ export const ActionType = z
     permissions: z.array(z.string()).optional(),
     agent_policy: AgentPolicy.default("always_confirm"),
     side_effects: z.array(SideEffectChannel).optional(),
+    side_effects_config: SideEffectsConfig.optional(),
   })
   .strict();
 export type ActionType = z.infer<typeof ActionType>;
