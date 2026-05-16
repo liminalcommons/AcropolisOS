@@ -131,6 +131,8 @@ export const ActionType = z
     description: z.string().optional(),
     creates_link: z.string().optional(),
     creates_object: z.string().optional(),
+    updates: z.string().optional(),
+    deletes: z.string().optional(),
     function: z.string().optional(),
     parameters: z.record(z.string(), PropertyDefinition).optional(),
     permissions: z.array(z.string()).optional(),
