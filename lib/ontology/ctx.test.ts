@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { createCtx, createInMemoryStore } from "./ctx";
+import {
+  buildObjectPermissionsMap,
+  createCtx,
+  createInMemoryStore,
+  PermissionError,
+  type ObjectPermissionsMap,
+} from "./ctx";
 import type { Actor } from "../ctx";
-import type { Member } from "./types.generated";
+import type { Ontology } from "./schema";
+import type { MeetingMinute, Member } from "./types.generated";
 
 function memberRow(id: string, overrides: Partial<Member> = {}): Member {
   return {
@@ -191,15 +198,285 @@ describe("ontology createCtx — actions are stubs (real impl in US-027)", () =>
   });
 });
 
-describe("ontology createCtx — permission filtering is a no-op in M0", () => {
-  it("exposes actor on the ctx so M3 can plug in without API churn", () => {
+describe("ontology createCtx — permissions are pass-through when map is omitted", () => {
+  it("exposes actor on the ctx", () => {
     const ctx = createCtx({ db: createInMemoryStore(), actor: steward });
     expect(ctx.actor).toBe(steward);
   });
 
-  it("null actor still has access in M0 — US-031 will tighten this", async () => {
+  it("null actor still has access when no permissions map is supplied", async () => {
     const ctx = createCtx({ db: createInMemoryStore(), actor: null });
     await ctx.objects.Member.create(memberRow("m-1"));
     expect(await ctx.objects.Member.findById("m-1")).not.toBeNull();
+  });
+});
+
+// US-031: permission enforcement
+const memberA: Actor = {
+  userId: "user-a",
+  email: "a@example.com",
+  role: "member",
+  customRoles: [],
+};
+const memberB: Actor = {
+  userId: "user-b",
+  email: "b@example.com",
+  role: "member",
+  customRoles: [],
+};
+
+const smallCommunityPermissions: ObjectPermissionsMap = {
+  Member: {
+    read: ["*"],
+    write: ["steward", "member_self"],
+    properties: {
+      notes: { read: ["steward"], write: ["steward"] },
+    },
+  },
+  Event: {
+    read: ["*"],
+    write: ["steward"],
+  },
+  MeetingMinute: {
+    read: ["*"],
+    write: ["steward"],
+  },
+};
+
+describe("ontology createCtx — US-031 object-level read filtering", () => {
+  it("returns rows readable by '*' to anyone, including null actor", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Member.create(memberRow("m-1"));
+    const ctx = createCtx({
+      db,
+      actor: null,
+      permissions: smallCommunityPermissions,
+    });
+    expect(await ctx.objects.Member.findById("m-1")).not.toBeNull();
+    expect((await ctx.objects.Member.findMany()).map((m) => m.id)).toEqual(["m-1"]);
+  });
+
+  it("hides rows when actor role is absent from read tokens", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Event.create({
+      id: "e-1",
+      title: "Town hall",
+      starts_at: "2026-05-01T12:00:00+00:00",
+      location: "Square",
+      description: "",
+      created_at: "2026-04-01T00:00:00+00:00",
+    });
+    const restrictive: ObjectPermissionsMap = {
+      Event: { read: ["steward"], write: ["steward"] },
+    };
+    const stewardCtx = createCtx({ db, actor: steward, permissions: restrictive });
+    const memberCtx = createCtx({ db, actor: memberA, permissions: restrictive });
+    expect(await stewardCtx.objects.Event.findById("e-1")).not.toBeNull();
+    expect(await memberCtx.objects.Event.findById("e-1")).toBeNull();
+    expect(await memberCtx.objects.Event.findMany()).toEqual([]);
+  });
+});
+
+describe("ontology createCtx — US-031 property-level read filtering", () => {
+  it("omits Member.notes for a member-role actor", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Member.create(memberRow("m-1", { notes: "secret" }));
+    const ctx = createCtx({
+      db,
+      actor: memberA,
+      permissions: smallCommunityPermissions,
+    });
+    const fetched = await ctx.objects.Member.findById("m-1");
+    expect(fetched).not.toBeNull();
+    expect((fetched as Record<string, unknown>).notes).toBeUndefined();
+    expect(fetched?.full_name).toBe("Member m-1");
+  });
+
+  it("keeps Member.notes for a steward", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Member.create(memberRow("m-1", { notes: "secret" }));
+    const ctx = createCtx({
+      db,
+      actor: steward,
+      permissions: smallCommunityPermissions,
+    });
+    const fetched = await ctx.objects.Member.findById("m-1");
+    expect(fetched?.notes).toBe("secret");
+  });
+
+  it("strips notes across findMany results", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Member.create(memberRow("m-1", { notes: "alpha" }));
+    await db.objects.Member.create(memberRow("m-2", { notes: "beta" }));
+    const ctx = createCtx({
+      db,
+      actor: memberA,
+      permissions: smallCommunityPermissions,
+    });
+    const all = await ctx.objects.Member.findMany();
+    expect(all).toHaveLength(2);
+    for (const row of all) {
+      expect((row as Record<string, unknown>).notes).toBeUndefined();
+    }
+  });
+});
+
+describe("ontology createCtx — US-031 write enforcement", () => {
+  it("throws PermissionError when a member tries to update another member", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Member.create(memberRow("user-a"));
+    await db.objects.Member.create(memberRow("user-b"));
+    const ctx = createCtx({
+      db,
+      actor: memberA,
+      permissions: smallCommunityPermissions,
+    });
+    await expect(
+      ctx.objects.Member.update("user-b", { full_name: "hacked" }),
+    ).rejects.toBeInstanceOf(PermissionError);
+  });
+
+  it("permits a member to update their own Member row (member_self via row.id)", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Member.create(memberRow("user-a"));
+    const ctx = createCtx({
+      db,
+      actor: memberA,
+      permissions: smallCommunityPermissions,
+    });
+    const updated = await ctx.objects.Member.update("user-a", {
+      full_name: "Alice Updated",
+    });
+    expect(updated?.full_name).toBe("Alice Updated");
+  });
+
+  it("permits a steward to update any Member row", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Member.create(memberRow("user-a"));
+    const ctx = createCtx({
+      db,
+      actor: steward,
+      permissions: smallCommunityPermissions,
+    });
+    const updated = await ctx.objects.Member.update("user-a", {
+      full_name: "Steward Touched",
+    });
+    expect(updated?.full_name).toBe("Steward Touched");
+  });
+
+  it("throws PermissionError when a member tries to delete another member", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Member.create(memberRow("user-b"));
+    const ctx = createCtx({
+      db,
+      actor: memberA,
+      permissions: smallCommunityPermissions,
+    });
+    await expect(ctx.objects.Member.delete("user-b")).rejects.toBeInstanceOf(
+      PermissionError,
+    );
+  });
+
+  it("throws PermissionError when a member tries to create an Event (steward-only write)", async () => {
+    const db = createInMemoryStore();
+    const ctx = createCtx({
+      db,
+      actor: memberA,
+      permissions: smallCommunityPermissions,
+    });
+    await expect(
+      ctx.objects.Event.create({
+        id: "e-1",
+        title: "Coup",
+        starts_at: "2026-05-01T12:00:00+00:00",
+        location: "",
+        description: "",
+        created_at: "2026-04-01T00:00:00+00:00",
+      }),
+    ).rejects.toBeInstanceOf(PermissionError);
+  });
+
+  it("update returns null without throwing when the row does not exist", async () => {
+    const db = createInMemoryStore();
+    const ctx = createCtx({
+      db,
+      actor: memberA,
+      permissions: smallCommunityPermissions,
+    });
+    expect(await ctx.objects.Member.update("missing", { notes: "x" })).toBeNull();
+  });
+
+  it("PermissionError carries actor/objectType/operation context", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Member.create(memberRow("user-b"));
+    const ctx = createCtx({
+      db,
+      actor: memberA,
+      permissions: smallCommunityPermissions,
+    });
+    try {
+      await ctx.objects.Member.update("user-b", { full_name: "x" });
+      throw new Error("should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(PermissionError);
+      const pe = err as PermissionError;
+      expect(pe.actorId).toBe("user-a");
+      expect(pe.objectType).toBe("Member");
+      expect(pe.operation).toBe("update");
+    }
+  });
+});
+
+describe("ontology createCtx — US-031 member_self via row.user_id / row.owner", () => {
+  it("matches member_self when row.user_id equals actor.userId", async () => {
+    const db = createInMemoryStore();
+    // MeetingMinute does not naturally have user_id, but the resolver must
+    // honor user_id wherever it appears on a row. Inject one via cast.
+    await db.objects.MeetingMinute.create({
+      id: "mm-1",
+      title: "Notes",
+      body: "...",
+      event_id: "e-1",
+      created_at: "2026-04-01T00:00:00+00:00",
+      user_id: "user-a",
+    } as unknown as MeetingMinute);
+    const perms: ObjectPermissionsMap = {
+      MeetingMinute: { read: ["*"], write: ["steward", "member_self"] },
+    };
+    const ctxOwn = createCtx({ db, actor: memberA, permissions: perms });
+    const ctxOther = createCtx({ db, actor: memberB, permissions: perms });
+    await expect(
+      ctxOwn.objects.MeetingMinute.update("mm-1", { title: "Updated" }),
+    ).resolves.toMatchObject({ title: "Updated" });
+    await expect(
+      ctxOther.objects.MeetingMinute.update("mm-1", { title: "Nope" }),
+    ).rejects.toBeInstanceOf(PermissionError);
+  });
+});
+
+describe("ontology buildObjectPermissionsMap — derive from Ontology", () => {
+  it("captures object-level and property-level read/write tokens", () => {
+    const ontology = {
+      properties: {},
+      roles: {},
+      object_types: {
+        Member: {
+          permissions: { read: ["*"], write: ["steward", "member_self"] },
+          properties: {
+            id: { type: "uuid" as const, primary_key: true },
+            notes: {
+              type: "string" as const,
+              permissions: { read: ["steward"], write: ["steward"] },
+            },
+          },
+        },
+      },
+      link_types: {},
+      action_types: {},
+    };
+    const map = buildObjectPermissionsMap(ontology as unknown as Ontology);
+    expect(map.Member?.read).toEqual(["*"]);
+    expect(map.Member?.write).toEqual(["steward", "member_self"]);
+    expect(map.Member?.properties?.notes?.read).toEqual(["steward"]);
   });
 });

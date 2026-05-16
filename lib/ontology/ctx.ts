@@ -1,11 +1,13 @@
 // Typed ontology accessor — single facade over ontology storage that app code,
 // function-backed actions, and the agent share.
 //
-// Permission filtering is a no-op in M0; the `actor` field is part of the
-// signature so US-031 can wrap accessors without API churn.
-// Action handlers are stubs; US-027 will implement them.
+// US-007 introduced the surface; US-031 (this file's current state) wraps it
+// with permission filtering: object-level read/write, property-level read,
+// and the `member_self` token resolved against a row's owner identity.
+// Action handlers are still stubs; US-027 will implement them.
 
 import type { Actor } from "../ctx";
+import type { Ontology, PermissionsBlock } from "./schema";
 import type {
   AddMeetingMinuteParams,
   AddMemberParams,
@@ -69,11 +71,211 @@ export interface OntologyActions {
   ): Promise<ActionStubResult>;
 }
 
+// === Permission model ===
+
+export interface ObjectPermissions {
+  read?: string[];
+  write?: string[];
+  properties?: Record<string, PermissionsBlock>;
+}
+
+export type ObjectPermissionsMap = Record<string, ObjectPermissions>;
+
+export type PermissionOperation = "read" | "create" | "update" | "delete";
+
+export class PermissionError extends Error {
+  constructor(
+    message: string,
+    readonly actorId: string | null,
+    readonly objectType: string,
+    readonly operation: PermissionOperation,
+  ) {
+    super(message);
+    this.name = "PermissionError";
+  }
+}
+
+// `member_self` matches when the row's owner identity equals actor.userId.
+// We probe the common conventions (user_id, owner_id, owner) and fall back
+// to `row.id` for self-referencing types like Member, where the row IS the
+// user record.
+function rowOwnedBy(
+  actor: Actor,
+  row: Record<string, unknown>,
+  objectTypeName: string,
+): boolean {
+  if (row.user_id === actor.userId) return true;
+  if (row.owner_id === actor.userId) return true;
+  if (row.owner === actor.userId) return true;
+  if (row.userId === actor.userId) return true;
+  if (objectTypeName === "Member" && row.id === actor.userId) return true;
+  return false;
+}
+
+function actorMatchesTokens(
+  actor: Actor | null,
+  tokens: string[] | undefined,
+  row: Record<string, unknown> | null,
+  objectTypeName: string,
+): boolean {
+  // No tokens declared => unrestricted at this level.
+  if (!tokens || tokens.length === 0) return true;
+  if (tokens.includes("*")) return true;
+  if (!actor) return false;
+  for (const token of tokens) {
+    if (token === actor.role) return true;
+    if (actor.customRoles.includes(token)) return true;
+    if (token === "member_self" && row && rowOwnedBy(actor, row, objectTypeName)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function filterReadableProperties<T extends { id: string }>(
+  row: T,
+  perms: ObjectPermissions | undefined,
+  actor: Actor | null,
+  objectTypeName: string,
+): T {
+  if (!perms?.properties) return row;
+  const rowRecord = row as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...rowRecord };
+  for (const [propName, propPerm] of Object.entries(perms.properties)) {
+    if (
+      propPerm.read &&
+      !actorMatchesTokens(actor, propPerm.read, rowRecord, objectTypeName)
+    ) {
+      delete out[propName];
+    }
+  }
+  return out as T;
+}
+
+function denyWrite(
+  actor: Actor | null,
+  objectType: string,
+  operation: PermissionOperation,
+): never {
+  throw new PermissionError(
+    `actor ${actor?.userId ?? "<anonymous>"} cannot ${operation} ${objectType}`,
+    actor?.userId ?? null,
+    objectType,
+    operation,
+  );
+}
+
+function wrapObjectAccess<T extends { id: string }>(
+  base: ObjectAccess<T>,
+  perms: ObjectPermissions | undefined,
+  actor: Actor | null,
+  objectTypeName: string,
+): ObjectAccess<T> {
+  if (!perms) return base;
+  return {
+    async findById(id) {
+      const row = await base.findById(id);
+      if (!row) return null;
+      if (
+        !actorMatchesTokens(
+          actor,
+          perms.read,
+          row as unknown as Record<string, unknown>,
+          objectTypeName,
+        )
+      ) {
+        return null;
+      }
+      return filterReadableProperties(row, perms, actor, objectTypeName);
+    },
+    async findMany(filter) {
+      const all = await base.findMany(filter);
+      return all
+        .filter((row) =>
+          actorMatchesTokens(
+            actor,
+            perms.read,
+            row as unknown as Record<string, unknown>,
+            objectTypeName,
+          ),
+        )
+        .map((row) => filterReadableProperties(row, perms, actor, objectTypeName));
+    },
+    async create(input) {
+      if (
+        !actorMatchesTokens(
+          actor,
+          perms.write,
+          input as unknown as Record<string, unknown>,
+          objectTypeName,
+        )
+      ) {
+        denyWrite(actor, objectTypeName, "create");
+      }
+      return base.create(input);
+    },
+    async update(id, patch) {
+      const existing = await base.findById(id);
+      if (!existing) return null;
+      if (
+        !actorMatchesTokens(
+          actor,
+          perms.write,
+          existing as unknown as Record<string, unknown>,
+          objectTypeName,
+        )
+      ) {
+        denyWrite(actor, objectTypeName, "update");
+      }
+      return base.update(id, patch);
+    },
+    async delete(id) {
+      const existing = await base.findById(id);
+      if (!existing) return false;
+      if (
+        !actorMatchesTokens(
+          actor,
+          perms.write,
+          existing as unknown as Record<string, unknown>,
+          objectTypeName,
+        )
+      ) {
+        denyWrite(actor, objectTypeName, "delete");
+      }
+      return base.delete(id);
+    },
+  };
+}
+
+// Derive an ObjectPermissionsMap from a loaded ontology. Inline property
+// permissions are surfaced; ref-style properties (which point to the shared
+// registry) carry no inline permissions in the current schema.
+export function buildObjectPermissionsMap(
+  ontology: Ontology,
+): ObjectPermissionsMap {
+  const map: ObjectPermissionsMap = {};
+  for (const [name, def] of Object.entries(ontology.object_types)) {
+    const propPerms: Record<string, PermissionsBlock> = {};
+    for (const [propName, propDef] of Object.entries(def.properties)) {
+      if ("permissions" in propDef && propDef.permissions) {
+        propPerms[propName] = propDef.permissions;
+      }
+    }
+    map[name] = {
+      read: def.permissions?.read,
+      write: def.permissions?.write,
+      ...(Object.keys(propPerms).length > 0 ? { properties: propPerms } : {}),
+    };
+  }
+  return map;
+}
+
 // === createCtx ===
 
 export interface CreateCtxInput {
   db: OntologyStore;
   actor: Actor | null;
+  permissions?: ObjectPermissionsMap;
 }
 
 export interface OntologyCtx {
@@ -83,11 +285,16 @@ export interface OntologyCtx {
   actions: OntologyActions;
 }
 
-export function createCtx({ db, actor }: CreateCtxInput): OntologyCtx {
-  // M0: pass-through. US-031 will wrap each accessor with permission filtering
-  // keyed off `actor.role` / `actor.customRoles` and per-property permissions
-  // from the ontology — no signature change needed.
-  void actor;
+export function createCtx({
+  db,
+  actor,
+  permissions,
+}: CreateCtxInput): OntologyCtx {
+  const wrap = <T extends { id: string }>(
+    access: ObjectAccess<T>,
+    typeName: string,
+  ): ObjectAccess<T> =>
+    permissions ? wrapObjectAccess(access, permissions[typeName], actor, typeName) : access;
 
   const stub =
     <P>(name: string) =>
@@ -98,7 +305,11 @@ export function createCtx({ db, actor }: CreateCtxInput): OntologyCtx {
 
   return {
     actor,
-    objects: db.objects,
+    objects: {
+      Member: wrap(db.objects.Member, "Member"),
+      Event: wrap(db.objects.Event, "Event"),
+      MeetingMinute: wrap(db.objects.MeetingMinute, "MeetingMinute"),
+    },
     links: db.links,
     actions: {
       add_member: stub<AddMemberParams>("add_member"),
