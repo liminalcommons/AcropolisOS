@@ -1,0 +1,5 @@
+member:
+  description: Anyone with a verified account in the community
+
+steward:
+  description: Trusted operator able to record actions on others' behalf

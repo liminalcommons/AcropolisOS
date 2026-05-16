@@ -1,0 +1,19 @@
+record_attendance:
+  description: Record that a member attended an event
+  creates_link: attended
+  parameters:
+    member:
+      type: ref
+      target: Member
+      required: true
+    event:
+      type: ref
+      target: Event
+      required: true
+    role:
+      type: enum
+      values: [attendee, organizer, speaker]
+      default: attendee
+  permissions: [steward, member_self]
+  agent_policy: auto_apply
+  side_effects: [audit]

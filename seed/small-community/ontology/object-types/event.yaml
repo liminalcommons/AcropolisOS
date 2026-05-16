@@ -1,0 +1,20 @@
+Event:
+  description: A community event open to members
+  title_property: title
+  permissions:
+    read: ["*"]
+    write: ["steward"]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    title:
+      type: string
+    starts_at:
+      type: timestamp
+    location:
+      type: string
+    description:
+      type: string
+    created_at:
+      ref: created_at

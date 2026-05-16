@@ -52,6 +52,13 @@ Member:
     full_name: { type: string }
     email: { ref: email }
 `,
+      "object-types/event.yaml": `
+Event:
+  description: An event
+  properties:
+    id: { type: uuid, primary_key: true }
+    title: { type: string }
+`,
       "link-types.yaml": `
 attended:
   from: Member

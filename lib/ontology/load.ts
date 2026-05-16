@@ -10,7 +10,10 @@ import {
   RoleDefinition,
   SharedPropertyRegistry,
   type Ontology as OntologyType,
+  type PropertyDefinition,
 } from "./schema";
+
+const BUILTIN_PERMISSION_TOKENS = new Set(["*", "member_self"]);
 
 export class OntologyValidationError extends Error {
   constructor(
@@ -132,5 +135,150 @@ export async function loadOntology(root: string): Promise<OntologyType> {
   const action_types = await loadDir(actionTypesDir, ActionType);
 
   const aggregate = { properties, roles, object_types, link_types, action_types };
-  return Ontology.parse(aggregate);
+  const parsed = Ontology.parse(aggregate);
+  assertOntologyIntegrity(parsed);
+  return parsed;
+}
+
+function isRefProp(
+  prop: PropertyDefinition,
+): prop is Extract<PropertyDefinition, { ref: string }> {
+  return "ref" in prop;
+}
+
+export class OntologyIntegrityError extends Error {
+  constructor(
+    readonly violations: { pointer: string; message: string }[],
+  ) {
+    super(
+      "ontology integrity check failed:\n" +
+        violations.map((v) => `  - ${v.pointer}: ${v.message}`).join("\n"),
+    );
+    this.name = "OntologyIntegrityError";
+  }
+}
+
+export function assertOntologyIntegrity(ontology: OntologyType): void {
+  const violations: { pointer: string; message: string }[] = [];
+  const knownRoles = new Set([
+    "member",
+    "steward",
+    ...Object.keys(ontology.roles),
+  ]);
+  const knownObjectTypes = new Set(Object.keys(ontology.object_types));
+  const knownLinkTypes = new Set(Object.keys(ontology.link_types));
+  const knownProperties = new Set(Object.keys(ontology.properties));
+
+  const checkPermissionTokens = (pointer: string, tokens: string[]) => {
+    for (const tok of tokens) {
+      if (BUILTIN_PERMISSION_TOKENS.has(tok)) continue;
+      if (!knownRoles.has(tok)) {
+        violations.push({
+          pointer,
+          message: `unknown role/token "${tok}"`,
+        });
+      }
+    }
+  };
+
+  const checkPropertyMap = (
+    pointer: string,
+    props: Record<string, PropertyDefinition>,
+  ) => {
+    for (const [name, prop] of Object.entries(props)) {
+      if (isRefProp(prop)) {
+        if (!knownProperties.has(prop.ref)) {
+          violations.push({
+            pointer: `${pointer}/${name}`,
+            message: `ref "${prop.ref}" does not resolve to a shared property`,
+          });
+        }
+        continue;
+      }
+      if (prop.type === "ref") {
+        if (!knownObjectTypes.has(prop.target)) {
+          violations.push({
+            pointer: `${pointer}/${name}`,
+            message: `target "${prop.target}" does not resolve to an object type`,
+          });
+        }
+      }
+      if (prop.permissions) {
+        if (prop.permissions.read) {
+          checkPermissionTokens(
+            `${pointer}/${name}/permissions/read`,
+            prop.permissions.read,
+          );
+        }
+        if (prop.permissions.write) {
+          checkPermissionTokens(
+            `${pointer}/${name}/permissions/write`,
+            prop.permissions.write,
+          );
+        }
+      }
+    }
+  };
+
+  for (const [name, ot] of Object.entries(ontology.object_types)) {
+    const base = `/object_types/${name}`;
+    if (ot.permissions?.read) {
+      checkPermissionTokens(`${base}/permissions/read`, ot.permissions.read);
+    }
+    if (ot.permissions?.write) {
+      checkPermissionTokens(`${base}/permissions/write`, ot.permissions.write);
+    }
+    checkPropertyMap(`${base}/properties`, ot.properties);
+    if (ot.title_property && !(ot.title_property in ot.properties)) {
+      violations.push({
+        pointer: `${base}/title_property`,
+        message: `title_property "${ot.title_property}" is not a declared property`,
+      });
+    }
+  }
+
+  for (const [name, lt] of Object.entries(ontology.link_types)) {
+    const base = `/link_types/${name}`;
+    if (!knownObjectTypes.has(lt.from)) {
+      violations.push({
+        pointer: `${base}/from`,
+        message: `from "${lt.from}" does not resolve to an object type`,
+      });
+    }
+    if (!knownObjectTypes.has(lt.to)) {
+      violations.push({
+        pointer: `${base}/to`,
+        message: `to "${lt.to}" does not resolve to an object type`,
+      });
+    }
+    if (lt.properties) {
+      checkPropertyMap(`${base}/properties`, lt.properties);
+    }
+  }
+
+  for (const [name, at] of Object.entries(ontology.action_types)) {
+    const base = `/action_types/${name}`;
+    if (at.creates_link && !knownLinkTypes.has(at.creates_link)) {
+      violations.push({
+        pointer: `${base}/creates_link`,
+        message: `creates_link "${at.creates_link}" does not resolve to a link type`,
+      });
+    }
+    if (at.creates_object && !knownObjectTypes.has(at.creates_object)) {
+      violations.push({
+        pointer: `${base}/creates_object`,
+        message: `creates_object "${at.creates_object}" does not resolve to an object type`,
+      });
+    }
+    if (at.parameters) {
+      checkPropertyMap(`${base}/parameters`, at.parameters);
+    }
+    if (at.permissions) {
+      checkPermissionTokens(`${base}/permissions`, at.permissions);
+    }
+  }
+
+  if (violations.length > 0) {
+    throw new OntologyIntegrityError(violations);
+  }
 }

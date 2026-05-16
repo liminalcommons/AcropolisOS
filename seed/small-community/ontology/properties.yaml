@@ -1,0 +1,11 @@
+email:
+  type: email
+  description: Primary contact email
+
+joined_at:
+  type: date
+  description: When the entity joined the community
+
+created_at:
+  type: timestamp
+  description: When this record was created
