@@ -1,9 +1,15 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { Tool } from "@mastra/core/tools";
+import {
+  ActionPermissionError,
+  enforceActionPermission,
+} from "../actions/permission-check";
+import { InMemoryAuditStore } from "../audit/writer";
 import type { Actor } from "../ctx";
 import { loadOntology } from "../ontology/load";
-import { getToolsForActor } from "./tool-gating";
+import { createCtx, createInMemoryStore } from "../ontology/ctx";
+import { getToolsForActor, runApplyActionTool } from "./tool-gating";
 import type { Ontology } from "../ontology/schema";
 
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
@@ -134,6 +140,106 @@ describe("getToolsForActor — toolset counts (acceptance criterion)", () => {
     const bundle = getToolsForActor(stewardsOnly, null);
     expect(bundle.tools.apply_action).toBeUndefined();
     expect(Object.keys(bundle.tools).length).toBe(0);
+  });
+});
+
+describe("apply_action — structured permission error surface (US-032)", () => {
+  it("runApplyActionTool returns ok:false with permission_denied when dispatcher throws ActionPermissionError", async () => {
+    const onto = await loadOntology(SMALL_COMMUNITY);
+    const audit = new InMemoryAuditStore();
+    const memberCtx = createCtx({
+      db: createInMemoryStore(),
+      actor: memberActor,
+      audit,
+    });
+    const out = await runApplyActionTool({
+      actor: memberActor,
+      dispatcher: async ({ action }) => {
+        await enforceActionPermission({
+          ontology: onto,
+          actionName: action,
+          ctx: memberCtx,
+        });
+        return { ran: action };
+      },
+      action: "add_member",
+      params: { full_name: "Mallory", email: "m@example.com" },
+    });
+    expect(out.ok).toBe(false);
+    expect(out.error?.type).toBe("permission_denied");
+    expect(out.error?.action).toBe("add_member");
+    expect(out.error?.actor_id).toBe("u-member");
+    expect(out.error?.required_permissions).toEqual(["steward"]);
+    // The middleware also recorded the rejection in action_audit.
+    const rows = await audit.listActionAudit();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].subject_id).toBe("add_member");
+  });
+
+  it("runApplyActionTool returns ok:true with dispatcher result on permitted invocation", async () => {
+    const onto = await loadOntology(SMALL_COMMUNITY);
+    const stewardCtx = createCtx({
+      db: createInMemoryStore(),
+      actor: stewardActor,
+    });
+    const out = await runApplyActionTool({
+      actor: stewardActor,
+      dispatcher: async ({ action, params }) => {
+        await enforceActionPermission({
+          ontology: onto,
+          actionName: action,
+          ctx: stewardCtx,
+        });
+        return { ran: action, params };
+      },
+      action: "add_member",
+      params: { full_name: "Ada", email: "a@example.com", tier: "sustaining" },
+    });
+    expect(out.ok).toBe(true);
+    expect(out.result).toMatchObject({ ran: "add_member" });
+    expect(out.error).toBeUndefined();
+  });
+
+  it("runApplyActionTool returns ok:false / not_implemented when no dispatcher is wired", async () => {
+    const out = await runApplyActionTool({
+      actor: stewardActor,
+      dispatcher: undefined,
+      action: "add_member",
+      params: { full_name: "x", email: "x@x" },
+    });
+    expect(out.ok).toBe(false);
+    expect(out.error?.type).toBe("not_implemented");
+    expect(out.error?.actor_id).toBe("u-steward");
+  });
+
+  it("runApplyActionTool rethrows non-permission errors from dispatcher (unexpected failures surface)", async () => {
+    await expect(
+      runApplyActionTool({
+        actor: stewardActor,
+        dispatcher: async () => {
+          throw new Error("network exploded");
+        },
+        action: "add_member",
+        params: {},
+      }),
+    ).rejects.toThrow(/network exploded/);
+  });
+
+  it("getToolsForActor wires apply_action tool when a dispatcher is supplied", async () => {
+    const onto = await loadOntology(SMALL_COMMUNITY);
+    const { tools } = getToolsForActor(onto, stewardActor, {
+      applyActionDispatcher: async () => ({ ok: true }),
+    });
+    expect(tools.apply_action).toBeInstanceOf(Tool);
+  });
+
+  it("re-exports ActionPermissionError as instanceof for caller branch checks", () => {
+    const e = new ActionPermissionError({
+      actorId: "u-1",
+      actionName: "add_member",
+      requiredPermissions: ["steward"],
+    });
+    expect(e).toBeInstanceOf(ActionPermissionError);
   });
 });
 

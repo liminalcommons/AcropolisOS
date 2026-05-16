@@ -6,6 +6,7 @@
 // and the `member_self` token resolved against a row's owner identity.
 // Action handlers are still stubs; US-027 will implement them.
 
+import type { AuditStore } from "../audit/writer";
 import type { Actor } from "../ctx";
 import type { Ontology, PermissionsBlock } from "./schema";
 import type {
@@ -81,7 +82,12 @@ export interface ObjectPermissions {
 
 export type ObjectPermissionsMap = Record<string, ObjectPermissions>;
 
-export type PermissionOperation = "read" | "create" | "update" | "delete";
+export type PermissionOperation =
+  | "read"
+  | "create"
+  | "update"
+  | "delete"
+  | "invoke";
 
 export class PermissionError extends Error {
   constructor(
@@ -276,6 +282,10 @@ export interface CreateCtxInput {
   db: OntologyStore;
   actor: Actor | null;
   permissions?: ObjectPermissionsMap;
+  // Optional audit sink. When provided, action middleware (US-032) writes
+  // rejection rows here; action_audit middleware (US-030) will write success
+  // rows here as well.
+  audit?: AuditStore;
 }
 
 export interface OntologyCtx {
@@ -283,12 +293,14 @@ export interface OntologyCtx {
   objects: OntologyStore["objects"];
   links: OntologyStore["links"];
   actions: OntologyActions;
+  audit?: AuditStore;
 }
 
 export function createCtx({
   db,
   actor,
   permissions,
+  audit,
 }: CreateCtxInput): OntologyCtx {
   const wrap = <T extends { id: string }>(
     access: ObjectAccess<T>,
@@ -317,6 +329,7 @@ export function createCtx({
       change_tier: stub<ChangeTierParams>("change_tier"),
       record_attendance: stub<RecordAttendanceParams>("record_attendance"),
     },
+    ...(audit ? { audit } : {}),
   };
 }
 

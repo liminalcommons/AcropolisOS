@@ -3,6 +3,7 @@
 
 import { inngest } from "../inngest/client";
 import { runDeclarativeAction } from "../actions/declarative";
+import { enforceActionPermission } from "../actions/permission-check";
 import type { Ontology } from "../ontology/schema";
 import type { OntologyCtx } from "../ontology/ctx";
 
@@ -27,6 +28,13 @@ export const actionAddMeetingMinute = inngest.createFunction(
         `acropolisos-action-add_meeting_minute: event.data.ctx is required (OntologyCtx must be passed in event payload)`,
       );
     }
+    await step.run("permission-check.add_meeting_minute", () =>
+      enforceActionPermission({
+        ontology,
+        actionName: "add_meeting_minute",
+        ctx,
+      }),
+    );
     return await step.run("declarative.add_meeting_minute", () =>
       runDeclarativeAction({
         actionName: "add_meeting_minute",
@@ -55,6 +63,13 @@ export const actionAddMember = inngest.createFunction(
         `acropolisos-action-add_member: event.data.ctx is required (OntologyCtx must be passed in event payload)`,
       );
     }
+    await step.run("permission-check.add_member", () =>
+      enforceActionPermission({
+        ontology,
+        actionName: "add_member",
+        ctx,
+      }),
+    );
     return await step.run("declarative.add_member", () =>
       runDeclarativeAction({
         actionName: "add_member",
@@ -83,6 +98,13 @@ export const actionRecordAttendance = inngest.createFunction(
         `acropolisos-action-record_attendance: event.data.ctx is required (OntologyCtx must be passed in event payload)`,
       );
     }
+    await step.run("permission-check.record_attendance", () =>
+      enforceActionPermission({
+        ontology,
+        actionName: "record_attendance",
+        ctx,
+      }),
+    );
     return await step.run("declarative.record_attendance", () =>
       runDeclarativeAction({
         actionName: "record_attendance",

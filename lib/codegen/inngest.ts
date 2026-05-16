@@ -52,6 +52,7 @@ const HEADER =
 const IMPORTS =
   'import { inngest } from "../inngest/client";\n' +
   'import { runDeclarativeAction } from "../actions/declarative";\n' +
+  'import { enforceActionPermission } from "../actions/permission-check";\n' +
   'import type { Ontology } from "../ontology/schema";\n' +
   'import type { OntologyCtx } from "../ontology/ctx";\n' +
   "\n";
@@ -92,6 +93,13 @@ function emitFunction(actionName: string): string {
     `        \`${id}: event.data.ctx is required (OntologyCtx must be passed in event payload)\`,\n` +
     `      );\n` +
     `    }\n` +
+    `    await step.run(${JSON.stringify(`permission-check.${actionName}`)}, () =>\n` +
+    `      enforceActionPermission({\n` +
+    `        ontology,\n` +
+    `        actionName: ${JSON.stringify(actionName)},\n` +
+    `        ctx,\n` +
+    `      }),\n` +
+    `    );\n` +
     `    return await step.run(${JSON.stringify(`declarative.${actionName}`)}, () =>\n` +
     `      runDeclarativeAction({\n` +
     `        actionName: ${JSON.stringify(actionName)},\n` +

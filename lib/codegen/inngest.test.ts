@@ -93,4 +93,29 @@ describe("generateInngestActionsModule — runtime semantics", () => {
     expect(out).toContain("event.data.params");
     expect(out).toContain("ctx");
   });
+
+  it("emits an enforceActionPermission step before the runner (US-032)", async () => {
+    const ontology = await loadOntology(SEED_DIR);
+    const out = generateInngestActionsModule(ontology);
+
+    expect(out).toContain("enforceActionPermission");
+    expect(out).toMatch(
+      /from\s+"\.\.\/actions\/permission-check"/,
+    );
+    // For each declarative action: a permission-check step is registered.
+    for (const action of [
+      "add_member",
+      "add_meeting_minute",
+      "record_attendance",
+    ]) {
+      expect(out).toContain(`"permission-check.${action}"`);
+      // The permission check is emitted ahead of the declarative step in
+      // source order — short of parsing the AST, we use the index check.
+      const checkIdx = out.indexOf(`"permission-check.${action}"`);
+      const runIdx = out.indexOf(`"declarative.${action}"`);
+      expect(checkIdx).toBeGreaterThan(-1);
+      expect(runIdx).toBeGreaterThan(-1);
+      expect(checkIdx).toBeLessThan(runIdx);
+    }
+  });
 });

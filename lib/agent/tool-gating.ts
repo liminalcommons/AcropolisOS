@@ -11,6 +11,7 @@
 
 import { z, type ZodTypeAny } from "zod";
 import { createTool } from "@mastra/core/tools";
+import { ActionPermissionError } from "../actions/permission-check";
 import type { Actor } from "../ctx";
 import type { Ontology } from "../ontology/schema";
 import {
@@ -20,6 +21,77 @@ import {
   type AnyMastraTool,
 } from "../codegen/mastra-tools";
 import { buildZodSchemas, pascalCase } from "../codegen/zod";
+
+// US-032: apply_action's execute() dispatches to whatever runs the action
+// (in production: an Inngest send + wait; in tests: a direct middleware
+// call). The dispatcher returns whatever the action returned, and may throw
+// ActionPermissionError — apply_action catches that and turns it into a
+// structured chat-visible error rather than letting the throw bubble up.
+export type ApplyActionDispatcher = (input: {
+  action: string;
+  params: unknown;
+}) => Promise<unknown>;
+
+export interface GetToolsForActorOptions {
+  applyActionDispatcher?: ApplyActionDispatcher;
+}
+
+export interface ApplyActionResult {
+  ok: boolean;
+  result?: unknown;
+  error?: {
+    type: "permission_denied" | "not_implemented" | "internal";
+    action: string;
+    actor_id: string | null;
+    required_permissions: string[];
+    message: string;
+  };
+}
+
+// Execute logic extracted from the Mastra tool wrapper so it is directly
+// testable without going through the wrapper's input validation pipeline.
+// Production call path is identical: the tool's execute() forwards to this.
+export async function runApplyActionTool(input: {
+  actor: Actor | null;
+  dispatcher: ApplyActionDispatcher | undefined;
+  action: string;
+  params: unknown;
+}): Promise<ApplyActionResult> {
+  if (!input.dispatcher) {
+    return {
+      ok: false,
+      error: {
+        type: "not_implemented",
+        action: input.action,
+        actor_id: input.actor?.userId ?? null,
+        required_permissions: [],
+        message:
+          "apply_action dispatcher is not wired (handler arrives with US-027)",
+      },
+    };
+  }
+  try {
+    const result = await input.dispatcher({
+      action: input.action,
+      params: input.params,
+    });
+    return { ok: true, result };
+  } catch (err) {
+    if (err instanceof ActionPermissionError) {
+      return {
+        ok: false,
+        error: {
+          type: "permission_denied",
+          action: err.actionName,
+          actor_id: err.actorId,
+          required_permissions: err.requiredPermissions,
+          message: err.message,
+        },
+      };
+    }
+    throw err;
+  }
+}
 
 export interface ToolsForActor {
   tools: Record<string, AnyMastraTool>;
@@ -68,6 +140,7 @@ export function canActorInvokeAction(
 export function getToolsForActor(
   ontology: Ontology,
   actor: Actor | null,
+  options: GetToolsForActorOptions = {},
 ): ToolsForActor {
   const { tools: allTools } = buildMastraTools(ontology);
   const filtered: Record<string, AnyMastraTool> = {};
@@ -114,6 +187,7 @@ export function getToolsForActor(
             ],
           );
 
+    const dispatcher = options.applyActionDispatcher;
     filtered.apply_action = createTool({
       id: "apply_action",
       description:
@@ -121,15 +195,25 @@ export function getToolsForActor(
       inputSchema: applyActionInput,
       outputSchema: z.object({
         ok: z.boolean(),
-        created: z
+        result: z.unknown().optional(),
+        error: z
           .object({
-            object_type: z.string().optional(),
-            id: z.string().optional(),
+            type: z.enum(["permission_denied", "not_implemented", "internal"]),
+            action: z.string(),
+            actor_id: z.string().nullable(),
+            required_permissions: z.array(z.string()),
+            message: z.string(),
           })
           .optional(),
       }),
-      execute: async () => {
-        throw new Error("apply_action not implemented (US-027)");
+      execute: async (inputData) => {
+        const input = inputData as { action: string; params: unknown };
+        return runApplyActionTool({
+          actor,
+          dispatcher,
+          action: input.action,
+          params: input.params,
+        });
       },
     });
   }
