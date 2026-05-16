@@ -13,4 +13,8 @@ next-env.d.ts
 # Runtime data (users.json, setup.json) — file-backed defaults; US-002 replaces with Postgres
 data/
 
+# Test scratch dirs for function-backed action runner (US-025)
+lib/actions/__test_fixtures__/
+functions/__sandbox_fixtures__/
+
 .DS_Store

@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@acropolisos/sdk": [
+        "./lib/sdk/index.ts"
       ]
     }
   },
