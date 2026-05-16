@@ -6,6 +6,7 @@ import {
   generateOntologyModule,
   generateZodModule,
 } from "../lib/codegen/zod";
+import { generateMastraToolsModule } from "../lib/codegen/mastra-tools";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,18 +15,24 @@ async function main(): Promise<void> {
   const seedName = process.argv[2] ?? "small-community";
   const pkgRoot = path.resolve(__dirname, "..");
   const seedRoot = path.join(pkgRoot, "seed", seedName, "ontology");
-  const outDir = path.join(pkgRoot, "lib", "ontology");
+  const ontologyOutDir = path.join(pkgRoot, "lib", "ontology");
+  const agentOutDir = path.join(pkgRoot, "lib", "agent");
 
   const ontology = await loadOntology(seedRoot);
-  await mkdir(outDir, { recursive: true });
+  await mkdir(ontologyOutDir, { recursive: true });
+  await mkdir(agentOutDir, { recursive: true });
 
-  const typesPath = path.join(outDir, "types.generated.ts");
-  const combinedPath = path.join(outDir, "ontology.generated.ts");
+  const typesPath = path.join(ontologyOutDir, "types.generated.ts");
+  const combinedPath = path.join(ontologyOutDir, "ontology.generated.ts");
+  const toolsPath = path.join(agentOutDir, "tools.generated.ts");
 
   await writeFile(typesPath, generateZodModule(ontology), "utf8");
   await writeFile(combinedPath, generateOntologyModule(ontology), "utf8");
+  await writeFile(toolsPath, generateMastraToolsModule(ontology), "utf8");
 
-  process.stdout.write(`generated:\n  ${typesPath}\n  ${combinedPath}\n`);
+  process.stdout.write(
+    `generated:\n  ${typesPath}\n  ${combinedPath}\n  ${toolsPath}\n`,
+  );
 }
 
 main().catch((err) => {
