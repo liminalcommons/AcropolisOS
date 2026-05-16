@@ -10,7 +10,8 @@
     "inngest:dev": "inngest-cli dev -u http://localhost:3030/api/inngest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "codegen:ontology": "tsx scripts/generate-ontology.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",
