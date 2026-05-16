@@ -18,6 +18,11 @@ describe("ProposalDiff schema", () => {
     expect(draft.new_link_types).toEqual({});
     expect(draft.new_shared_properties).toEqual({});
     expect(draft.modified_properties).toEqual({});
+    expect(draft.new_action_types).toEqual({});
+    expect(draft.new_functions).toEqual({});
+    expect(draft.new_views).toEqual({});
+    expect(draft.new_seeds).toEqual({});
+    expect(draft.new_ingests).toEqual({});
     expect(draft.impacted_tables).toEqual([]);
   });
 
@@ -45,5 +50,23 @@ describe("recomputeImpactedTables", () => {
 
   it("returns empty array when no object types are proposed", () => {
     expect(recomputeImpactedTables(emptyDraft())).toEqual([]);
+  });
+
+  it("unions seed, ingest, and action-type creates_object targets, deduped", () => {
+    const draft = emptyDraft();
+    draft.new_object_types["A"] = {
+      properties: { id: { type: "uuid", primary_key: true } },
+    };
+    draft.new_seeds["B"] = { object_type: "B", rows_jsonl: "" };
+    draft.new_ingests["x"] = {
+      inbox_ids: ["1"],
+      target_object_type: "C",
+      mapping: {},
+    };
+    draft.new_action_types["mk_a"] = {
+      creates_object: "A",
+      agent_policy: "always_confirm",
+    };
+    expect(recomputeImpactedTables(draft)).toEqual(["A", "B", "C"]);
   });
 });

@@ -2,10 +2,16 @@ import { randomUUID } from "node:crypto";
 import {
   emptyDraft,
   recomputeImpactedTables,
+  viewKey,
+  type FunctionProposal,
+  type IngestProposal,
   type ProposalDiff,
   type ProposalStatus,
+  type SeedProposal,
+  type ViewProposal,
 } from "./diff";
 import type {
+  ActionType,
   InlineProperty,
   LinkType,
   ObjectType,
@@ -39,6 +45,28 @@ export interface ProposalDraftStore {
     name: string,
     definition: InlineProperty,
     opts?: AppendSharedPropertyOptions,
+  ): Promise<ProposalDiff>;
+  appendActionType(
+    session_id: string,
+    name: string,
+    definition: ActionType,
+  ): Promise<ProposalDiff>;
+  appendFunction(
+    session_id: string,
+    proposal: FunctionProposal,
+  ): Promise<ProposalDiff>;
+  appendView(
+    session_id: string,
+    proposal: ViewProposal,
+  ): Promise<ProposalDiff>;
+  appendSeed(
+    session_id: string,
+    proposal: SeedProposal,
+  ): Promise<ProposalDiff>;
+  appendIngest(
+    session_id: string,
+    name: string,
+    proposal: IngestProposal,
   ): Promise<ProposalDiff>;
   getDraft(session_id: string): Promise<ProposalDiff | null>;
   finalize(session_id: string): Promise<Proposal>;
@@ -98,6 +126,56 @@ export class InMemoryProposalDraftStore implements ProposalDraftStore {
     } else {
       draft.new_shared_properties[name] = definition;
     }
+    return draft;
+  }
+
+  async appendActionType(
+    session_id: string,
+    name: string,
+    definition: ActionType,
+  ): Promise<ProposalDiff> {
+    const draft = this.ensureDraft(session_id);
+    draft.new_action_types[name] = definition;
+    draft.impacted_tables = recomputeImpactedTables(draft);
+    return draft;
+  }
+
+  async appendFunction(
+    session_id: string,
+    proposal: FunctionProposal,
+  ): Promise<ProposalDiff> {
+    const draft = this.ensureDraft(session_id);
+    draft.new_functions[proposal.filename] = proposal;
+    return draft;
+  }
+
+  async appendView(
+    session_id: string,
+    proposal: ViewProposal,
+  ): Promise<ProposalDiff> {
+    const draft = this.ensureDraft(session_id);
+    draft.new_views[viewKey(proposal.object_type, proposal.view)] = proposal;
+    return draft;
+  }
+
+  async appendSeed(
+    session_id: string,
+    proposal: SeedProposal,
+  ): Promise<ProposalDiff> {
+    const draft = this.ensureDraft(session_id);
+    draft.new_seeds[proposal.object_type] = proposal;
+    draft.impacted_tables = recomputeImpactedTables(draft);
+    return draft;
+  }
+
+  async appendIngest(
+    session_id: string,
+    name: string,
+    proposal: IngestProposal,
+  ): Promise<ProposalDiff> {
+    const draft = this.ensureDraft(session_id);
+    draft.new_ingests[name] = proposal;
+    draft.impacted_tables = recomputeImpactedTables(draft);
     return draft;
   }
 

@@ -108,6 +108,58 @@ describe("InMemoryProposalDraftStore", () => {
     expect(Object.keys(proposal.diff.new_object_types)).toEqual(["Thread"]);
   });
 
+  it("appendActionType writes the action type and includes creates_object in impacted_tables", async () => {
+    const store = new InMemoryProposalDraftStore();
+    const draft = await store.appendActionType("s1", "create_thread", {
+      creates_object: "Thread",
+      agent_policy: "always_confirm",
+    });
+    expect(draft.new_action_types["create_thread"]).toBeDefined();
+    expect(draft.impacted_tables).toContain("Thread");
+  });
+
+  it("appendFunction keys by filename and preserves ts_body", async () => {
+    const store = new InMemoryProposalDraftStore();
+    const draft = await store.appendFunction("s1", {
+      filename: "f.ts",
+      ts_body: "export const x = 1;",
+    });
+    expect(draft.new_functions["f.ts"].ts_body).toBe("export const x = 1;");
+  });
+
+  it("appendView keys by object_type:view composite", async () => {
+    const store = new InMemoryProposalDraftStore();
+    const draft = await store.appendView("s1", {
+      object_type: "Thread",
+      view: "detail",
+      tsx_body: "<div/>",
+    });
+    expect(draft.new_views["Thread:detail"].tsx_body).toBe("<div/>");
+  });
+
+  it("appendSeed keys by object_type and marks the table as impacted", async () => {
+    const store = new InMemoryProposalDraftStore();
+    const draft = await store.appendSeed("s1", {
+      object_type: "Thread",
+      rows_jsonl: '{"id":"1"}',
+    });
+    expect(draft.new_seeds["Thread"].rows_jsonl).toBe('{"id":"1"}');
+    expect(draft.impacted_tables).toContain("Thread");
+  });
+
+  it("appendIngest stores config under the given name and marks target as impacted", async () => {
+    const store = new InMemoryProposalDraftStore();
+    const draft = await store.appendIngest("s1", "email_to_thread", {
+      inbox_ids: ["a"],
+      target_object_type: "Thread",
+      mapping: { subject: "title" },
+    });
+    expect(draft.new_ingests["email_to_thread"].target_object_type).toBe(
+      "Thread",
+    );
+    expect(draft.impacted_tables).toContain("Thread");
+  });
+
   it("listProposals returns finalized proposals in insertion order", async () => {
     const store = new InMemoryProposalDraftStore();
     await store.appendObjectType("s1", "A", SAMPLE_OT);

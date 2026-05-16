@@ -6,14 +6,19 @@ import { buildProposalTools } from "./tools";
 const SESSION = "session-abc";
 
 describe("buildProposalTools — registration", () => {
-  it("registers the four required tool ids", () => {
+  it("registers all nine required tool ids", () => {
     const store = new InMemoryProposalDraftStore();
     const { tools } = buildProposalTools(store);
     expect(Object.keys(tools).sort()).toEqual([
       "finalize_proposal",
+      "propose_action_type",
+      "propose_function",
+      "propose_ingest",
       "propose_link_type",
       "propose_object_type",
+      "propose_seed",
       "propose_shared_property",
+      "propose_view",
     ]);
   });
 
@@ -151,6 +156,308 @@ describe("finalize_proposal tool", () => {
     };
     expect(result.proposal.status).toBe("pending");
     expect(result.proposal.diff.new_object_types["Thread"]).toBeDefined();
+  });
+});
+
+describe("propose_action_type tool", () => {
+  it("writes the proposed action type and updates impacted_tables when creates_object is set", async () => {
+    const store = new InMemoryProposalDraftStore();
+    const { propose_action_type } = buildProposalTools(store);
+    const result = (await propose_action_type.execute!(
+      {
+        session_id: SESSION,
+        name: "create_thread",
+        definition: {
+          description: "Create a forum thread",
+          creates_object: "Thread",
+          agent_policy: "always_confirm",
+        },
+      },
+      {},
+    )) as {
+      ok: true;
+      draft: {
+        new_action_types: Record<string, unknown>;
+        impacted_tables: string[];
+      };
+    };
+    expect(result.draft.new_action_types["create_thread"]).toBeDefined();
+    expect(result.draft.impacted_tables).toContain("Thread");
+  });
+});
+
+describe("propose_function tool", () => {
+  it("stores TS body verbatim under the filename key", async () => {
+    const store = new InMemoryProposalDraftStore();
+    const { propose_function } = buildProposalTools(store);
+    const body = "export function hello() { return 'hi'; }";
+    const result = (await propose_function.execute!(
+      {
+        session_id: SESSION,
+        filename: "hello.ts",
+        ts_body: body,
+      },
+      {},
+    )) as {
+      ok: true;
+      draft: { new_functions: Record<string, { ts_body: string }> };
+    };
+    expect(result.draft.new_functions["hello.ts"].ts_body).toBe(body);
+  });
+});
+
+describe("propose_view tool", () => {
+  it("keys views by object_type:view and preserves tsx_body", async () => {
+    const store = new InMemoryProposalDraftStore();
+    const { propose_view } = buildProposalTools(store);
+    const tsx = "export default () => <div>hi</div>;";
+    const result = (await propose_view.execute!(
+      {
+        session_id: SESSION,
+        object_type: "Thread",
+        view: "list",
+        tsx_body: tsx,
+      },
+      {},
+    )) as {
+      ok: true;
+      draft: { new_views: Record<string, { tsx_body: string }> };
+    };
+    expect(result.draft.new_views["Thread:list"].tsx_body).toBe(tsx);
+  });
+});
+
+describe("propose_seed tool", () => {
+  it("stores rows JSONL and marks the object type as impacted", async () => {
+    const store = new InMemoryProposalDraftStore();
+    const { propose_seed } = buildProposalTools(store);
+    const jsonl = '{"id":"1","title":"x"}\n{"id":"2","title":"y"}';
+    const result = (await propose_seed.execute!(
+      {
+        session_id: SESSION,
+        object_type: "Thread",
+        rows_jsonl: jsonl,
+      },
+      {},
+    )) as {
+      ok: true;
+      draft: {
+        new_seeds: Record<string, { rows_jsonl: string }>;
+        impacted_tables: string[];
+      };
+    };
+    expect(result.draft.new_seeds["Thread"].rows_jsonl).toBe(jsonl);
+    expect(result.draft.impacted_tables).toContain("Thread");
+  });
+});
+
+describe("propose_ingest tool", () => {
+  it("stores ingest config and marks the target object type as impacted", async () => {
+    const store = new InMemoryProposalDraftStore();
+    const { propose_ingest } = buildProposalTools(store);
+    const result = (await propose_ingest.execute!(
+      {
+        session_id: SESSION,
+        name: "email_to_thread",
+        inbox_ids: ["inbox-1", "inbox-2"],
+        target_object_type: "Thread",
+        mapping: { subject: "title", body: "content" },
+      },
+      {},
+    )) as {
+      ok: true;
+      draft: {
+        new_ingests: Record<
+          string,
+          {
+            inbox_ids: string[];
+            target_object_type: string;
+            mapping: Record<string, string>;
+          }
+        >;
+        impacted_tables: string[];
+      };
+    };
+    expect(result.draft.new_ingests["email_to_thread"].inbox_ids).toEqual([
+      "inbox-1",
+      "inbox-2",
+    ]);
+    expect(
+      result.draft.new_ingests["email_to_thread"].target_object_type,
+    ).toBe("Thread");
+    expect(result.draft.new_ingests["email_to_thread"].mapping).toEqual({
+      subject: "title",
+      body: "content",
+    });
+    expect(result.draft.impacted_tables).toContain("Thread");
+  });
+
+  it("rejects empty inbox_ids", async () => {
+    const store = new InMemoryProposalDraftStore();
+    const { propose_ingest } = buildProposalTools(store);
+    const result = (await propose_ingest.execute!(
+      {
+        session_id: SESSION,
+        name: "bad",
+        inbox_ids: [],
+        target_object_type: "Thread",
+        mapping: {},
+      },
+      {},
+    )) as { error?: boolean; message?: string };
+    expect(result.error).toBe(true);
+    expect(result.message).toContain("inbox_ids");
+  });
+});
+
+describe("integration: round-trip with all proposal types", () => {
+  it("a single proposal carries object_type, link_type, shared_property, action_type, function, view, seed, and ingest cleanly", async () => {
+    const store = new InMemoryProposalDraftStore();
+    const {
+      propose_object_type,
+      propose_link_type,
+      propose_shared_property,
+      propose_action_type,
+      propose_function,
+      propose_view,
+      propose_seed,
+      propose_ingest,
+      finalize_proposal,
+    } = buildProposalTools(store);
+
+    await propose_object_type.execute!(
+      {
+        session_id: SESSION,
+        name: "Thread",
+        definition: {
+          description: "A forum thread",
+          properties: {
+            id: { type: "uuid", primary_key: true },
+            title: { type: "string", required: true },
+          },
+        },
+      },
+      {},
+    );
+    await propose_link_type.execute!(
+      {
+        session_id: SESSION,
+        name: "member_threads",
+        definition: {
+          from: "Member",
+          to: "Thread",
+          cardinality: "one-to-many",
+        },
+      },
+      {},
+    );
+    await propose_shared_property.execute!(
+      {
+        session_id: SESSION,
+        name: "tag",
+        definition: { type: "string", description: "User tag" },
+      },
+      {},
+    );
+    await propose_action_type.execute!(
+      {
+        session_id: SESSION,
+        name: "create_thread",
+        definition: {
+          description: "Create a thread",
+          creates_object: "Thread",
+          agent_policy: "always_confirm",
+        },
+      },
+      {},
+    );
+    await propose_function.execute!(
+      {
+        session_id: SESSION,
+        filename: "createThread.ts",
+        ts_body: "export async function createThread() { /* ... */ }",
+      },
+      {},
+    );
+    await propose_view.execute!(
+      {
+        session_id: SESSION,
+        object_type: "Thread",
+        view: "list",
+        tsx_body: "export default () => <ul />;",
+      },
+      {},
+    );
+    await propose_seed.execute!(
+      {
+        session_id: SESSION,
+        object_type: "Thread",
+        rows_jsonl: '{"id":"seed-1","title":"Welcome"}',
+      },
+      {},
+    );
+    await propose_ingest.execute!(
+      {
+        session_id: SESSION,
+        name: "email_to_thread",
+        inbox_ids: ["inbox-1"],
+        target_object_type: "Thread",
+        mapping: { subject: "title" },
+      },
+      {},
+    );
+
+    const finalized = (await finalize_proposal.execute!(
+      { session_id: SESSION },
+      {},
+    )) as {
+      ok: true;
+      proposal: {
+        id: string;
+        diff: {
+          new_object_types: Record<string, unknown>;
+          new_link_types: Record<string, unknown>;
+          new_shared_properties: Record<string, unknown>;
+          new_action_types: Record<string, unknown>;
+          new_functions: Record<string, { ts_body: string }>;
+          new_views: Record<string, { tsx_body: string }>;
+          new_seeds: Record<string, { rows_jsonl: string }>;
+          new_ingests: Record<
+            string,
+            { inbox_ids: string[]; target_object_type: string }
+          >;
+          impacted_tables: string[];
+        };
+      };
+    };
+
+    expect(Object.keys(finalized.proposal.diff.new_object_types)).toEqual([
+      "Thread",
+    ]);
+    expect(Object.keys(finalized.proposal.diff.new_link_types)).toEqual([
+      "member_threads",
+    ]);
+    expect(Object.keys(finalized.proposal.diff.new_shared_properties)).toEqual([
+      "tag",
+    ]);
+    expect(Object.keys(finalized.proposal.diff.new_action_types)).toEqual([
+      "create_thread",
+    ]);
+    expect(
+      finalized.proposal.diff.new_functions["createThread.ts"].ts_body,
+    ).toContain("createThread");
+    expect(
+      finalized.proposal.diff.new_views["Thread:list"].tsx_body,
+    ).toContain("<ul />");
+    expect(finalized.proposal.diff.new_seeds["Thread"].rows_jsonl).toContain(
+      "Welcome",
+    );
+    expect(
+      finalized.proposal.diff.new_ingests["email_to_thread"].inbox_ids,
+    ).toEqual(["inbox-1"]);
+    expect(finalized.proposal.diff.impacted_tables).toEqual(["Thread"]);
+
+    expect(await store.getDraft(SESSION)).toBeNull();
   });
 });
 
