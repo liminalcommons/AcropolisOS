@@ -14,6 +14,7 @@ import { createTool } from "@mastra/core/tools";
 import { ActionPermissionError } from "../actions/permission-check";
 import type { Actor } from "../ctx";
 import type { Ontology } from "../ontology/schema";
+import type { OntologyCtx } from "../ontology/ctx";
 import {
   READ_OPS,
   buildMastraTools,
@@ -21,6 +22,7 @@ import {
   type AnyMastraTool,
 } from "../codegen/mastra-tools";
 import { buildZodSchemas, pascalCase } from "../codegen/zod";
+import { buildReadToolsForActor } from "./read-tools";
 
 // US-032: apply_action's execute() dispatches to whatever runs the action
 // (in production: an Inngest send + wait; in tests: a direct middleware
@@ -34,6 +36,10 @@ export type ApplyActionDispatcher = (input: {
 
 export interface GetToolsForActorOptions {
   applyActionDispatcher?: ApplyActionDispatcher;
+  // When supplied, READ tools (describe/query/traverse/sample/read/audit) are
+  // wired with real executes that route through this ctx. Without it, READ
+  // tools surface their codegen stubs that throw "not implemented (US-014)".
+  ctx?: OntologyCtx;
 }
 
 export interface ApplyActionResult {
@@ -143,6 +149,11 @@ export function getToolsForActor(
   options: GetToolsForActorOptions = {},
 ): ToolsForActor {
   const { tools: allTools } = buildMastraTools(ontology);
+  // When ctx is supplied, prefer the real-execute READ tools from
+  // `buildReadToolsForActor` over the codegen stubs in `buildMastraTools`.
+  const readToolsWithCtx = options.ctx
+    ? buildReadToolsForActor({ ontology, ctx: options.ctx })
+    : null;
   const filtered: Record<string, AnyMastraTool> = {};
 
   // READ tools: keep only object types the actor can read.
@@ -151,7 +162,7 @@ export function getToolsForActor(
     const pascal = pascalCase(objName);
     for (const op of READ_OPS) {
       const id = toolIdFor(op, pascal);
-      const tool = allTools[id];
+      const tool = readToolsWithCtx?.[id] ?? allTools[id];
       if (tool) filtered[id] = tool;
     }
   }
