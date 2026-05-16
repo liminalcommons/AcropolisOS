@@ -7,6 +7,7 @@ import {
   generateZodModule,
 } from "../lib/codegen/zod";
 import { generateMastraToolsModule } from "../lib/codegen/mastra-tools";
+import { generateDrizzleModule } from "../lib/codegen/drizzle";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,21 +18,25 @@ async function main(): Promise<void> {
   const seedRoot = path.join(pkgRoot, "seed", seedName, "ontology");
   const ontologyOutDir = path.join(pkgRoot, "lib", "ontology");
   const agentOutDir = path.join(pkgRoot, "lib", "agent");
+  const dbOutDir = path.join(pkgRoot, "lib", "db");
 
   const ontology = await loadOntology(seedRoot);
   await mkdir(ontologyOutDir, { recursive: true });
   await mkdir(agentOutDir, { recursive: true });
+  await mkdir(dbOutDir, { recursive: true });
 
   const typesPath = path.join(ontologyOutDir, "types.generated.ts");
   const combinedPath = path.join(ontologyOutDir, "ontology.generated.ts");
   const toolsPath = path.join(agentOutDir, "tools.generated.ts");
+  const drizzlePath = path.join(dbOutDir, "schema.generated.ts");
 
   await writeFile(typesPath, generateZodModule(ontology), "utf8");
   await writeFile(combinedPath, generateOntologyModule(ontology), "utf8");
   await writeFile(toolsPath, generateMastraToolsModule(ontology), "utf8");
+  await writeFile(drizzlePath, generateDrizzleModule(ontology), "utf8");
 
   process.stdout.write(
-    `generated:\n  ${typesPath}\n  ${combinedPath}\n  ${toolsPath}\n`,
+    `generated:\n  ${typesPath}\n  ${combinedPath}\n  ${toolsPath}\n  ${drizzlePath}\n`,
   );
 }
 
