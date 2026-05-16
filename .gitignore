@@ -10,4 +10,7 @@ next-env.d.ts
 .env.local
 .env*.local
 
+# Runtime data (users.json, setup.json) — file-backed defaults; US-002 replaces with Postgres
+data/
+
 .DS_Store
