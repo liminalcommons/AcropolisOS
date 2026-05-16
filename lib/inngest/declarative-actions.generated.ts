@@ -4,6 +4,10 @@
 import { inngest } from "../inngest/client";
 import { runDeclarativeAction } from "../actions/declarative";
 import { enforceActionPermission } from "../actions/permission-check";
+import {
+  auditPreInvocation,
+  auditPostInvocation,
+} from "../actions/audit-middleware";
 import type { Ontology } from "../ontology/schema";
 import type { OntologyCtx } from "../ontology/ctx";
 
@@ -21,12 +25,26 @@ export const actionAddMeetingMinute = inngest.createFunction(
     const payload = (event.data ?? {}) as {
       params?: unknown;
       ctx?: OntologyCtx;
+      parentAuditId?: string;
     };
     const ctx = payload.ctx;
     if (!ctx) {
       throw new Error(
         `acropolisos-action-add_meeting_minute: event.data.ctx is required (OntologyCtx must be passed in event payload)`,
       );
+    }
+    const params = payload.params;
+    const parentAuditId = payload.parentAuditId;
+    const pre = await step.run("audit-pre.add_meeting_minute", () =>
+      auditPreInvocation({
+        ctx,
+        actionName: "add_meeting_minute",
+        params,
+        parentAuditId,
+      }),
+    );
+    if (pre.kind === "replay") {
+      return pre.priorResult;
     }
     await step.run("permission-check.add_meeting_minute", () =>
       enforceActionPermission({
@@ -35,14 +53,46 @@ export const actionAddMeetingMinute = inngest.createFunction(
         ctx,
       }),
     );
-    return await step.run("declarative.add_meeting_minute", () =>
-      runDeclarativeAction({
-        actionName: "add_meeting_minute",
-        ontology,
-        params: event.data.params,
-        ctx,
-      }),
-    );
+    const startedAt = Date.now();
+    try {
+      const result = await step.run("declarative.add_meeting_minute", () =>
+        runDeclarativeAction({
+          actionName: "add_meeting_minute",
+          ontology,
+          params,
+          ctx,
+        }),
+      );
+      await step.run("audit-post.add_meeting_minute", () =>
+        auditPostInvocation({
+          ctx,
+          actionName: "add_meeting_minute",
+          params,
+          pendingAuditId: pre.pendingAuditId,
+          idempotencyKey: pre.idempotencyKey,
+          parentAuditId,
+          status: "ok",
+          durationMs: Date.now() - startedAt,
+          result,
+        }),
+      );
+      return result;
+    } catch (err) {
+      await step.run("audit-post.add_meeting_minute", () =>
+        auditPostInvocation({
+          ctx,
+          actionName: "add_meeting_minute",
+          params,
+          pendingAuditId: pre.pendingAuditId,
+          idempotencyKey: pre.idempotencyKey,
+          parentAuditId,
+          status: "error",
+          durationMs: Date.now() - startedAt,
+          error: err,
+        }),
+      );
+      throw err;
+    }
   },
 );
 
@@ -56,12 +106,26 @@ export const actionAddMember = inngest.createFunction(
     const payload = (event.data ?? {}) as {
       params?: unknown;
       ctx?: OntologyCtx;
+      parentAuditId?: string;
     };
     const ctx = payload.ctx;
     if (!ctx) {
       throw new Error(
         `acropolisos-action-add_member: event.data.ctx is required (OntologyCtx must be passed in event payload)`,
       );
+    }
+    const params = payload.params;
+    const parentAuditId = payload.parentAuditId;
+    const pre = await step.run("audit-pre.add_member", () =>
+      auditPreInvocation({
+        ctx,
+        actionName: "add_member",
+        params,
+        parentAuditId,
+      }),
+    );
+    if (pre.kind === "replay") {
+      return pre.priorResult;
     }
     await step.run("permission-check.add_member", () =>
       enforceActionPermission({
@@ -70,14 +134,46 @@ export const actionAddMember = inngest.createFunction(
         ctx,
       }),
     );
-    return await step.run("declarative.add_member", () =>
-      runDeclarativeAction({
-        actionName: "add_member",
-        ontology,
-        params: event.data.params,
-        ctx,
-      }),
-    );
+    const startedAt = Date.now();
+    try {
+      const result = await step.run("declarative.add_member", () =>
+        runDeclarativeAction({
+          actionName: "add_member",
+          ontology,
+          params,
+          ctx,
+        }),
+      );
+      await step.run("audit-post.add_member", () =>
+        auditPostInvocation({
+          ctx,
+          actionName: "add_member",
+          params,
+          pendingAuditId: pre.pendingAuditId,
+          idempotencyKey: pre.idempotencyKey,
+          parentAuditId,
+          status: "ok",
+          durationMs: Date.now() - startedAt,
+          result,
+        }),
+      );
+      return result;
+    } catch (err) {
+      await step.run("audit-post.add_member", () =>
+        auditPostInvocation({
+          ctx,
+          actionName: "add_member",
+          params,
+          pendingAuditId: pre.pendingAuditId,
+          idempotencyKey: pre.idempotencyKey,
+          parentAuditId,
+          status: "error",
+          durationMs: Date.now() - startedAt,
+          error: err,
+        }),
+      );
+      throw err;
+    }
   },
 );
 
@@ -91,12 +187,26 @@ export const actionRecordAttendance = inngest.createFunction(
     const payload = (event.data ?? {}) as {
       params?: unknown;
       ctx?: OntologyCtx;
+      parentAuditId?: string;
     };
     const ctx = payload.ctx;
     if (!ctx) {
       throw new Error(
         `acropolisos-action-record_attendance: event.data.ctx is required (OntologyCtx must be passed in event payload)`,
       );
+    }
+    const params = payload.params;
+    const parentAuditId = payload.parentAuditId;
+    const pre = await step.run("audit-pre.record_attendance", () =>
+      auditPreInvocation({
+        ctx,
+        actionName: "record_attendance",
+        params,
+        parentAuditId,
+      }),
+    );
+    if (pre.kind === "replay") {
+      return pre.priorResult;
     }
     await step.run("permission-check.record_attendance", () =>
       enforceActionPermission({
@@ -105,14 +215,46 @@ export const actionRecordAttendance = inngest.createFunction(
         ctx,
       }),
     );
-    return await step.run("declarative.record_attendance", () =>
-      runDeclarativeAction({
-        actionName: "record_attendance",
-        ontology,
-        params: event.data.params,
-        ctx,
-      }),
-    );
+    const startedAt = Date.now();
+    try {
+      const result = await step.run("declarative.record_attendance", () =>
+        runDeclarativeAction({
+          actionName: "record_attendance",
+          ontology,
+          params,
+          ctx,
+        }),
+      );
+      await step.run("audit-post.record_attendance", () =>
+        auditPostInvocation({
+          ctx,
+          actionName: "record_attendance",
+          params,
+          pendingAuditId: pre.pendingAuditId,
+          idempotencyKey: pre.idempotencyKey,
+          parentAuditId,
+          status: "ok",
+          durationMs: Date.now() - startedAt,
+          result,
+        }),
+      );
+      return result;
+    } catch (err) {
+      await step.run("audit-post.record_attendance", () =>
+        auditPostInvocation({
+          ctx,
+          actionName: "record_attendance",
+          params,
+          pendingAuditId: pre.pendingAuditId,
+          idempotencyKey: pre.idempotencyKey,
+          parentAuditId,
+          status: "error",
+          durationMs: Date.now() - startedAt,
+          error: err,
+        }),
+      );
+      throw err;
+    }
   },
 );
 

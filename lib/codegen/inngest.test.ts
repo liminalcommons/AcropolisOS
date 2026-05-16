@@ -86,11 +86,15 @@ describe("generateInngestActionsModule — runtime semantics", () => {
     const ontology = await loadOntology(SEED_DIR);
     const out = generateInngestActionsModule(ontology);
 
-    // For add_member, the function must wire actionName + event.data.params + ctx.
+    // For add_member, the function must wire actionName + ctx and source
+    // params from the event payload (via the `payload` local extracted from
+    // event.data — US-030 introduced the indirection so audit_pre + the
+    // declarative step share the same params binding).
     expect(out).toMatch(
       /runDeclarativeAction\(\{\s*actionName:\s*"add_member"/,
     );
-    expect(out).toContain("event.data.params");
+    expect(out).toMatch(/const payload\s*=\s*\(event\.data/);
+    expect(out).toMatch(/const params\s*=\s*payload\.params/);
     expect(out).toContain("ctx");
   });
 
@@ -117,5 +121,42 @@ describe("generateInngestActionsModule — runtime semantics", () => {
       expect(runIdx).toBeGreaterThan(-1);
       expect(checkIdx).toBeLessThan(runIdx);
     }
+  });
+
+  it("emits audit_pre / audit_post steps wrapping the action body (US-030)", async () => {
+    const ontology = await loadOntology(SEED_DIR);
+    const out = generateInngestActionsModule(ontology);
+
+    expect(out).toContain("auditPreInvocation");
+    expect(out).toContain("auditPostInvocation");
+    expect(out).toMatch(/from\s+"\.\.\/actions\/audit-middleware"/);
+
+    // Each declarative action gets matching audit step ids and they bracket
+    // the permission-check + declarative steps in source order.
+    for (const action of [
+      "add_member",
+      "add_meeting_minute",
+      "record_attendance",
+    ]) {
+      expect(out).toContain(`"audit-pre.${action}"`);
+      expect(out).toContain(`"audit-post.${action}"`);
+      const preIdx = out.indexOf(`"audit-pre.${action}"`);
+      const permIdx = out.indexOf(`"permission-check.${action}"`);
+      const runIdx = out.indexOf(`"declarative.${action}"`);
+      const postIdx = out.indexOf(`"audit-post.${action}"`);
+      expect(preIdx).toBeGreaterThan(-1);
+      expect(preIdx).toBeLessThan(permIdx);
+      expect(permIdx).toBeLessThan(runIdx);
+      expect(runIdx).toBeLessThan(postIdx);
+    }
+  });
+
+  it("short-circuits the body when audit_pre reports a replay (US-030)", async () => {
+    const ontology = await loadOntology(SEED_DIR);
+    const out = generateInngestActionsModule(ontology);
+    // Generated source must branch on the replay result before running the
+    // permission-check + declarative steps.
+    expect(out).toMatch(/kind\s*===\s*"replay"/);
+    expect(out).toContain("priorResult");
   });
 });

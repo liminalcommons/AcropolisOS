@@ -53,6 +53,10 @@ const IMPORTS =
   'import { inngest } from "../inngest/client";\n' +
   'import { runDeclarativeAction } from "../actions/declarative";\n' +
   'import { enforceActionPermission } from "../actions/permission-check";\n' +
+  'import {\n' +
+  '  auditPreInvocation,\n' +
+  '  auditPostInvocation,\n' +
+  '} from "../actions/audit-middleware";\n' +
   'import type { Ontology } from "../ontology/schema";\n' +
   'import type { OntologyCtx } from "../ontology/ctx";\n' +
   "\n";
@@ -75,6 +79,11 @@ function emitFunction(actionName: string): string {
   const constName = functionConstNameFor(actionName);
   const id = inngestFunctionIdFor(actionName);
   const eventName = inngestEventNameFor(actionName);
+  const preStep = JSON.stringify(`audit-pre.${actionName}`);
+  const permStep = JSON.stringify(`permission-check.${actionName}`);
+  const runStep = JSON.stringify(`declarative.${actionName}`);
+  const postStep = JSON.stringify(`audit-post.${actionName}`);
+  const nameLit = JSON.stringify(actionName);
   return (
     `export const ${constName} = inngest.createFunction(\n` +
     `  {\n` +
@@ -86,6 +95,7 @@ function emitFunction(actionName: string): string {
     `    const payload = (event.data ?? {}) as {\n` +
     `      params?: unknown;\n` +
     `      ctx?: OntologyCtx;\n` +
+    `      parentAuditId?: string;\n` +
     `    };\n` +
     `    const ctx = payload.ctx;\n` +
     `    if (!ctx) {\n` +
@@ -93,21 +103,66 @@ function emitFunction(actionName: string): string {
     `        \`${id}: event.data.ctx is required (OntologyCtx must be passed in event payload)\`,\n` +
     `      );\n` +
     `    }\n` +
-    `    await step.run(${JSON.stringify(`permission-check.${actionName}`)}, () =>\n` +
+    `    const params = payload.params;\n` +
+    `    const parentAuditId = payload.parentAuditId;\n` +
+    `    const pre = await step.run(${preStep}, () =>\n` +
+    `      auditPreInvocation({\n` +
+    `        ctx,\n` +
+    `        actionName: ${nameLit},\n` +
+    `        params,\n` +
+    `        parentAuditId,\n` +
+    `      }),\n` +
+    `    );\n` +
+    `    if (pre.kind === "replay") {\n` +
+    `      return pre.priorResult;\n` +
+    `    }\n` +
+    `    await step.run(${permStep}, () =>\n` +
     `      enforceActionPermission({\n` +
     `        ontology,\n` +
-    `        actionName: ${JSON.stringify(actionName)},\n` +
+    `        actionName: ${nameLit},\n` +
     `        ctx,\n` +
     `      }),\n` +
     `    );\n` +
-    `    return await step.run(${JSON.stringify(`declarative.${actionName}`)}, () =>\n` +
-    `      runDeclarativeAction({\n` +
-    `        actionName: ${JSON.stringify(actionName)},\n` +
-    `        ontology,\n` +
-    `        params: event.data.params,\n` +
-    `        ctx,\n` +
-    `      }),\n` +
-    `    );\n` +
+    `    const startedAt = Date.now();\n` +
+    `    try {\n` +
+    `      const result = await step.run(${runStep}, () =>\n` +
+    `        runDeclarativeAction({\n` +
+    `          actionName: ${nameLit},\n` +
+    `          ontology,\n` +
+    `          params,\n` +
+    `          ctx,\n` +
+    `        }),\n` +
+    `      );\n` +
+    `      await step.run(${postStep}, () =>\n` +
+    `        auditPostInvocation({\n` +
+    `          ctx,\n` +
+    `          actionName: ${nameLit},\n` +
+    `          params,\n` +
+    `          pendingAuditId: pre.pendingAuditId,\n` +
+    `          idempotencyKey: pre.idempotencyKey,\n` +
+    `          parentAuditId,\n` +
+    `          status: "ok",\n` +
+    `          durationMs: Date.now() - startedAt,\n` +
+    `          result,\n` +
+    `        }),\n` +
+    `      );\n` +
+    `      return result;\n` +
+    `    } catch (err) {\n` +
+    `      await step.run(${postStep}, () =>\n` +
+    `        auditPostInvocation({\n` +
+    `          ctx,\n` +
+    `          actionName: ${nameLit},\n` +
+    `          params,\n` +
+    `          pendingAuditId: pre.pendingAuditId,\n` +
+    `          idempotencyKey: pre.idempotencyKey,\n` +
+    `          parentAuditId,\n` +
+    `          status: "error",\n` +
+    `          durationMs: Date.now() - startedAt,\n` +
+    `          error: err,\n` +
+    `        }),\n` +
+    `      );\n` +
+    `      throw err;\n` +
+    `    }\n` +
     `  },\n` +
     `);\n\n`
   );
