@@ -150,6 +150,37 @@ describe("docker-entrypoint.sh — first-boot schema sync", () => {
   });
 });
 
+describe("scripts/smoke-compose.ts — I3 boot smoke", () => {
+  const SMOKE_PATH = path.join(PKG_ROOT, "scripts", "smoke-compose.ts");
+  const PACKAGE_JSON_PATH = path.join(PKG_ROOT, "package.json");
+
+  it("exists", () => {
+    expect(existsSync(SMOKE_PATH)).toBe(true);
+  });
+
+  it("is wired to the test:compose npm script", () => {
+    const pkg = JSON.parse(readFileSync(PACKAGE_JSON_PATH, "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    expect(pkg.scripts?.["test:compose"]).toBeDefined();
+    expect(pkg.scripts?.["test:compose"]).toMatch(/smoke-compose/);
+  });
+
+  it("asserts the four signals that catch the original launch bugs", () => {
+    // Guard against the script being silently stripped down — it must
+    // probe the four boot signals that the unit suite missed:
+    //   1. /api/auth/csrf (Edge runtime / middleware / migrations)
+    //   2. /signin (missing-page regressions)
+    //   3. Inngest GraphQL (action discovery)
+    //   4. docker compose build/up succeeds (Dockerfile / compose syntax)
+    const script = readFileSync(SMOKE_PATH, "utf8");
+    expect(script).toMatch(/\/api\/auth\/csrf/);
+    expect(script).toMatch(/\/signin/);
+    expect(script).toMatch(/Inngest GraphQL|\/v0\/gql/);
+    expect(script).toMatch(/docker compose build|"build"/);
+  });
+});
+
 describe(".dockerignore — reproducible builds", () => {
   it("exists at package root", () => {
     expect(existsSync(DOCKERIGNORE_PATH)).toBe(true);

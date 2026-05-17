@@ -18,7 +18,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push --force",
     "backup": "tsx scripts/backup.ts",
-    "restore": "tsx scripts/restore.ts"
+    "restore": "tsx scripts/restore.ts",
+    "test:compose": "tsx scripts/smoke-compose.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",
