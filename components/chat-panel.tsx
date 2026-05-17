@@ -1,24 +1,41 @@
 "use client";
 
 // US-017: Persistent chat panel.
+// US-018: Inline proposal panel surface below the message thread.
 //
-// Right-side dock-collapsible chat surface for vibe ontology coding. Mounted in
-// app/layout.tsx so every authenticated route has it. Open/closed state is
+// Right-side dock-collapsible chat surface for vibe ontology coding. Mounted
+// in app/layout.tsx so every authenticated route has it. Open/closed state is
 // persisted to localStorage via the helpers in chat-panel-state.ts.
 //
 // Streaming integration: uses `useChat` from `@ai-sdk/react` with the
 // `TextStreamChatTransport` because /api/chat returns `toTextStreamResponse()`
 // (plain text protocol). Markdown is rendered with react-markdown + remark-gfm
 // (code fences, tables, strikethrough). The file drop slot accepts files via
-// the native drag-and-drop API and shows their names — full attachment routing
-// is a follow-up task (see US-018).
+// the native drag-and-drop API and shows their names.
+//
+// Inline proposal panel (US-018): each chat-panel session is identified by a
+// stable client-side UUID stored in localStorage under
+// CHAT_SESSION_STORAGE_KEY. The id is sent to /api/chat as `session_id` so the
+// agent can pass it to finalize_proposal(); the proposal store associates
+// proposals with that session id. After every agent stream completes we poll
+// /api/proposals?session_id=<id> and surface the latest pending proposal
+// below the message list via <InlineProposalPanel/>.
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useChat } from "@ai-sdk/react";
 import { TextStreamChatTransport, type UIMessage } from "ai";
 import { ChevronRight, MessageSquare, Paperclip, Send, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { Proposal } from "@/lib/proposals/store";
+import type { BuiltInRole } from "@/lib/auth/users";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_PANEL_STATE,
@@ -26,10 +43,20 @@ import {
   savePanelState,
   subscribePanelState,
 } from "./chat-panel-state";
+import {
+  CHAT_SESSION_STORAGE_KEY,
+  pickLatestProposalForSession,
+} from "./inline-proposal-panel-state";
+import { InlineProposalPanel } from "./inline-proposal-panel";
 
 interface DroppedFile {
   name: string;
   size: number;
+}
+
+interface ChatPanelProps {
+  actorRole?: BuiltInRole | null;
+  actorEmail?: string;
 }
 
 function getMessageText(message: UIMessage): string {
@@ -39,7 +66,40 @@ function getMessageText(message: UIMessage): string {
     .join("");
 }
 
-export function ChatPanel(): React.ReactNode {
+function getOrCreateChatSessionId(): string {
+  if (typeof globalThis === "undefined") return "";
+  const storage = (globalThis as { localStorage?: Storage }).localStorage;
+  if (!storage) return "";
+  try {
+    const existing = storage.getItem(CHAT_SESSION_STORAGE_KEY);
+    if (existing) return existing;
+  } catch {
+    return "";
+  }
+  const cryptoApi = (globalThis as { crypto?: Crypto }).crypto;
+  const fresh = cryptoApi?.randomUUID
+    ? cryptoApi.randomUUID()
+    : `chat-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  try {
+    storage.setItem(CHAT_SESSION_STORAGE_KEY, fresh);
+  } catch {
+    // Quota / private-browsing — fall through with the value we already minted.
+  }
+  return fresh;
+}
+
+function chatSessionNoopSubscribe(): () => void {
+  return () => {};
+}
+
+function serverChatSessionSnapshot(): string {
+  return "";
+}
+
+export function ChatPanel({
+  actorRole = null,
+  actorEmail,
+}: ChatPanelProps = {}): React.ReactNode {
   const panelState = useSyncExternalStore(
     subscribePanelState,
     loadPanelState,
@@ -48,20 +108,72 @@ export function ChatPanel(): React.ReactNode {
   const [input, setInput] = useState("");
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
+  const [dismissedProposals, setDismissedProposals] = useState<Set<string>>(
+    () => new Set(),
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const transport = useMemo(
-    () => new TextStreamChatTransport({ api: "/api/chat" }),
-    [],
+  // Stable per-browser chat session id; SSR returns "" to avoid touching
+  // localStorage on the server, the client picks up the persisted id on
+  // hydration. useSyncExternalStore keeps the setState-in-effect lint happy
+  // by sourcing the value via a snapshot callback instead of useEffect.
+  const chatSessionId = useSyncExternalStore<string>(
+    chatSessionNoopSubscribe,
+    getOrCreateChatSessionId,
+    serverChatSessionSnapshot,
   );
 
-  const { messages, sendMessage, status, error } = useChat({ transport });
+  const transport = useMemo(() => {
+    if (!chatSessionId) {
+      return new TextStreamChatTransport({ api: "/api/chat" });
+    }
+    return new TextStreamChatTransport({
+      api: "/api/chat",
+      body: { session_id: chatSessionId },
+    });
+  }, [chatSessionId]);
+
+  const dismissedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    dismissedRef.current = dismissedProposals;
+  }, [dismissedProposals]);
+
+  const pollLatestProposal = useCallback(async (): Promise<void> => {
+    if (!chatSessionId) return;
+    try {
+      const res = await fetch(
+        `/api/proposals?session_id=${encodeURIComponent(chatSessionId)}`,
+      );
+      if (!res.ok) return;
+      const body = (await res.json()) as { proposals: Proposal[] };
+      const latest = pickLatestProposalForSession(
+        body.proposals,
+        chatSessionId,
+      );
+      if (latest && !dismissedRef.current.has(latest.id)) {
+        setActiveProposalId(latest.id);
+      }
+    } catch {
+      // Polling is best-effort; a transient failure is fine.
+    }
+  }, [chatSessionId]);
+
+  const { messages, sendMessage, status, error } = useChat({
+    transport,
+    // After the assistant stream finishes the agent may have just called
+    // finalize_proposal(). Poll the queue for the freshly minted proposal so
+    // the inline panel materializes without the user clicking anything.
+    onFinish: () => {
+      void pollLatestProposal();
+    },
+  });
 
   useEffect(() => {
     if (panelState.open && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, panelState.open]);
+  }, [messages, panelState.open, activeProposalId]);
 
   const toggle = () => savePanelState({ open: !panelState.open });
 
@@ -82,6 +194,15 @@ export function ChatPanel(): React.ReactNode {
       ...prev,
       ...files.map((f) => ({ name: f.name, size: f.size })),
     ]);
+  };
+
+  const dismissProposal = (id: string): void => {
+    setDismissedProposals((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    setActiveProposalId((current) => (current === id ? null : current));
   };
 
   if (!panelState.open) {
@@ -155,6 +276,17 @@ export function ChatPanel(): React.ReactNode {
             })}
           </ul>
         )}
+        {activeProposalId ? (
+          <div className="mt-3" data-testid="chat-panel-proposal-slot">
+            <InlineProposalPanel
+              key={activeProposalId}
+              proposalId={activeProposalId}
+              actorRole={actorRole}
+              actorEmail={actorEmail}
+              onDismiss={() => dismissProposal(activeProposalId)}
+            />
+          </div>
+        ) : null}
         {error ? (
           <p className="mt-3 rounded-md bg-red-950/40 px-3 py-2 text-xs text-red-300 ring-1 ring-red-900">
             {error.message}

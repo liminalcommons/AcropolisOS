@@ -14,6 +14,10 @@ const SAMPLE_OT = {
   properties: { id: { type: "uuid", primary_key: true } },
 } as const;
 
+function makeReq(url = "http://localhost/api/proposals"): Request {
+  return new Request(url, { method: "GET" });
+}
+
 describe("GET /api/proposals", () => {
   beforeEach(async () => {
     // Drain the singleton between tests.
@@ -24,7 +28,7 @@ describe("GET /api/proposals", () => {
   });
 
   it("returns an empty list when nothing is pending", async () => {
-    const res = await GET();
+    const res = await GET(makeReq());
     expect(res.status).toBe(200);
     const body = (await res.json()) as { proposals: unknown[] };
     expect(body.proposals).toEqual([]);
@@ -38,7 +42,7 @@ describe("GET /api/proposals", () => {
     await store.appendObjectType("s-new", "New", SAMPLE_OT);
     const newer = await store.finalize("s-new");
 
-    const res = await GET();
+    const res = await GET(makeReq());
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       proposals: Array<{ id: string; status: string }>;
@@ -55,8 +59,23 @@ describe("GET /api/proposals", () => {
     await store.setStatus(p1.id, "approved");
     await store.setStatus(p2.id, "rejected");
 
-    const res = await GET();
+    const res = await GET(makeReq());
     const body = (await res.json()) as { proposals: unknown[] };
     expect(body.proposals).toEqual([]);
+  });
+
+  it("filters by session_id when ?session_id=… is set", async () => {
+    await store.appendObjectType("mine", "Mine", SAMPLE_OT);
+    const mine = await store.finalize("mine");
+    await store.appendObjectType("yours", "Yours", SAMPLE_OT);
+    await store.finalize("yours");
+
+    const res = await GET(
+      makeReq("http://localhost/api/proposals?session_id=mine"),
+    );
+    const body = (await res.json()) as {
+      proposals: Array<{ id: string; session_id: string }>;
+    };
+    expect(body.proposals.map((p) => p.id)).toEqual([mine.id]);
   });
 });
