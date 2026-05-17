@@ -1,8 +1,8 @@
 {
   "name": "@chora/acropolisos",
-  "version": "0.0.1",
+  "version": "5.0.0",
   "private": true,
-  "description": "acropolisOS — self-hostable AI-first Foundry analogue for small communities",
+  "description": "acropolisOS v5 — self-hostable AI-first ontology platform for small communities",
   "scripts": {
     "dev": "next dev --port 3030",
     "dev:watch": "tsx scripts/dev-watch.ts",
