@@ -128,14 +128,16 @@ export function buildLanguageModel(env: EnvLike = process.env): LanguageModel {
       return provider(cfg.model);
     }
     case "opencode": {
-      // OpenCode Zen is OpenAI-compatible. Pin the base URL so the user only
-      // configures provider + key + model. cfg.baseURL is an escape hatch
-      // (e.g. self-hosted OpenCode proxy).
+      // OpenCode Zen exposes /v1/chat/completions for all routed models.
+      // @ai-sdk/openai v6 defaults provider(model) to the new /v1/responses
+      // API, which Zen only supports for a subset (claude-*, gpt-*). Force
+      // .chat() so open-weight models (qwen, glm, kimi, deepseek, minimax)
+      // also work.
       const provider = createOpenAI({
         apiKey: cfg.apiKey,
         baseURL: cfg.baseURL ?? OPENCODE_BASE_URL,
       });
-      return provider(cfg.model);
+      return provider.chat(cfg.model);
     }
   }
 }
