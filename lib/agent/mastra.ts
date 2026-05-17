@@ -5,13 +5,19 @@ import { Agent } from "@mastra/core/agent";
 import { createOllama } from "ollama-ai-provider-v2";
 import type { LanguageModel } from "ai";
 
-export type Provider = "anthropic" | "openai" | "groq" | "ollama";
+export type Provider =
+  | "anthropic"
+  | "openai"
+  | "groq"
+  | "ollama"
+  | "opencode";
 
 export const PROVIDERS: readonly Provider[] = [
   "anthropic",
   "openai",
   "groq",
   "ollama",
+  "opencode",
 ] as const;
 
 export const DEFAULT_MODELS: Record<Provider, string> = {
@@ -19,7 +25,38 @@ export const DEFAULT_MODELS: Record<Provider, string> = {
   openai: "gpt-5",
   groq: "llama-3.3-70b-versatile",
   ollama: "llama3.2",
+  // OpenCode Go's free tier covers open-weight models. Default to qwen3.6-plus
+  // for the strongest open-weight reasoner; users with Zen credits can switch
+  // to claude-* or gpt-* via the model picker.
+  opencode: "qwen3.6-plus",
 };
+
+// OpenCode Zen is an OpenAI-compatible gateway. We pin the base URL so users
+// only need to supply their key + pick a model — same shape as anthropic/groq
+// (single field setup, no base URL guessing).
+export const OPENCODE_BASE_URL = "https://opencode.ai/zen/v1" as const;
+
+// Curated set of OpenCode Zen model IDs surfaced in the setup picker. The
+// /v1/models endpoint lists the full set; this list is the steward-friendly
+// subset (most likely to work on Go-tier and Zen pay-as-you-go).
+export const OPENCODE_MODELS = [
+  // Open-weight (Go-plan free tier)
+  "qwen3.6-plus",
+  "glm-5.1",
+  "glm-5",
+  "kimi-k2.6",
+  "kimi-k2.5",
+  "deepseek-v4-flash",
+  "minimax-m2.7",
+  "minimax-m2.5",
+  // Closed / Zen pay-as-you-go
+  "claude-opus-4-7",
+  "claude-sonnet-4-6",
+  "claude-haiku-4-5",
+  "gpt-5.5",
+  "gpt-5",
+  "gemini-3.1-pro",
+] as const;
 
 export const AGENT_NAME = "acropolisos-chat";
 
@@ -87,6 +124,16 @@ export function buildLanguageModel(env: EnvLike = process.env): LanguageModel {
     case "ollama": {
       const provider = createOllama({
         ...(cfg.baseURL ? { baseURL: cfg.baseURL } : {}),
+      });
+      return provider(cfg.model);
+    }
+    case "opencode": {
+      // OpenCode Zen is OpenAI-compatible. Pin the base URL so the user only
+      // configures provider + key + model. cfg.baseURL is an escape hatch
+      // (e.g. self-hosted OpenCode proxy).
+      const provider = createOpenAI({
+        apiKey: cfg.apiKey,
+        baseURL: cfg.baseURL ?? OPENCODE_BASE_URL,
       });
       return provider(cfg.model);
     }

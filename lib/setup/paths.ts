@@ -1,6 +1,11 @@
 import path from "node:path";
 
-const PKG_ROOT = path.resolve(__dirname, "..", "..");
+// Turbopack replaces `__dirname` with the literal placeholder "/ROOT" in
+// the server bundle, which breaks `path.resolve(__dirname, "..", "..")` at
+// runtime (yields "/ROOT" — a directory the container can't mkdir into).
+// Use `process.cwd()` instead — the Docker image WORKDIR is the package
+// root, and `npm run dev` is invoked from there too.
+const PKG_ROOT = process.env.ACROPOLISOS_PKG_ROOT ?? process.cwd();
 
 export function getEnvFile(): string {
   return process.env.ACROPOLISOS_ENV_FILE ?? path.join(PKG_ROOT, ".env");

@@ -27,10 +27,11 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: "invalid body" }, { status: 400 });
   }
 
-  const { provider, apiKey, baseURL } = body as {
+  const { provider, apiKey, baseURL, model } = body as {
     provider?: unknown;
     apiKey?: unknown;
     baseURL?: unknown;
+    model?: unknown;
   };
   if (!isProvider(provider)) {
     return Response.json(
@@ -40,6 +41,7 @@ export async function POST(req: Request): Promise<Response> {
   }
   const key = typeof apiKey === "string" ? apiKey : "";
   const base = typeof baseURL === "string" ? baseURL : undefined;
+  const chosenModel = typeof model === "string" ? model.trim() : "";
   if (provider !== "ollama" && !key.trim()) {
     return Response.json({ error: "apiKey is required" }, { status: 400 });
   }
@@ -52,6 +54,7 @@ export async function POST(req: Request): Promise<Response> {
   const vars: Record<string, string> = { LLM_PROVIDER: provider };
   if (key.trim()) vars.LLM_API_KEY = key.trim();
   if (base) vars.LLM_BASE_URL = base;
+  if (chosenModel) vars.LLM_MODEL = chosenModel;
   await upsertEnvVars(getEnvFile(), vars);
 
   return Response.json({ ok: true, provider });

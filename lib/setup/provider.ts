@@ -1,4 +1,4 @@
-import { PROVIDERS, type Provider } from "../agent/mastra";
+import { OPENCODE_BASE_URL, PROVIDERS, type Provider } from "../agent/mastra";
 
 export type FetchLike = typeof fetch;
 
@@ -13,25 +13,34 @@ export type ValidationResult =
   | { ok: true }
   | { ok: false; error: string };
 
+// Strip a trailing /v1 (and any trailing slashes) so we can re-append the
+// canonical /v1/models path without ending up with /v1/v1/models against
+// OpenAI-compatible gateways that already include /v1 in their base URL.
+const stripV1 = (u: string) => u.replace(/\/+$/, "").replace(/\/v1$/, "");
+
 const PROBE: Record<
   Provider,
   (apiKey: string, baseURL?: string) => { url: string; headers: HeadersInit }
 > = {
-  anthropic: (apiKey) => ({
-    url: "https://api.anthropic.com/v1/models",
+  anthropic: (apiKey, baseURL) => ({
+    url: `${stripV1(baseURL ?? "https://api.anthropic.com")}/v1/models`,
     headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
   }),
-  openai: (apiKey) => ({
-    url: "https://api.openai.com/v1/models",
+  openai: (apiKey, baseURL) => ({
+    url: `${stripV1(baseURL ?? "https://api.openai.com")}/v1/models`,
     headers: { Authorization: `Bearer ${apiKey}` },
   }),
-  groq: (apiKey) => ({
-    url: "https://api.groq.com/openai/v1/models",
+  groq: (apiKey, baseURL) => ({
+    url: `${stripV1(baseURL ?? "https://api.groq.com/openai")}/v1/models`,
     headers: { Authorization: `Bearer ${apiKey}` },
   }),
   ollama: (_apiKey, baseURL) => ({
     url: `${(baseURL ?? "http://localhost:11434").replace(/\/+$/, "")}/api/tags`,
     headers: {},
+  }),
+  opencode: (apiKey, baseURL) => ({
+    url: `${stripV1(baseURL ?? OPENCODE_BASE_URL)}/v1/models`,
+    headers: { Authorization: `Bearer ${apiKey}` },
   }),
 };
 

@@ -46,7 +46,9 @@ services:
       - ./ontology:/app/ontology
       - ./functions:/app/functions
       - ./uploads:/app/uploads
-      - ./.env:/app/.env:ro
+      # .env is bind-mounted read-write so the setup wizard can persist
+      # LLM_* keys back to it (docker-compose re-reads it on `compose up`).
+      - ./.env:/app/.env
       - appdata:/app/data
     ports:
       - "3030:3030"

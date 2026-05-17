@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 
-type Provider = "anthropic" | "openai" | "groq" | "ollama";
+type Provider = "anthropic" | "openai" | "groq" | "ollama" | "opencode";
 type Step = 1 | 2 | 3 | 4;
 
 const PROVIDERS: { id: Provider; label: string; help: string }[] = [
@@ -15,6 +15,30 @@ const PROVIDERS: { id: Provider; label: string; help: string }[] = [
     label: "Ollama",
     help: "Local — no key, set the base URL",
   },
+  {
+    id: "opencode",
+    label: "OpenCode Zen",
+    help: "Multi-model gateway — paste your OpenCode Go/Zen key",
+  },
+];
+
+// Mirrors lib/agent/mastra.ts → OPENCODE_MODELS. Kept inline here to avoid
+// pulling a server module into the client bundle.
+const OPENCODE_MODELS: { id: string; tier: "go" | "zen" }[] = [
+  { id: "qwen3.6-plus", tier: "go" },
+  { id: "glm-5.1", tier: "go" },
+  { id: "glm-5", tier: "go" },
+  { id: "kimi-k2.6", tier: "go" },
+  { id: "kimi-k2.5", tier: "go" },
+  { id: "deepseek-v4-flash", tier: "go" },
+  { id: "minimax-m2.7", tier: "go" },
+  { id: "minimax-m2.5", tier: "go" },
+  { id: "claude-opus-4-7", tier: "zen" },
+  { id: "claude-sonnet-4-6", tier: "zen" },
+  { id: "claude-haiku-4-5", tier: "zen" },
+  { id: "gpt-5.5", tier: "zen" },
+  { id: "gpt-5", tier: "zen" },
+  { id: "gemini-3.1-pro", tier: "zen" },
 ];
 
 const SEEDS: { id: "empty" | "small-community"; label: string; help: string }[] = [
@@ -38,6 +62,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
   const [provider, setProvider] = useState<Provider>("anthropic");
   const [apiKey, setApiKey] = useState("");
   const [baseURL, setBaseURL] = useState("http://localhost:11434");
+  const [opencodeModel, setOpencodeModel] = useState<string>("qwen3.6-plus");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -70,6 +95,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
         provider,
         apiKey,
         ...(provider === "ollama" ? { baseURL } : {}),
+        ...(provider === "opencode" ? { model: opencodeModel } : {}),
       });
       setStep(2);
     } catch (err) {
@@ -180,6 +206,35 @@ export function SetupWizard({ initialStep = 1 }: Props) {
               />
             </label>
           )}
+          {provider === "opencode" ? (
+            <label className="block text-sm">
+              Model
+              <select
+                value={opencodeModel}
+                onChange={(e) => setOpencodeModel(e.target.value)}
+                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 p-2"
+              >
+                <optgroup label="OpenCode Go (open-weight, included)">
+                  {OPENCODE_MODELS.filter((m) => m.tier === "go").map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.id}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="OpenCode Zen (pay-as-you-go)">
+                  {OPENCODE_MODELS.filter((m) => m.tier === "zen").map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.id}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+              <span className="mt-1 block text-xs text-zinc-500">
+                Go-tier models are included in the $10/mo plan. Zen-tier models
+                charge against your OpenCode credit balance.
+              </span>
+            </label>
+          ) : null}
           <button
             type="submit"
             disabled={busy}

@@ -5,7 +5,8 @@ import { loadCustomRoleNames } from "../ontology/roles";
 import { FileUserStore, type UserStore } from "./users";
 import { enrichJwt, enrichSession } from "./session-shape";
 
-const PKG_ROOT = path.resolve(__dirname, "..", "..");
+// See lib/setup/paths.ts for why we use process.cwd() instead of __dirname.
+const PKG_ROOT = process.env.ACROPOLISOS_PKG_ROOT ?? process.cwd();
 const DEFAULT_DATA_DIR = path.join(PKG_ROOT, "data");
 const DEFAULT_USERS_FILE = path.join(DEFAULT_DATA_DIR, "users.json");
 const DEFAULT_ONTOLOGY_DIR = path.join(
