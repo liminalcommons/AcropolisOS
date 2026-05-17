@@ -12,6 +12,7 @@
 import { z, type ZodTypeAny } from "zod";
 import { createTool } from "@mastra/core/tools";
 import { ActionPermissionError } from "../actions/permission-check";
+import { resolveActionPolicy } from "../actions/policy";
 import type { Actor } from "../ctx";
 import type { Ontology } from "../ontology/schema";
 import type { OntologyCtx } from "../ontology/ctx";
@@ -45,6 +46,18 @@ export interface GetToolsForActorOptions {
 export interface ApplyActionResult {
   ok: boolean;
   result?: unknown;
+  // US-026: present (and ok:false) when the action's agent_policy declined
+  // to auto-fire. The chat panel renders this as a confirmation card; on
+  // user approval the same params re-enter apply_action with policy bypassed
+  // (or, for now, the steward invokes the dispatcher path directly).
+  confirmation_required?: {
+    action: string;
+    params: unknown;
+    reason: "always_confirm" | "unfamiliar";
+    prior_success_count?: number;
+    required_permissions: string[];
+    description?: string;
+  };
   error?: {
     type: "permission_denied" | "not_implemented" | "internal";
     action: string;
@@ -52,6 +65,16 @@ export interface ApplyActionResult {
     required_permissions: string[];
     message: string;
   };
+}
+
+// US-026: per-action policy gate. When supplied to runApplyActionTool the
+// action's agent_policy is consulted before dispatch; an always_confirm or
+// unfamiliar confirm_if_unfamiliar resolution short-circuits to a structured
+// confirmation_required envelope and the dispatcher is NOT called.
+export interface ApplyActionPolicyGate {
+  ontology: Ontology;
+  ctx: OntologyCtx;
+  familiarityThreshold?: number;
 }
 
 // Execute logic extracted from the Mastra tool wrapper so it is directly
@@ -62,7 +85,36 @@ export async function runApplyActionTool(input: {
   dispatcher: ApplyActionDispatcher | undefined;
   action: string;
   params: unknown;
+  // US-026: optional policy gate. When supplied, agent_policy is consulted
+  // before dispatch. Omitting it preserves pre-US-026 behavior.
+  policy?: ApplyActionPolicyGate;
 }): Promise<ApplyActionResult> {
+  if (input.policy) {
+    const decision = await resolveActionPolicy({
+      ontology: input.policy.ontology,
+      actionName: input.action,
+      params: input.params,
+      ctx: input.policy.ctx,
+      familiarityThreshold: input.policy.familiarityThreshold,
+    });
+    if (decision.decision === "confirmation_required") {
+      const def = input.policy.ontology.action_types[input.action];
+      return {
+        ok: false,
+        confirmation_required: {
+          action: input.action,
+          params: input.params,
+          reason: decision.reason,
+          required_permissions: def?.permissions ?? [],
+          ...(typeof decision.priorSuccessCount === "number"
+            ? { prior_success_count: decision.priorSuccessCount }
+            : {}),
+          ...(def?.description ? { description: def.description } : {}),
+        },
+      };
+    }
+  }
+
   if (!input.dispatcher) {
     return {
       ok: false,
@@ -199,6 +251,12 @@ export function getToolsForActor(
           );
 
     const dispatcher = options.applyActionDispatcher;
+    // US-026: policy gate is enabled whenever a ctx is wired, so the
+    // production code path is policy-aware by default. The ctx is also
+    // what gives confirm_if_unfamiliar access to action_audit history.
+    const policy: ApplyActionPolicyGate | undefined = options.ctx
+      ? { ontology, ctx: options.ctx }
+      : undefined;
     filtered.apply_action = createTool({
       id: "apply_action",
       description:
@@ -207,6 +265,16 @@ export function getToolsForActor(
       outputSchema: z.object({
         ok: z.boolean(),
         result: z.unknown().optional(),
+        confirmation_required: z
+          .object({
+            action: z.string(),
+            params: z.unknown(),
+            reason: z.enum(["always_confirm", "unfamiliar"]),
+            prior_success_count: z.number().optional(),
+            required_permissions: z.array(z.string()),
+            description: z.string().optional(),
+          })
+          .optional(),
         error: z
           .object({
             type: z.enum(["permission_denied", "not_implemented", "internal"]),
@@ -224,6 +292,7 @@ export function getToolsForActor(
           dispatcher,
           action: input.action,
           params: input.params,
+          policy,
         });
       },
     });
