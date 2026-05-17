@@ -16,7 +16,9 @@
     "codegen:ontology": "tsx scripts/generate-ontology.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "backup": "tsx scripts/backup.ts",
+    "restore": "tsx scripts/restore.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",
