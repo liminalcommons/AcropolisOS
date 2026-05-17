@@ -13,6 +13,7 @@ import { z, type ZodTypeAny } from "zod";
 import { createTool } from "@mastra/core/tools";
 import { ActionPermissionError } from "../actions/permission-check";
 import { resolveActionPolicy } from "../actions/policy";
+import { isDispatchedActionEnvelope } from "../actions/dispatcher";
 import type { Actor } from "../ctx";
 import type { Ontology } from "../ontology/schema";
 import type { OntologyCtx } from "../ontology/ctx";
@@ -46,6 +47,13 @@ export interface GetToolsForActorOptions {
 export interface ApplyActionResult {
   ok: boolean;
   result?: unknown;
+  // US-027: id of the action_audit row that records this invocation. Present
+  // on successful dispatch when the dispatcher returns a DispatchedAction
+  // envelope (the in-process dispatcher does). Chat renders an "Action
+  // recorded" card linking to this row. Omitted for confirmation_required
+  // results (nothing was applied yet) and for back-compat dispatchers that
+  // return only a raw result.
+  audit_id?: string | null;
   // US-026: present (and ok:false) when the action's agent_policy declined
   // to auto-fire. The chat panel renders this as a confirmation card; on
   // user approval the same params re-enter apply_action with policy bypassed
@@ -129,11 +137,14 @@ export async function runApplyActionTool(input: {
     };
   }
   try {
-    const result = await input.dispatcher({
+    const raw = await input.dispatcher({
       action: input.action,
       params: input.params,
     });
-    return { ok: true, result };
+    if (isDispatchedActionEnvelope(raw)) {
+      return { ok: true, result: raw.result, audit_id: raw.audit_id };
+    }
+    return { ok: true, result: raw };
   } catch (err) {
     if (err instanceof ActionPermissionError) {
       return {
@@ -265,6 +276,7 @@ export function getToolsForActor(
       outputSchema: z.object({
         ok: z.boolean(),
         result: z.unknown().optional(),
+        audit_id: z.string().nullable().optional(),
         confirmation_required: z
           .object({
             action: z.string(),

@@ -233,6 +233,33 @@ describe("apply_action — structured permission error surface (US-032)", () => 
     expect(tools.apply_action).toBeInstanceOf(Tool);
   });
 
+  it("surfaces audit_id in ApplyActionResult when dispatcher returns a DispatchedAction envelope (US-027)", async () => {
+    const out = await runApplyActionTool({
+      actor: stewardActor,
+      dispatcher: async ({ action, params }) => ({
+        result: { ran: action, params },
+        audit_id: "audit-row-42",
+      }),
+      action: "add_member",
+      params: { full_name: "Ada", email: "a@example.com" },
+    });
+    expect(out.ok).toBe(true);
+    expect(out.audit_id).toBe("audit-row-42");
+    expect(out.result).toMatchObject({ ran: "add_member" });
+  });
+
+  it("omits audit_id when dispatcher returns a raw result (back-compat with pre-US-027 dispatchers)", async () => {
+    const out = await runApplyActionTool({
+      actor: stewardActor,
+      dispatcher: async ({ action }) => ({ ran: action }),
+      action: "add_member",
+      params: { full_name: "x", email: "x@x" },
+    });
+    expect(out.ok).toBe(true);
+    expect(out.audit_id).toBeUndefined();
+    expect(out.result).toMatchObject({ ran: "add_member" });
+  });
+
   it("re-exports ActionPermissionError as instanceof for caller branch checks", () => {
     const e = new ActionPermissionError({
       actorId: "u-1",
