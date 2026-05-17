@@ -1,6 +1,7 @@
 Member:
   description: A person belonging to the community
   title_property: full_name
+  data_audit: true
   permissions:
     read: ["*"]
     write: ["steward", "member_self"]

@@ -84,6 +84,10 @@ export const ObjectType = z
     description: z.string().optional(),
     title_property: z.string().optional(),
     permissions: PermissionsBlock.optional(),
+    // When true, codegen emits a Postgres trigger on the generated table that
+    // mirrors every INSERT/UPDATE/DELETE into the generic data_audit table.
+    // Opt-in per object type (US-034).
+    data_audit: z.boolean().optional(),
     properties: z
       .record(z.string(), PropertyDefinition)
       .refine((props) => Object.keys(props).length > 0, {

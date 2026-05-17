@@ -74,6 +74,19 @@ describe("ObjectType", () => {
     const result = ObjectType.safeParse({ ...valid, color: "red" });
     expect(result.success).toBe(false);
   });
+
+  it("accepts the optional data_audit flag", () => {
+    const result = ObjectType.safeParse({ ...valid, data_audit: true });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.data_audit).toBe(true);
+    }
+  });
+
+  it("defaults data_audit to undefined when omitted", () => {
+    const result = ObjectType.parse(valid);
+    expect(result.data_audit).toBeUndefined();
+  });
 });
 
 describe("LinkType", () => {
