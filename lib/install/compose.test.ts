@@ -121,14 +121,19 @@ describe("Dockerfile — US-036 reproducible image", () => {
   });
 });
 
-describe("docker-entrypoint.sh — first-boot migration", () => {
+describe("docker-entrypoint.sh — first-boot schema sync", () => {
   it("exists", () => {
     expect(existsSync(ENTRYPOINT_PATH)).toBe(true);
   });
 
-  it("runs drizzle-kit migrate before starting the app", () => {
+  it("runs drizzle-kit push before starting the app", () => {
+    // Changed from `drizzle-kit migrate` in commit 8857ec873 — the hand-
+    // written SQL migrations in drizzle/ don't include CREATE TABLE for
+    // the codegen'd object tables, so `migrate` always failed at
+    // 0003_data_audit. `push --force` syncs the full Drizzle schema
+    // (incl. the re-exported schema.generated) idempotently.
     const entrypoint = readFileSync(ENTRYPOINT_PATH, "utf8");
-    expect(entrypoint).toMatch(/drizzle-kit migrate/);
+    expect(entrypoint).toMatch(/drizzle-kit push --force/);
     expect(entrypoint).toMatch(/exec/);
   });
 });
