@@ -136,6 +136,18 @@ describe("docker-entrypoint.sh — first-boot schema sync", () => {
     expect(entrypoint).toMatch(/drizzle-kit push --force/);
     expect(entrypoint).toMatch(/exec/);
   });
+
+  it("applies 0003_data_audit.sql via psql after push (B9 regression guard)", () => {
+    // drizzle-kit push doesn't run the hand-written SQL migrations, so the
+    // member_data_audit_trg trigger from drizzle/0003_data_audit.sql was
+    // silently never applied after we switched to push. Re-running 0003
+    // explicitly via psql after push is the pragmatic fix; 0003 itself is
+    // idempotent (CREATE TABLE IF NOT EXISTS, CREATE OR REPLACE FUNCTION,
+    // DROP TRIGGER IF EXISTS).
+    const entrypoint = readFileSync(ENTRYPOINT_PATH, "utf8");
+    expect(entrypoint).toMatch(/psql .*0003_data_audit\.sql/);
+    expect(entrypoint).toMatch(/ON_ERROR_STOP=1/);
+  });
 });
 
 describe(".dockerignore — reproducible builds", () => {

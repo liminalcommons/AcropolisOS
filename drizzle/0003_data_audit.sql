@@ -15,15 +15,15 @@ CREATE OR REPLACE FUNCTION "member_data_audit_fn"() RETURNS trigger AS $$
 BEGIN
 	IF (TG_OP = 'DELETE') THEN
 		INSERT INTO "data_audit" ("table_name", "row_id", "operation", "before", "after", "db_actor")
-		VALUES ('member', OLD.id::text, TG_OP, row_to_jsonb(OLD), NULL, current_user);
+		VALUES ('member', OLD.id::text, TG_OP, to_jsonb(OLD), NULL, current_user);
 		RETURN OLD;
 	ELSIF (TG_OP = 'UPDATE') THEN
 		INSERT INTO "data_audit" ("table_name", "row_id", "operation", "before", "after", "db_actor")
-		VALUES ('member', COALESCE(NEW.id, OLD.id)::text, TG_OP, row_to_jsonb(OLD), row_to_jsonb(NEW), current_user);
+		VALUES ('member', COALESCE(NEW.id, OLD.id)::text, TG_OP, to_jsonb(OLD), to_jsonb(NEW), current_user);
 		RETURN NEW;
 	ELSIF (TG_OP = 'INSERT') THEN
 		INSERT INTO "data_audit" ("table_name", "row_id", "operation", "before", "after", "db_actor")
-		VALUES ('member', NEW.id::text, TG_OP, NULL, row_to_jsonb(NEW), current_user);
+		VALUES ('member', NEW.id::text, TG_OP, NULL, to_jsonb(NEW), current_user);
 		RETURN NEW;
 	END IF;
 	RETURN NULL;
