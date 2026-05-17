@@ -23,3 +23,8 @@ export default async function middleware(req: NextRequest) {
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
+
+// Force Node.js runtime: the setup/state and setup/config modules read
+// setup.json from disk via node:path / node:fs. Edge runtime can't load
+// node: built-ins, so middleware throws on every request without this.
+export const runtime = "nodejs";
