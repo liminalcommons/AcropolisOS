@@ -21,7 +21,19 @@ export interface AuthorizedUser {
   customRoles: string[];
 }
 
-const BCRYPT_COST = 10;
+// bcryptjs cost factor. Production default 10 = ~100ms per hash. We lower it
+// to 4 (~3ms) under vitest so the steward-route test suite — which hashes
+// 4-5 passwords across its cases — comfortably stays under the 5s default
+// test timeout. This eliminates the flake observed in negativa cycle 5 where
+// the suite ran right at the timeout edge (4.7s) and intermittently failed.
+// Set ACROPOLISOS_BCRYPT_COST to override either default.
+const BCRYPT_COST = (() => {
+  const override = Number(process.env.ACROPOLISOS_BCRYPT_COST);
+  if (Number.isFinite(override) && override >= 4 && override <= 15) {
+    return override;
+  }
+  return process.env.VITEST === "true" ? 4 : 10;
+})();
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, BCRYPT_COST);
