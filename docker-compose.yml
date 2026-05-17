@@ -40,6 +40,17 @@ services:
       INNGEST_BASE_URL: http://inngest:8288
       NODE_ENV: production
       PORT: "3030"
+      # Inside Docker the app sees host `app:3030`. AuthJS refuses to issue
+      # session callbacks against an "untrusted" host and logs a stack trace
+      # on every request without this. Override in .env for non-localhost
+      # installs (e.g. AUTH_URL=https://acropolisos.example.com behind a
+      # reverse proxy).
+      AUTH_TRUST_HOST: "true"
+      AUTH_URL: "http://localhost:3030"
+      # Inngest client defaults to "cloud mode" and complains about a
+      # missing signing key on every request. We ship a self-hosted Inngest
+      # dev server in this compose, so dev mode is correct here.
+      INNGEST_DEV: "1"
     env_file:
       - .env
     volumes:
