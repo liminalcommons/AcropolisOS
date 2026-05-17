@@ -1,6 +1,10 @@
-# acropolisOS
+# acropolisOS v5
 
 Self-hostable AI-first ontology platform for small communities (50–200 people).
+
+> **v5** is the fifth iteration of the acropolisOS concept — a ground-up
+> TypeScript reimagining. See [`CHANGELOG.md`](CHANGELOG.md) for the lineage
+> from earlier Python-based iterations (v1–v4).
 
 **Design spec:** [`docs/superpowers/specs/2026-05-15-acropolisos-design.md`](../../docs/superpowers/specs/2026-05-15-acropolisos-design.md) (commit `fcfe553b4`)
 **PRD:** [`tasks/prd-acropolisos.md`](../../tasks/prd-acropolisos.md)
