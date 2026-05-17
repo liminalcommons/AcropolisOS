@@ -5,6 +5,7 @@
   "description": "acropolisOS — self-hostable AI-first Foundry analogue for small communities",
   "scripts": {
     "dev": "next dev --port 3030",
+    "dev:watch": "tsx scripts/dev-watch.ts",
     "build": "next build",
     "start": "next start --port 3030",
     "inngest:dev": "inngest-cli dev -u http://localhost:3030/api/inngest",

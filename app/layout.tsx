@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ReloadToast } from "@/components/dev/reload-toast";
 
 export const metadata: Metadata = {
   title: "acropolisOS",
@@ -13,7 +14,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {children}
+        <ReloadToast />
+      </body>
     </html>
   );
 }

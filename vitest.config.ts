@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@acropolisos/sdk": path.resolve(__dirname, "lib/sdk/index.ts"),
+      "@": path.resolve(__dirname, "."),
     },
   },
   test: {

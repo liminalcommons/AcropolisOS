@@ -53,7 +53,18 @@ const sandboxRestrictedPatterns = [
 const config = [
   ...nextCoreWebVitals,
   ...nextTypescript,
-  { ignores: [".next/**", "node_modules/**", "lib/actions/__test_fixtures__/**"] },
+  {
+    ignores: [
+      ".next/**",
+      "node_modules/**",
+      "lib/actions/__test_fixtures__/**",
+      // Generated files (US-005 / US-013 / US-022 codegen pipeline). Lint
+      // would flag the codegen's broad imports; the source of truth is
+      // lib/codegen/*.ts, which is linted normally.
+      "**/*.generated.ts",
+      "lib/dev/.__codegen_fixture__/**",
+    ],
+  },
   {
     files: ["functions/**/*.ts", "functions/**/*.tsx"],
     rules: {
