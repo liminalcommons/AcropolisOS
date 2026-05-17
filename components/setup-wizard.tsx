@@ -214,14 +214,14 @@ export function SetupWizard({ initialStep = 1 }: Props) {
                 onChange={(e) => setOpencodeModel(e.target.value)}
                 className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 p-2"
               >
-                <optgroup label="OpenCode Go (open-weight, included)">
+                <optgroup label="Open-weight (qwen, glm, kimi, deepseek, minimax)">
                   {OPENCODE_MODELS.filter((m) => m.tier === "go").map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.id}
                     </option>
                   ))}
                 </optgroup>
-                <optgroup label="OpenCode Zen (pay-as-you-go)">
+                <optgroup label="Closed (claude, gpt, gemini)">
                   {OPENCODE_MODELS.filter((m) => m.tier === "zen").map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.id}
@@ -230,8 +230,10 @@ export function SetupWizard({ initialStep = 1 }: Props) {
                 </optgroup>
               </select>
               <span className="mt-1 block text-xs text-zinc-500">
-                Go-tier models are included in the $10/mo plan. Zen-tier models
-                charge against your OpenCode credit balance.
+                Every model — including open-weight ones — bills against your
+                OpenCode Zen credit balance. The OpenCode Go plan ($10/mo)
+                covers the OpenCode CLI/TUI, not external API consumption.
+                Add Zen credits at opencode.ai/workspace/&lt;your-workspace&gt;/billing.
               </span>
             </label>
           ) : null}
