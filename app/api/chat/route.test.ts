@@ -66,11 +66,17 @@ describe("POST /api/chat", () => {
     expect(res.status).toBe(400);
   });
 
-  it("streams text response for single-message body", async () => {
+  it("streams text response for single UIMessage body", async () => {
     const req = new Request("http://localhost/api/chat", {
       method: "POST",
       body: JSON.stringify({
-        messages: [{ role: "user", content: "hi" }],
+        messages: [
+          {
+            id: "m1",
+            role: "user",
+            parts: [{ type: "text", text: "hi" }],
+          },
+        ],
       }),
     });
     const res = await POST(req);

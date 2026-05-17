@@ -1,8 +1,8 @@
-import { streamText, type ModelMessage } from "ai";
+import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { AGENT_INSTRUCTIONS, buildLanguageModel } from "@/lib/agent/mastra";
 
 interface ChatRequestBody {
-  messages: ModelMessage[];
+  messages: UIMessage[];
 }
 
 function isChatRequestBody(value: unknown): value is ChatRequestBody {
@@ -25,7 +25,7 @@ export async function POST(req: Request): Promise<Response> {
   const result = streamText({
     model: buildLanguageModel(),
     system: AGENT_INSTRUCTIONS,
-    messages: body.messages,
+    messages: await convertToModelMessages(body.messages),
   });
   return result.toTextStreamResponse();
 }
