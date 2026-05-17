@@ -17,10 +17,27 @@ Self-hostable AI-first ontology platform for small communities (50–200 people)
 
 ## Quickstart
 
+### Local development
+
 ```bash
 npm install
 npm run dev   # http://localhost:3030
 ```
+
+### Single-host install via Docker
+
+Postgres, the Next.js app (with migrations applied on first boot), and a
+self-hosted Inngest dev server come up together with one command.
+
+```bash
+cp .env.example .env   # fill in AUTH_SECRET and LLM_API_KEY at minimum
+docker compose up      # → http://localhost:3030/setup within ~60s
+```
+
+The compose stack bind-mounts `./ontology`, `./functions`, `./uploads`, and
+`./.env` from the host so the steward can edit them without rebuilding the
+image. Postgres data persists in the `pgdata` named volume; the steward's
+setup marker lives in `appdata` at `/app/data`.
 
 ## Quality gates
 

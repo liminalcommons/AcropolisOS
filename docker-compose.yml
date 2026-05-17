@@ -1,0 +1,62 @@
+# acropolisOS single-host install (US-036).
+#
+# Goal: `docker-compose up` on a fresh checkout reaches http://localhost:3030/setup
+# within ~60s without anyone touching Node, Postgres, or Inngest manually.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: acropolisos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: acropolisos
+      POSTGRES_PASSWORD: acropolisos
+      POSTGRES_DB: acropolisos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acropolisos -d acropolisos"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: acropolisos-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://acropolisos:acropolisos@postgres:5432/acropolisos
+      INNGEST_BASE_URL: http://inngest:8288
+      NODE_ENV: production
+      PORT: "3030"
+    env_file:
+      - .env
+    volumes:
+      - ./ontology:/app/ontology
+      - ./functions:/app/functions
+      - ./uploads:/app/uploads
+      - ./.env:/app/.env:ro
+      - appdata:/app/data
+    ports:
+      - "3030:3030"
+
+  inngest:
+    image: inngest/inngest:latest
+    container_name: acropolisos-inngest
+    restart: unless-stopped
+    command: inngest dev -u http://app:3030/api/inngest --no-discovery
+    depends_on:
+      - app
+    ports:
+      - "8288:8288"
+
+volumes:
+  pgdata:
+  appdata:

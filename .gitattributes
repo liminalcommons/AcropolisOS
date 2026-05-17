@@ -1,0 +1,5 @@
+# Linux containers refuse to exec shell scripts with CRLF line endings, so
+# pin shell scripts and Dockerfiles to LF regardless of platform autocrlf.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+docker-entrypoint.sh text eol=lf
