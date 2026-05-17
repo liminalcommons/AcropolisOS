@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   InMemoryProposalDraftStore,
   ProposalDraftNotFoundError,
+  ProposalNotFoundError,
 } from "./store";
 import type { InlineProperty, LinkType, ObjectType } from "../ontology/schema";
 
@@ -168,5 +169,72 @@ describe("InMemoryProposalDraftStore", () => {
     const p2 = await store.finalize("s2");
     const all = await store.listProposals();
     expect(all.map((p) => p.id)).toEqual([p1.id, p2.id]);
+  });
+
+  it("getProposal returns the proposal by id", async () => {
+    const store = new InMemoryProposalDraftStore();
+    await store.appendObjectType("s1", "Thread", SAMPLE_OT);
+    const p = await store.finalize("s1");
+    const found = await store.getProposal(p.id);
+    expect(found?.id).toBe(p.id);
+    expect(found?.diff.new_object_types["Thread"]).toEqual(SAMPLE_OT);
+  });
+
+  it("getProposal returns null for unknown id", async () => {
+    const store = new InMemoryProposalDraftStore();
+    expect(await store.getProposal("nope")).toBeNull();
+  });
+
+  it("updateProposalDiff replaces the proposal's diff payload", async () => {
+    const store = new InMemoryProposalDraftStore();
+    await store.appendObjectType("s1", "Thread", SAMPLE_OT);
+    const p = await store.finalize("s1");
+    const nextDiff = {
+      ...p.diff,
+      new_object_types: { ...p.diff.new_object_types, Post: SAMPLE_OT },
+      impacted_tables: ["Post", "Thread"],
+    };
+    const updated = await store.updateProposalDiff(p.id, nextDiff);
+    expect(Object.keys(updated.diff.new_object_types).sort()).toEqual([
+      "Post",
+      "Thread",
+    ]);
+    const fetched = await store.getProposal(p.id);
+    expect(fetched?.diff.impacted_tables).toEqual(["Post", "Thread"]);
+  });
+
+  it("updateProposalDiff throws ProposalNotFoundError for unknown id", async () => {
+    const store = new InMemoryProposalDraftStore();
+    await expect(
+      store.updateProposalDiff("ghost", {
+        new_object_types: {},
+        new_link_types: {},
+        new_shared_properties: {},
+        modified_properties: {},
+        new_action_types: {},
+        new_functions: {},
+        new_views: {},
+        new_seeds: {},
+        new_ingests: {},
+        impacted_tables: [],
+      }),
+    ).rejects.toBeInstanceOf(ProposalNotFoundError);
+  });
+
+  it("setStatus transitions pending proposal to approved", async () => {
+    const store = new InMemoryProposalDraftStore();
+    await store.appendObjectType("s1", "Thread", SAMPLE_OT);
+    const p = await store.finalize("s1");
+    const updated = await store.setStatus(p.id, "approved");
+    expect(updated.status).toBe("approved");
+    const fetched = await store.getProposal(p.id);
+    expect(fetched?.status).toBe("approved");
+  });
+
+  it("setStatus throws ProposalNotFoundError for unknown id", async () => {
+    const store = new InMemoryProposalDraftStore();
+    await expect(store.setStatus("ghost", "rejected")).rejects.toBeInstanceOf(
+      ProposalNotFoundError,
+    );
   });
 });

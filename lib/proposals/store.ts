@@ -71,12 +71,22 @@ export interface ProposalDraftStore {
   getDraft(session_id: string): Promise<ProposalDiff | null>;
   finalize(session_id: string): Promise<Proposal>;
   listProposals(): Promise<Proposal[]>;
+  getProposal(id: string): Promise<Proposal | null>;
+  updateProposalDiff(id: string, diff: ProposalDiff): Promise<Proposal>;
+  setStatus(id: string, status: ProposalStatus): Promise<Proposal>;
 }
 
 export class ProposalDraftNotFoundError extends Error {
   constructor(session_id: string) {
     super(`no proposal draft for session "${session_id}"`);
     this.name = "ProposalDraftNotFoundError";
+  }
+}
+
+export class ProposalNotFoundError extends Error {
+  constructor(id: string) {
+    super(`no proposal with id "${id}"`);
+    this.name = "ProposalNotFoundError";
   }
 }
 
@@ -200,5 +210,29 @@ export class InMemoryProposalDraftStore implements ProposalDraftStore {
 
   async listProposals(): Promise<Proposal[]> {
     return [...this.proposals];
+  }
+
+  async getProposal(id: string): Promise<Proposal | null> {
+    return this.proposals.find((p) => p.id === id) ?? null;
+  }
+
+  async updateProposalDiff(
+    id: string,
+    diff: ProposalDiff,
+  ): Promise<Proposal> {
+    const idx = this.proposals.findIndex((p) => p.id === id);
+    if (idx === -1) throw new ProposalNotFoundError(id);
+    this.proposals[idx] = {
+      ...this.proposals[idx],
+      diff: structuredClone(diff),
+    };
+    return this.proposals[idx];
+  }
+
+  async setStatus(id: string, status: ProposalStatus): Promise<Proposal> {
+    const idx = this.proposals.findIndex((p) => p.id === id);
+    if (idx === -1) throw new ProposalNotFoundError(id);
+    this.proposals[idx] = { ...this.proposals[idx], status };
+    return this.proposals[idx];
   }
 }
