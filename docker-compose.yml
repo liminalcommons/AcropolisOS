@@ -63,14 +63,31 @@ services:
       - appdata:/app/data
     ports:
       - "3030:3030"
+    healthcheck:
+      # Inngest polls /api/inngest every 5s for registration. The app needs
+      # to be HTTP-ready before that polling reaches it, otherwise the first
+      # few polls fail and side-effect dispatch is delayed. Healthcheck +
+      # depends_on: condition: service_healthy on inngest below ensures
+      # ordering.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3030/api/auth/csrf"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
 
   inngest:
     image: inngest/inngest:latest
     container_name: acropolisos-inngest
     restart: unless-stopped
+    # --no-discovery disables network scanning for OTHER apps. The --sdk-url
+    # (-u) flag below tells Inngest to sync THIS one app explicitly, polled
+    # every 5s (--no-poll defaults to false). I4 (May 2026): verified via
+    # GraphQL probe that the app registers automatically; --no-discovery is
+    # correct for the single-host install.
     command: inngest dev -u http://app:3030/api/inngest --no-discovery
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     ports:
       - "8288:8288"
 
