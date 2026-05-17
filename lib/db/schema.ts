@@ -1,6 +1,12 @@
 import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
+// Re-export YAML-derived object/link tables so drizzle-kit sees them when
+// resolving migrations and `db:push`. Without this, the object tables (member,
+// event, …) live only in the generated module and are invisible to migration
+// tooling — making 0003_data_audit fail because `member` doesn't exist yet.
+export * from "./schema.generated";
+
 export const _meta = pgTable("_meta", {
   key: text("key").primaryKey().notNull(),
   value: jsonb("value").notNull().default(sql`'{}'::jsonb`),
