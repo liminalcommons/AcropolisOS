@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
-import path from "node:path";
 
-const PKG_ROOT = path.resolve(__dirname, "..", "..");
+// See lib/setup/paths.ts for why we use process.cwd() instead of __dirname.
+const PKG_ROOT = process.env.ACROPOLISOS_PKG_ROOT ?? process.cwd();
 
 function runNpmScript(script: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -24,5 +24,10 @@ export async function runCodegen(): Promise<void> {
 }
 
 export async function runMigrations(): Promise<void> {
-  await runNpmScript("db:migrate");
+  // After codegen regenerates schema.generated.ts the DB schema needs to be
+  // re-synced. We use db:push (same as the boot entrypoint) rather than
+  // db:migrate because the hand-written SQL migrations don't include CREATE
+  // TABLE statements for the codegen'd object tables — see lib/db/schema.ts
+  // and docker-entrypoint.sh for the same reasoning.
+  await runNpmScript("db:push");
 }
