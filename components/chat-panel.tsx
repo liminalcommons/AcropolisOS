@@ -128,6 +128,11 @@ export function ChatPanel({
     dismissedRef.current = dismissedProposals;
   }, [dismissedProposals]);
 
+  // S4 · Track which proposal we've already broadcast so the mutation
+  // CustomEvent fires once per unique proposal id, even though the poll
+  // runs after every stream.
+  const lastBroadcastIdRef = useRef<string | null>(null);
+
   const pollLatestProposal = useCallback(async (): Promise<void> => {
     if (!chatSessionId) return;
     try {
@@ -141,6 +146,25 @@ export function ChatPanel({
         chatSessionId,
       );
       if (latest && !dismissedRef.current.has(latest.id)) {
+        // S4 · Broadcast which object types this proposal touches so home
+        // type cards can pulse for 3s. Sources: keys of new_object_types
+        // (additions) + impacted_tables (mutations on existing tables).
+        if (
+          typeof window !== "undefined" &&
+          lastBroadcastIdRef.current !== latest.id
+        ) {
+          lastBroadcastIdRef.current = latest.id;
+          const newKeys = Object.keys(latest.diff.new_object_types ?? {});
+          const impacted = Array.isArray(latest.diff.impacted_tables)
+            ? latest.diff.impacted_tables
+            : [];
+          const types = Array.from(new Set([...newKeys, ...impacted]));
+          if (types.length > 0) {
+            window.dispatchEvent(
+              new CustomEvent("acropolisos:mutation", { detail: { types } }),
+            );
+          }
+        }
         setActiveProposalId(latest.id);
       }
     } catch {

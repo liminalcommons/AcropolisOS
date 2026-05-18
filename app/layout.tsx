@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ChatPanel } from "@/components/chat-panel";
 import { ReloadToast } from "@/components/dev/reload-toast";
+import { MutationPulseMount } from "@/components/home/mutation-pulse-mount";
 import { auth } from "@/lib/auth";
 import { createCtx } from "@/lib/ctx";
 
@@ -33,6 +34,7 @@ export default async function RootLayout({
           actorRole={actor?.role ?? null}
           actorEmail={actor?.email}
         />
+        <MutationPulseMount />
         <ReloadToast />
       </body>
     </html>

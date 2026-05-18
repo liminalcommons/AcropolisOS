@@ -67,7 +67,8 @@ export function SeededHome({
               <div
                 key={k}
                 data-testid={`type-card-${k}`}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-4"
+                data-type={k}
+                className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-4 transition"
               >
                 <p className="text-[10px] uppercase tracking-widest text-zinc-500">
                   {prettify(k)}
