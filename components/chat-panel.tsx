@@ -192,24 +192,33 @@ export function ChatPanel({
     setActiveProposalId((current) => (current === id ? null : current));
   };
 
+  // S1 · Bottom chat strip. Aside is fixed to the viewport bottom at h-11
+  // (44px) idle. The input form is absolutely positioned to the bottom 44px
+  // so it's always visible regardless of the aside's height. The history
+  // pane sits above the form (bottom-11) and is clipped while the aside is
+  // h-11; S2 will grow the aside (`min(30vh, 320px)`) when the agent is
+  // streaming so the history pane becomes visible. Layout.tsx pads body
+  // with pb-11 so page content never sits under the strip.
   return (
     <aside
       aria-label="Chat panel"
-      className="sticky top-0 flex h-screen w-full shrink-0 flex-col border-l border-zinc-800 bg-zinc-950 text-zinc-100 md:w-96"
+      data-state="idle"
+      className="fixed inset-x-0 bottom-0 z-50 h-11 overflow-hidden border-t border-zinc-800 bg-zinc-950/95 text-zinc-100 backdrop-blur transition-[height] duration-200"
     >
-      <header className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3 text-sm font-medium">
-        <MessageSquare className="h-4 w-4 text-zinc-400" aria-hidden />
-        <span>chat</span>
-        <span className="ml-auto text-[10px] uppercase tracking-widest text-zinc-500">
-          always on
-        </span>
-      </header>
+      <div className="absolute inset-x-0 top-0 bottom-11 flex flex-col">
+        <header className="flex items-center gap-2 border-b border-zinc-800 px-4 py-2 text-sm font-medium">
+          <MessageSquare className="h-4 w-4 text-zinc-400" aria-hidden />
+          <span>chat</span>
+          <span className="ml-auto text-[10px] uppercase tracking-widest text-zinc-500">
+            always on
+          </span>
+        </header>
 
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-3"
-        data-testid="chat-panel-scroll"
-      >
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto px-4 py-3"
+          data-testid="chat-panel-scroll"
+        >
         {messages.length === 0 ? (
           <p className="text-xs text-zinc-500">
             Ask anything about your ontology. Drag files into the drop zone to
@@ -303,9 +312,11 @@ export function ChatPanel({
         )}
       </div>
 
+      </div>
+
       <form
         onSubmit={submit}
-        className="flex items-end gap-2 border-t border-zinc-800 px-4 py-3"
+        className="absolute inset-x-0 bottom-0 flex h-11 items-center gap-2 border-t border-zinc-800 bg-zinc-950/90 px-4"
       >
         <textarea
           value={input}
@@ -317,15 +328,15 @@ export function ChatPanel({
             }
           }}
           placeholder="ask the agent…"
-          rows={2}
+          rows={1}
           disabled={status !== "ready"}
-          className="flex-1 resize-none rounded-md bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 ring-1 ring-zinc-800 focus:outline-none focus:ring-zinc-600 disabled:opacity-50"
+          className="flex-1 resize-none rounded-md bg-zinc-900 px-3 py-1.5 text-sm leading-tight text-zinc-100 placeholder-zinc-500 ring-1 ring-zinc-800 focus:outline-none focus:ring-zinc-600 disabled:opacity-50"
         />
         <button
           type="submit"
           disabled={status !== "ready" || input.trim().length === 0}
           aria-label="Send message"
-          className="flex h-9 w-9 items-center justify-center rounded-md bg-zinc-100 text-zinc-900 transition hover:bg-white disabled:bg-zinc-800 disabled:text-zinc-500"
+          className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-900 transition hover:bg-white disabled:bg-zinc-800 disabled:text-zinc-500"
         >
           <Send className="h-4 w-4" aria-hidden />
         </button>
