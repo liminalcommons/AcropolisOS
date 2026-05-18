@@ -3,10 +3,8 @@
 // path; richer column-type inference and ingest mapping can grow here.
 
 import { randomUUID } from "node:crypto";
-import { exec as execCb } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 import { sql } from "drizzle-orm";
 import { stringify as stringifyYaml } from "yaml";
 import type { Database } from "../../db/client";
@@ -24,7 +22,6 @@ import type {
   AuditStore,
 } from "../../audit/writer";
 import type {
-  GitClient,
   InboxMigrator,
   MigrationPlan,
   MigrationRunner,
@@ -34,8 +31,6 @@ import type {
 } from "../apply";
 import type { ProposalDiff } from "../diff";
 import type { ObjectType } from "../../ontology/schema";
-
-const execAsync = promisify(execCb);
 
 // drizzle's tx and the base db share .execute / .insert / .update etc., so
 // we widen to Database (the tx is structurally compatible at call sites we
@@ -272,34 +267,6 @@ export class PgProposalStatusStore implements ProposalStatusStore {
         .set({ status: "approved" })
         .where(eq(proposalsTable.id, proposalId));
     });
-  }
-}
-
-// Best-effort commit. If the runtime is a Docker container without a git
-// working tree, swallow the failure — the audit row already records the
-// apply, which is the load-bearing artifact. The yaml/codegen writes are
-// already on the bind-mounted host volume.
-export class BestEffortGitClient implements GitClient {
-  constructor(private readonly cwd: string) {}
-
-  async addAndCommit(
-    message: string,
-    paths: string[],
-    attribution?: string,
-  ): Promise<void> {
-    if (paths.length === 0) return;
-    const quoted = paths.map((p) => `"${p.replace(/"/g, '\\"')}"`).join(" ");
-    try {
-      await execAsync(`git add ${quoted}`, { cwd: this.cwd });
-      const author = attribution
-        ? ` --author="${attribution.replace(/"/g, '\\"')}"`
-        : "";
-      const safeMsg = message.replace(/"/g, '\\"');
-      await execAsync(`git commit -m "${safeMsg}"${author}`, { cwd: this.cwd });
-    } catch {
-      // No git tree, no commits matter, or hook refused. Apply already
-      // succeeded at the DB + filesystem level — don't undo it.
-    }
   }
 }
 

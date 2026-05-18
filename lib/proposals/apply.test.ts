@@ -5,7 +5,6 @@ import {
   type ApplyResult,
   type CodegenRunner,
   type FileSnapshot,
-  type GitClient,
   type InboxMigrator,
   type MigrationRunner,
   type ProposalStatusStore,
@@ -47,7 +46,6 @@ interface Recorder {
   inboxMigrated: number[];
   auditWrites: number;
   statusUpdates: Array<{ id: string; status: string }>;
-  gitCommits: Array<{ message: string; paths: string[] }>;
   txAttempts: number;
   txCommits: number;
   txRollbacks: number;
@@ -63,7 +61,6 @@ function makeRecorder(): Recorder {
     inboxMigrated: [],
     auditWrites: 0,
     statusUpdates: [],
-    gitCommits: [],
     txAttempts: 0,
     txCommits: 0,
     txRollbacks: 0,
@@ -126,12 +123,6 @@ function makeDeps(
     },
   };
 
-  const git: GitClient = {
-    async addAndCommit(message, paths) {
-      rec.gitCommits.push({ message, paths });
-    },
-  };
-
   const tx: TransactionRunner = {
     async run(fn) {
       rec.txAttempts++;
@@ -153,7 +144,6 @@ function makeDeps(
     inbox,
     audit: auditStore,
     proposals,
-    git,
     tx,
     ontologyRoot: "/tmp/seed/x",
     actor: { id: "steward-1", role: "steward" },
@@ -180,8 +170,6 @@ describe("applyProposal — happy path", () => {
     expect(rec.inboxMigrated).toEqual([2]);
     expect(rec.auditWrites === 0 ? 1 : rec.auditWrites).toBe(1);
     expect(rec.statusUpdates).toEqual([{ id: proposal.id, status: "applied" }]);
-    expect(rec.gitCommits).toHaveLength(1);
-    expect(rec.gitCommits[0].message).toContain(proposal.id.slice(0, 8));
     expect(rec.txAttempts).toBe(1);
     expect(rec.txCommits).toBe(1);
     expect(rec.txRollbacks).toBe(0);
@@ -203,6 +191,60 @@ describe("applyProposal — happy path", () => {
     expect(rows[0].via).toBe("apply_proposal");
     expect(rows[0].actor).toBe("steward-1");
     expect(rows[0].after).toEqual(proposal.diff);
+  });
+
+  it("returns commitHint listing every host-side path the apply touched", async () => {
+    const rec = makeRecorder();
+    const deps = makeDeps(rec, {
+      yamlWriter: {
+        async writeUpdates(diff) {
+          rec.yamlWritten.push(diff);
+          return {
+            files: [
+              { path: "ontology/properties.yaml", previousContent: null },
+              {
+                path: "ontology/object-types/member.yaml",
+                previousContent: null,
+              },
+            ],
+          };
+        },
+        async restore() {
+          rec.snapshotsRestored++;
+        },
+      },
+      codegen: {
+        async regenerate() {
+          rec.codegenCalls++;
+          return {
+            files: [
+              { path: "lib/db/schema.generated.ts", previousContent: null },
+            ],
+          };
+        },
+        async restore() {
+          rec.snapshotsRestored++;
+        },
+      },
+      migrations: {
+        async generate() {
+          return { sql: "ALTER TABLE m ADD COLUMN x text;", tag: "T1" };
+        },
+        async apply() {},
+      },
+    });
+    const proposal = await finalizedProposal();
+    const r = await applyProposal(proposal, deps);
+    expect(r.ok).toBe(true);
+    expect(r.commitHint).toEqual(
+      expect.arrayContaining([
+        "ontology/properties.yaml",
+        "ontology/object-types/member.yaml",
+        "lib/db/schema.generated.ts",
+        "drizzle/T1.sql",
+        "drizzle/meta/_journal.json",
+      ]),
+    );
   });
 });
 
@@ -227,9 +269,7 @@ describe("applyProposal — rollback semantics", () => {
     expect(result.ok).toBe(false);
     expect(result.error?.message).toMatch(/drizzle-kit failed/);
     expect(rec.txAttempts).toBe(0);
-    expect(rec.gitCommits).toHaveLength(0);
     expect(rec.statusUpdates).toHaveLength(0);
-    // YAML snapshot + codegen snapshot both restored
     expect(rec.snapshotsRestored).toBeGreaterThanOrEqual(2);
   });
 
@@ -253,11 +293,10 @@ describe("applyProposal — rollback semantics", () => {
     expect(rec.txCommits).toBe(0);
     expect(rec.txRollbacks).toBe(1);
     expect(rec.statusUpdates).toHaveLength(0);
-    expect(rec.gitCommits).toHaveLength(0);
     expect(rec.snapshotsRestored).toBeGreaterThanOrEqual(2);
   });
 
-  it("does not commit to git if status update fails inside transaction", async () => {
+  it("does not commit status update if it fails inside transaction", async () => {
     const rec = makeRecorder();
     const deps = makeDeps(rec, {
       proposals: {
@@ -272,36 +311,9 @@ describe("applyProposal — rollback semantics", () => {
 
     expect(result.ok).toBe(false);
     expect(rec.txRollbacks).toBe(1);
-    expect(rec.gitCommits).toHaveLength(0);
   });
 
-  it("does not roll back filesystem after Postgres tx commit but git fails", async () => {
-    // Per AC: rollback only applies up to and including the Postgres tx.
-    // Git commit is the final, post-commit step; a git failure surfaces but
-    // does not unwind successful database state. Filesystem snapshot is
-    // preserved because the source-of-truth (Postgres + YAML on disk) is
-    // already consistent.
-    const rec = makeRecorder();
-    const deps = makeDeps(rec, {
-      git: {
-        async addAndCommit() {
-          throw new Error("nothing to commit");
-        },
-      },
-    });
-    const proposal = await finalizedProposal();
-
-    const result = await applyProposal(proposal, deps);
-
-    expect(result.ok).toBe(false);
-    expect(result.error?.message).toMatch(/nothing to commit/);
-    expect(rec.txCommits).toBe(1);
-    expect(rec.txRollbacks).toBe(0);
-    expect(rec.statusUpdates).toEqual([{ id: proposal.id, status: "applied" }]);
-    expect(rec.snapshotsRestored).toBe(0);
-  });
-
-  it("calls migrations.persist after tx commits and before git", async () => {
+  it("calls migrations.persist after tx commits", async () => {
     const rec = makeRecorder();
     const callOrder: string[] = [];
     const deps = makeDeps(rec, {
@@ -316,16 +328,11 @@ describe("applyProposal — rollback semantics", () => {
           callOrder.push("persist");
         },
       },
-      git: {
-        async addAndCommit() {
-          callOrder.push("git");
-        },
-      },
     });
     const proposal = await finalizedProposal();
     const r = await applyProposal(proposal, deps);
     expect(r.ok).toBe(true);
-    expect(callOrder).toEqual(["apply", "persist", "git"]);
+    expect(callOrder).toEqual(["apply", "persist"]);
   });
 
   it("does NOT call migrations.persist when the postgres tx rolls back", async () => {
@@ -370,7 +377,6 @@ describe("applyProposal — rollback semantics", () => {
     const r = await applyProposal(proposal, deps);
     expect(r.ok).toBe(false);
     expect(r.error?.message).toMatch(/disk full/);
-    // tx already committed; status update happened before persist
     expect(rec.statusUpdates).toEqual([{ id: proposal.id, status: "applied" }]);
   });
 

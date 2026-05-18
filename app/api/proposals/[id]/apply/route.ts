@@ -6,7 +6,6 @@ import { applyProposal } from "@/lib/proposals/apply";
 import { FsYamlWriter } from "@/lib/proposals/adapters/yaml-writer";
 import { GeneratedFilesCodegen } from "@/lib/proposals/adapters/codegen";
 import {
-  BestEffortGitClient,
   DiffMigrationRunner,
   PgAuditStore,
   PgInboxMigrator,
@@ -59,11 +58,9 @@ export async function POST(
     inbox: new PgInboxMigrator(),
     audit: new PgAuditStore(db),
     proposals: new PgProposalStatusStore(),
-    git: new BestEffortGitClient(packageRoot),
     tx: new PgTransactionRunner(db),
     ontologyRoot,
     actor: { id: actorId, role: actorRole },
-    attribution: `${actorId} <${actorId}>`,
   });
 
   if (!result.ok) {
@@ -82,6 +79,7 @@ export async function POST(
       proposal: updated,
       migrationTag: result.migrationTag,
       inboxRowsMigrated: result.inboxRowsMigrated,
+      commitHint: result.commitHint,
     });
   } catch (err) {
     if (err instanceof ProposalNotFoundError) {

@@ -70,9 +70,8 @@ async function finalizeProposalAddingThread(): Promise<Proposal> {
 
 function buildDeps(sb: Sandbox, opts: {
   failMigration?: boolean;
-} = {}): { deps: ApplyDeps; rec: { gitCommits: number; statusUpdates: number; auditWrites: () => Promise<number>; auditStore: InMemoryAuditStore } } {
+} = {}): { deps: ApplyDeps; rec: { statusUpdates: number; auditWrites: () => Promise<number>; auditStore: InMemoryAuditStore } } {
   const auditStore = new InMemoryAuditStore();
-  const gitCommitsRef = { count: 0 };
   const statusRef = { count: 0 };
 
   const deps: ApplyDeps = {
@@ -101,11 +100,6 @@ function buildDeps(sb: Sandbox, opts: {
         statusRef.count++;
       },
     },
-    git: {
-      async addAndCommit() {
-        gitCommitsRef.count++;
-      },
-    },
     tx: {
       async run(fn) {
         return fn({ tag: "fake" });
@@ -118,9 +112,6 @@ function buildDeps(sb: Sandbox, opts: {
   return {
     deps,
     rec: {
-      get gitCommits() {
-        return gitCommitsRef.count;
-      },
       get statusUpdates() {
         return statusRef.count;
       },
@@ -146,9 +137,9 @@ describe("applyProposal — integration with real YAML + codegen adapters", () =
 
     const result = await applyProposal(proposal, deps);
     expect(result.ok).toBe(true);
-    expect(rec.gitCommits).toBe(1);
     expect(rec.statusUpdates).toBe(1);
     expect(await rec.auditWrites()).toBe(1);
+    expect(result.commitHint).toEqual(expect.any(Array));
 
     // YAML files written
     const threadYaml = await readFile(
@@ -227,8 +218,8 @@ describe("applyProposal — integration with real YAML + codegen adapters", () =
     const result = await applyProposal(proposal, deps);
     expect(result.ok).toBe(false);
     expect(result.error?.message).toMatch(/forced migration failure/);
-    expect(rec.gitCommits).toBe(0);
     expect(rec.statusUpdates).toBe(0);
+    expect(result.commitHint).toBeUndefined();
 
     // properties.yaml + link-types.yaml restored exactly
     const afterProps = await readFile(

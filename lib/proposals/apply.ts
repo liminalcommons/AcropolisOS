@@ -33,8 +33,8 @@ export interface MigrationRunner {
   apply(tx: Tx, plan: MigrationPlan): Promise<void>;
   // Optional post-commit hook for writing migration artifacts to disk
   // (drizzle/<tag>.sql + meta/_journal.json). Runs after the postgres tx
-  // commits and before git.addAndCommit. Throwing here fails the apply with
-  // ok=false because the on-disk artifact is part of the audit trail.
+  // commits. Throwing fails the apply with ok=false because the on-disk
+  // artifact is part of the audit trail.
   persist?(plan: MigrationPlan): Promise<void>;
 }
 
@@ -47,14 +47,6 @@ export interface InboxMigrator {
 
 export interface ProposalStatusStore {
   markApplied(tx: Tx, proposalId: string): Promise<void>;
-}
-
-export interface GitClient {
-  addAndCommit(
-    message: string,
-    paths: string[],
-    attribution?: string,
-  ): Promise<void>;
 }
 
 export interface TransactionRunner {
@@ -73,11 +65,9 @@ export interface ApplyDeps {
   inbox: InboxMigrator;
   audit: AuditStore;
   proposals: ProposalStatusStore;
-  git: GitClient;
   tx: TransactionRunner;
   ontologyRoot: string;
   actor: ApplyActor;
-  attribution?: string;
 }
 
 export interface ApplyResult {
@@ -85,23 +75,14 @@ export interface ApplyResult {
   proposalId: string;
   migrationTag?: string;
   inboxRowsMigrated?: number;
+  // Host-side paths a steward should `git add` + commit after a successful
+  // apply. The app runs in a Docker container without a git working tree, so
+  // commits cannot happen automatically — this list is the audit hand-off.
+  commitHint?: string[];
   error?: Error;
 }
 
-function commitMessage(proposal: Proposal): string {
-  const shortId = proposal.id.slice(0, 8);
-  const objectCount = Object.keys(proposal.diff.new_object_types).length;
-  const linkCount = Object.keys(proposal.diff.new_link_types).length;
-  const actionCount = Object.keys(proposal.diff.new_action_types).length;
-  const parts: string[] = [];
-  if (objectCount > 0) parts.push(`${objectCount} object`);
-  if (linkCount > 0) parts.push(`${linkCount} link`);
-  if (actionCount > 0) parts.push(`${actionCount} action`);
-  const summary = parts.length > 0 ? parts.join(", ") : "ontology update";
-  return `proposal ${shortId}: apply ${summary}`;
-}
-
-function pathsTouched(
+function computeCommitHint(
   yamlSnap: FileSnapshot,
   codegenSnap: FileSnapshot,
   migrationTag: string,
@@ -189,26 +170,9 @@ export async function applyProposal(
   }
 
   // Postgres tx committed. Filesystem now reflects committed state — do
-  // not roll back filesystem from this point on, even if persist/git fails.
+  // not roll back filesystem from this point on, even if persist fails.
   try {
     await deps.migrations.persist?.(migrationPlan);
-  } catch (err) {
-    return {
-      ok: false,
-      proposalId: proposal.id,
-      migrationTag: migrationPlan.tag,
-      inboxRowsMigrated,
-      error: toError(err),
-    };
-  }
-
-  try {
-    const paths = pathsTouched(yamlSnapshot, codegenSnapshot, migrationPlan.tag);
-    await deps.git.addAndCommit(
-      commitMessage(proposal),
-      paths,
-      deps.attribution,
-    );
   } catch (err) {
     return {
       ok: false,
@@ -224,6 +188,11 @@ export async function applyProposal(
     proposalId: proposal.id,
     migrationTag: migrationPlan.tag,
     inboxRowsMigrated,
+    commitHint: computeCommitHint(
+      yamlSnapshot,
+      codegenSnapshot,
+      migrationPlan.tag,
+    ),
   };
 }
 
