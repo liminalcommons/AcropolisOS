@@ -164,6 +164,20 @@ export function ChatPanel({
     }
   }, [messages, activeProposalId]);
 
+  // S2 · Expand-on-stream. While the agent is processing (status === submitted
+  // or streaming) the strip grows to min(30vh, 320px) so messages become
+  // visible. 3s after status returns to "ready" it collapses back to h-11.
+  const [expanded, setExpanded] = useState(false);
+  const streaming = status !== "ready";
+  useEffect(() => {
+    if (streaming) {
+      setExpanded(true);
+      return;
+    }
+    const id = setTimeout(() => setExpanded(false), 3000);
+    return () => clearTimeout(id);
+  }, [streaming]);
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const text = input.trim();
@@ -202,8 +216,11 @@ export function ChatPanel({
   return (
     <aside
       aria-label="Chat panel"
-      data-state="idle"
-      className="fixed inset-x-0 bottom-0 z-50 h-11 overflow-hidden border-t border-zinc-800 bg-zinc-950/95 text-zinc-100 backdrop-blur transition-[height] duration-200"
+      data-state={expanded ? "expanded" : "idle"}
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-50 overflow-hidden border-t border-zinc-800 bg-zinc-950/95 text-zinc-100 backdrop-blur transition-[height] duration-200 ease-out",
+        expanded ? "h-[min(30vh,320px)]" : "h-11",
+      )}
     >
       <div className="absolute inset-x-0 top-0 bottom-11 flex flex-col">
         <header className="flex items-center gap-2 border-b border-zinc-800 px-4 py-2 text-sm font-medium">
