@@ -23,6 +23,16 @@ for SQL in drizzle/0004_proposals.sql; do
   fi
 done
 
+# Regenerate codegen artifacts (schema.generated.ts and friends) from the
+# bind-mounted ontology/ before drizzle-kit push. Container-baked generated
+# files would otherwise be stale relative to any proposal previously applied
+# via the API route, and `drizzle-kit push --force` would silently drop the
+# applied columns to make the DB match the stale schema.
+if [ -d ontology ] && [ -f scripts/regenerate-from-live.ts ]; then
+  echo "[entrypoint] regenerating codegen from live ontology/..."
+  npx --no-install tsx scripts/regenerate-from-live.ts
+fi
+
 echo "[entrypoint] syncing database schema..."
 
 ATTEMPTS=0
