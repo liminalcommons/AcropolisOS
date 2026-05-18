@@ -27,7 +27,6 @@ const SMALL_COMMUNITY = path.join(
   PKG_ROOT,
   "seed",
   "small-community",
-  "ontology",
 );
 
 const stewardActor: Actor = {

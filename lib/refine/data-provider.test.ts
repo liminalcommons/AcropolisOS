@@ -22,7 +22,6 @@ const SEED_DIR = path.join(
   "..",
   "seed",
   "small-community",
-  "ontology",
 );
 
 function newMember(overrides: Partial<Member> = {}): Member {

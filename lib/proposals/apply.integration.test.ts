@@ -17,7 +17,6 @@ const SOURCE_SEED = path.join(
   PKG_ROOT,
   "seed",
   "small-community",
-  "ontology",
 );
 
 interface Sandbox {
@@ -29,7 +28,7 @@ interface Sandbox {
 async function makeSandbox(): Promise<Sandbox> {
   const root = await mkdtemp(path.join(tmpdir(), "apply-int-"));
   const packageRoot = path.join(root, "pkg");
-  const ontologyRoot = path.join(packageRoot, "seed", "small-community", "ontology");
+  const ontologyRoot = path.join(packageRoot, "seed", "small-community");
   await mkdir(path.dirname(ontologyRoot), { recursive: true });
   await cp(SOURCE_SEED, ontologyRoot, { recursive: true });
   // Also create empty lib/ontology, lib/agent, lib/db so codegen has output dirs.

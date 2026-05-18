@@ -7,9 +7,8 @@ const SMALL_COMMUNITY = path.join(
   PKG_ROOT,
   "seed",
   "small-community",
-  "ontology",
 );
-const EMPTY = path.join(PKG_ROOT, "seed", "empty", "ontology");
+const EMPTY = path.join(PKG_ROOT, "seed", "empty");
 
 describe("seed: small-community", () => {
   it("loads and passes integrity check", async () => {

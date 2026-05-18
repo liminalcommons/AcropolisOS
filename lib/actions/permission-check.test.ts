@@ -44,7 +44,6 @@ const SEED_DIR = path.join(
   "..",
   "seed",
   "small-community",
-  "ontology",
 );
 
 let ontology: Ontology;
