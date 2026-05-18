@@ -40,7 +40,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body className="pb-11 antialiased">
+      <body className="pb-20 antialiased md:pb-24">
         <TopProgressBar />
         {children}
         <ChatPanel
