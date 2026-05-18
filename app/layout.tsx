@@ -28,11 +28,13 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        {children}
-        <ChatPanel
-          actorRole={actor?.role ?? null}
-          actorEmail={actor?.email}
-        />
+        <div className="flex min-h-screen">
+          <div className="min-w-0 flex-1">{children}</div>
+          <ChatPanel
+            actorRole={actor?.role ?? null}
+            actorEmail={actor?.email}
+          />
+        </div>
         <ReloadToast />
       </body>
     </html>

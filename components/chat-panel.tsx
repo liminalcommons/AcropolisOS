@@ -31,18 +31,12 @@ import {
 } from "react";
 import { useChat } from "@ai-sdk/react";
 import { TextStreamChatTransport, type UIMessage } from "ai";
-import { ChevronRight, MessageSquare, Paperclip, Send, X } from "lucide-react";
+import { MessageSquare, Paperclip, Send, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Proposal } from "@/lib/proposals/store";
 import type { BuiltInRole } from "@/lib/auth/users";
 import { cn } from "@/lib/utils";
-import {
-  DEFAULT_PANEL_STATE,
-  loadPanelState,
-  savePanelState,
-  subscribePanelState,
-} from "./chat-panel-state";
 import {
   CHAT_SESSION_STORAGE_KEY,
   pickLatestProposalForSession,
@@ -100,11 +94,6 @@ export function ChatPanel({
   actorRole = null,
   actorEmail,
 }: ChatPanelProps = {}): React.ReactNode {
-  const panelState = useSyncExternalStore(
-    subscribePanelState,
-    loadPanelState,
-    () => DEFAULT_PANEL_STATE,
-  );
   const [input, setInput] = useState("");
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -170,12 +159,10 @@ export function ChatPanel({
   });
 
   useEffect(() => {
-    if (panelState.open && scrollRef.current) {
+    if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, panelState.open, activeProposalId]);
-
-  const toggle = () => savePanelState({ open: !panelState.open });
+  }, [messages, activeProposalId]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,37 +192,17 @@ export function ChatPanel({
     setActiveProposalId((current) => (current === id ? null : current));
   };
 
-  if (!panelState.open) {
-    return (
-      <button
-        type="button"
-        onClick={toggle}
-        aria-label="Open chat panel"
-        className="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-900 text-zinc-100 shadow-lg ring-1 ring-zinc-800 transition hover:bg-zinc-800"
-      >
-        <MessageSquare className="h-5 w-5" aria-hidden />
-      </button>
-    );
-  }
-
   return (
     <aside
       aria-label="Chat panel"
-      className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl"
+      className="sticky top-0 flex h-screen w-full shrink-0 flex-col border-l border-zinc-800 bg-zinc-950 text-zinc-100 md:w-96"
     >
-      <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <MessageSquare className="h-4 w-4 text-zinc-400" aria-hidden />
-          <span>chat</span>
-        </div>
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label="Collapse chat panel"
-          className="rounded p-1 text-zinc-400 transition hover:bg-zinc-900 hover:text-zinc-100"
-        >
-          <ChevronRight className="h-4 w-4" aria-hidden />
-        </button>
+      <header className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3 text-sm font-medium">
+        <MessageSquare className="h-4 w-4 text-zinc-400" aria-hidden />
+        <span>chat</span>
+        <span className="ml-auto text-[10px] uppercase tracking-widest text-zinc-500">
+          always on
+        </span>
       </header>
 
       <div

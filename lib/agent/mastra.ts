@@ -25,22 +25,27 @@ export const DEFAULT_MODELS: Record<Provider, string> = {
   openai: "gpt-5",
   groq: "llama-3.3-70b-versatile",
   ollama: "llama3.2",
-  // OpenCode Go's free tier covers open-weight models. Default to qwen3.6-plus
-  // for the strongest open-weight reasoner; users with Zen credits can switch
-  // to claude-* or gpt-* via the model picker.
+  // OpenCode Go ($10/mo plan) covers open-weight models via /zen/go/v1.
+  // Default to qwen3.6-plus for the strongest open-weight reasoner; users
+  // who've topped up Zen credits can override LLM_BASE_URL=/zen/v1 and pick
+  // closed models (claude-*, gpt-*, gemini-*) via the model picker.
   opencode: "qwen3.6-plus",
 };
 
-// OpenCode Zen is an OpenAI-compatible gateway. We pin the base URL so users
-// only need to supply their key + pick a model — same shape as anthropic/groq
-// (single field setup, no base URL guessing).
-export const OPENCODE_BASE_URL = "https://opencode.ai/zen/v1" as const;
+// OpenCode Zen is an OpenAI-compatible gateway. The `/go/` segment routes
+// against the Go-plan subscription quota (covers open-weight models incl.
+// qwen, glm, kimi, deepseek, minimax); the bare `/zen/v1` root requires Zen
+// credit balance and returns CreditsError for Go-only accounts. Pinning to
+// /zen/go/v1 keeps the steward setup single-field; users who topped up Zen
+// can override via LLM_BASE_URL=https://opencode.ai/zen/v1 to unlock the
+// closed/premium models (claude-*, gpt-*, gemini-*).
+export const OPENCODE_BASE_URL = "https://opencode.ai/zen/go/v1" as const;
 
 // Curated set of OpenCode Zen model IDs surfaced in the setup picker. The
 // /v1/models endpoint lists the full set; this list is the steward-friendly
 // subset (most likely to work on Go-tier and Zen pay-as-you-go).
 export const OPENCODE_MODELS = [
-  // Open-weight (Go-plan free tier)
+  // Open-weight (Go-plan subscription via /zen/go/v1)
   "qwen3.6-plus",
   "glm-5.1",
   "glm-5",
