@@ -255,13 +255,36 @@ export function ChatPanel({
     return () => clearInterval(id);
   }, [thinkingStartMs]);
 
+  // `chatSessionId` hydrates from localStorage AFTER the first render. If a
+  // prompt is staged + submitted (e.g. PromptButton + dispatch +
+  // auto-click) before hydration completes, the transport ships without
+  // body.session_id and the proposal lands with an anon session id that
+  // the inline-panel poll can never match. We mark the submit as pending
+  // and flush it from a useEffect when chatSessionId becomes available.
+  const [pendingSubmit, setPendingSubmit] = useState(false);
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const text = input.trim();
     if (!text || status !== "ready") return;
+    if (!chatSessionId) {
+      setPendingSubmit(true);
+      return;
+    }
     sendMessage({ text });
     setInput("");
   };
+  useEffect(() => {
+    if (!pendingSubmit) return;
+    if (!chatSessionId || status !== "ready") return;
+    const text = input.trim();
+    if (!text) {
+      setPendingSubmit(false);
+      return;
+    }
+    setPendingSubmit(false);
+    sendMessage({ text });
+    setInput("");
+  }, [chatSessionId, status, pendingSubmit, input, sendMessage]);
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -473,14 +496,24 @@ export function ChatPanel({
               (e.currentTarget as HTMLTextAreaElement).blur();
             }
           }}
-          placeholder={streaming ? "agent is responding…" : "ask the agent…"}
+          placeholder={
+            !chatSessionId
+              ? "loading session…"
+              : streaming
+                ? "agent is responding…"
+                : "ask the agent…"
+          }
           rows={1}
-          disabled={status !== "ready"}
+          disabled={status !== "ready" || !chatSessionId}
           className="flex-1 resize-none rounded-md bg-zinc-900 px-3 py-1.5 text-sm leading-tight text-zinc-100 placeholder-zinc-500 ring-1 ring-zinc-800 focus:outline-none focus:ring-zinc-600 disabled:opacity-50"
         />
         <button
           type="submit"
-          disabled={status !== "ready" || input.trim().length === 0}
+          disabled={
+            status !== "ready" ||
+            input.trim().length === 0 ||
+            !chatSessionId
+          }
           aria-label="Send message"
           className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-900 transition hover:bg-white disabled:bg-zinc-800 disabled:text-zinc-500"
         >

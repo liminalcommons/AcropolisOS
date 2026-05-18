@@ -80,9 +80,12 @@ export function SeededHome({
                 data-type={k}
                 className="flex flex-col rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-4 transition"
               >
-                <p className="text-[10px] uppercase tracking-widest text-zinc-500">
+                <Link
+                  href={`/${k}`}
+                  className="text-[10px] uppercase tracking-widest text-zinc-500 transition hover:text-zinc-300"
+                >
                   {prettify(k)}
-                </p>
+                </Link>
                 <p className="mt-1 text-2xl font-semibold tracking-tight">0</p>
                 <p className="mt-1 truncate text-[11px] text-zinc-500">
                   {description}

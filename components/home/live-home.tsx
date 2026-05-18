@@ -277,16 +277,17 @@ export function LiveHome({
               const c = counts[k];
               return (
                 <li key={k}>
-                  <div
+                  <Link
+                    href={`/${k}`}
                     data-testid={`type-card-${k}`}
                     data-type={k}
-                    className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-zinc-900/60"
+                    className="flex items-center justify-between rounded px-2 py-1.5 text-sm transition hover:bg-zinc-900/60"
                   >
                     <span className="text-zinc-200">{prettify(k)}</span>
                     <span className="font-mono text-[11px] text-zinc-500">
                       {c === null ? "—" : c}
                     </span>
-                  </div>
+                  </Link>
                 </li>
               );
             })}
