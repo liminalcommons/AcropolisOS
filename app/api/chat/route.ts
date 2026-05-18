@@ -1,5 +1,12 @@
-import { convertToModelMessages, streamText, type UIMessage } from "ai";
+import {
+  convertToModelMessages,
+  stepCountIs,
+  streamText,
+  type UIMessage,
+} from "ai";
 import { AGENT_INSTRUCTIONS, buildLanguageModel } from "@/lib/agent/mastra";
+import { buildAiSdkProposalTools } from "@/lib/proposals/ai-sdk-tools";
+import { getProposalStore } from "@/lib/proposals/singleton";
 
 interface ChatRequestBody {
   messages: UIMessage[];
@@ -23,20 +30,25 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: "missing_messages" }, { status: 400 });
   }
 
-  // US-018: the chat panel sends a stable session_id so finalize_proposal()
-  // can associate proposals with this chat. The id is folded into the system
-  // prompt so the agent uses it consistently when it calls propose_* /
-  // finalize_proposal tools (wiring of the actual tools into streamText is the
-  // follow-up that completes the round-trip).
-  const sessionLine =
+  // The chat panel sends a stable session_id so finalize_proposal() can
+  // associate proposals with this chat. We bind it at tool-construction time
+  // so the model only needs to pass content-bearing args; it never has to
+  // remember or echo the session id.
+  const session_id =
     typeof body.session_id === "string" && body.session_id
-      ? `\nCurrent chat session_id: ${body.session_id}. Pass this to propose_* and finalize_proposal tools.`
-      : "";
+      ? body.session_id
+      : `anon-${Math.random().toString(36).slice(2, 10)}`;
+
+  const tools = buildAiSdkProposalTools(getProposalStore(), session_id);
 
   const result = streamText({
     model: buildLanguageModel(),
-    system: AGENT_INSTRUCTIONS + sessionLine,
+    system: AGENT_INSTRUCTIONS,
     messages: await convertToModelMessages(body.messages),
+    tools,
+    // Allow the model to chain multiple tool calls + a final text reply
+    // within a single user turn (propose → propose → finalize → summarize).
+    stopWhen: stepCountIs(8),
   });
   return result.toTextStreamResponse();
 }

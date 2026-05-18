@@ -10,6 +10,19 @@ set -euo pipefail
 
 : "${DATABASE_URL:?DATABASE_URL is required for schema sync}"
 
+# Apply idempotent hand-rolled SQL FIRST so drizzle-kit push sees the tables
+# already exist and doesn't open an interactive prompt asking whether each
+# new table is a rename of an existing one. drizzle-kit push --force does not
+# suppress the rename-vs-create prompt on non-TTY stdin (it errors with
+# "Interactive prompts require a TTY terminal"). Pre-creating with CREATE
+# TABLE IF NOT EXISTS sidesteps the question entirely.
+for SQL in drizzle/0004_proposals.sql; do
+  if [ -f "$SQL" ]; then
+    echo "[entrypoint] applying $SQL..."
+    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$SQL"
+  fi
+done
+
 echo "[entrypoint] syncing database schema..."
 
 ATTEMPTS=0

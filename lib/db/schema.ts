@@ -50,3 +50,27 @@ export const inbox = pgTable("inbox", {
 
 export type InboxRow = typeof inbox.$inferSelect;
 export type InboxInsert = typeof inbox.$inferInsert;
+
+export const proposal_drafts = pgTable("proposal_drafts", {
+  session_id: text("session_id").primaryKey().notNull(),
+  diff: jsonb("diff").notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type ProposalDraftRow = typeof proposal_drafts.$inferSelect;
+export type ProposalDraftInsert = typeof proposal_drafts.$inferInsert;
+
+export const proposals = pgTable("proposals", {
+  id: uuid("id").primaryKey().defaultRandom().notNull(),
+  session_id: text("session_id").notNull(),
+  diff: jsonb("diff").notNull(),
+  status: text("status").notNull().default("pending"),
+  created_at: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type ProposalRow = typeof proposals.$inferSelect;
+export type ProposalInsert = typeof proposals.$inferInsert;
