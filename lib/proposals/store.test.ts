@@ -61,6 +61,24 @@ describe("InMemoryProposalDraftStore", () => {
     expect(draft.new_shared_properties).toEqual({});
   });
 
+  it("finalize() normalizes inline properties to refs when shared property exists", async () => {
+    const store = new InMemoryProposalDraftStore();
+    await store.appendSharedProperty("s1", "pronouns", {
+      type: "string",
+      required: false,
+    });
+    await store.appendObjectType("s1", "Member", {
+      properties: {
+        id: { type: "uuid", primary_key: true },
+        pronouns: { type: "string" },
+      },
+    });
+    const proposal = await store.finalize("s1");
+    expect(
+      proposal.diff.new_object_types["Member"].properties["pronouns"],
+    ).toEqual({ ref: "pronouns" });
+  });
+
   it("accumulates changes within a single session id", async () => {
     const store = new InMemoryProposalDraftStore();
     await store.appendObjectType("s1", "Thread", SAMPLE_OT);

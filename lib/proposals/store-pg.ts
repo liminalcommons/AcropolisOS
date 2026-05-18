@@ -3,6 +3,7 @@ import { proposal_drafts, proposals } from "../db/schema";
 import type { Database } from "../db/client";
 import {
   emptyDraft,
+  normalizeDraft,
   recomputeImpactedTables,
   viewKey,
   type FunctionProposal,
@@ -173,7 +174,7 @@ export class PgProposalDraftStore implements ProposalDraftStore {
       .where(eq(proposal_drafts.session_id, session_id))
       .limit(1);
     if (!draftRow) throw new ProposalDraftNotFoundError(session_id);
-    const diff = draftRow.diff as ProposalDiff;
+    const diff = normalizeDraft(draftRow.diff as ProposalDiff);
     const [inserted] = await this.db
       .insert(proposals)
       .values({ session_id, diff, status: "pending" })

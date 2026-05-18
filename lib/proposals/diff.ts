@@ -4,6 +4,8 @@ import {
   InlineProperty,
   LinkType,
   ObjectType,
+  type PropertyReference,
+  type SharedPropertyRegistry,
 } from "../ontology/schema";
 
 export const ProposalStatus = z.enum(["pending", "approved", "rejected"]);
@@ -74,6 +76,58 @@ export function emptyDraft(): ProposalDiff {
 
 export function viewKey(object_type: string, view: string): string {
   return `${object_type}:${view}`;
+}
+
+// Rewrite inline object-type properties to PropertyReference (`{ref: name}`)
+// whenever the same proposal declares a shared property with the same name and
+// matching type. Without this, the agent's choice of inline-vs-ref leaks into
+// the diff: an inline `{type: string}` on Member.pronouns paired with a shared
+// property `pronouns: {type: string, required: false}` loses the shared
+// property's `required: false` default, leaving codegen to emit a NOT NULL
+// column that drizzle-kit push then resolves with a CASCADE truncate.
+// Called from finalize() so the persisted proposal carries refs.
+export function normalizeDraft(diff: ProposalDiff): ProposalDiff {
+  const cloned: ProposalDiff = structuredClone(diff);
+  const shared: SharedPropertyRegistry = {
+    ...cloned.new_shared_properties,
+    ...cloned.modified_properties,
+  };
+  for (const body of Object.values(cloned.new_object_types)) {
+    for (const [propName, propBody] of Object.entries(body.properties)) {
+      if ("ref" in propBody) continue;
+      const sharedDef = shared[propName];
+      if (!sharedDef) continue;
+      if (sharedDef.type !== propBody.type) continue;
+      if (propBody.type === "enum") {
+        // Also require enum values to align before we collapse to a ref.
+        const sharedValues =
+          "values" in sharedDef ? sharedDef.values : undefined;
+        const inlineValues =
+          "values" in propBody ? propBody.values : undefined;
+        if (
+          !sharedValues ||
+          !inlineValues ||
+          sharedValues.length !== inlineValues.length ||
+          !sharedValues.every((v, i) => v === inlineValues[i])
+        ) {
+          continue;
+        }
+      }
+      const ref: PropertyReference = { ref: propName };
+      if (propBody.required !== undefined) ref.required = propBody.required;
+      if (propBody.primary_key !== undefined) {
+        ref.primary_key = propBody.primary_key;
+      }
+      if (propBody.description !== undefined) {
+        ref.description = propBody.description;
+      }
+      if (propBody.permissions !== undefined) {
+        ref.permissions = propBody.permissions;
+      }
+      body.properties[propName] = ref;
+    }
+  }
+  return cloned;
 }
 
 export function recomputeImpactedTables(diff: ProposalDiff): string[] {

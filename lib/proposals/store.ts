@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   emptyDraft,
+  normalizeDraft,
   recomputeImpactedTables,
   viewKey,
   type FunctionProposal,
@@ -199,7 +200,7 @@ export class InMemoryProposalDraftStore implements ProposalDraftStore {
     const proposal: Proposal = {
       id: randomUUID(),
       session_id,
-      diff: structuredClone(draft),
+      diff: normalizeDraft(draft),
       status: "pending",
       created_at: new Date().toISOString(),
     };
