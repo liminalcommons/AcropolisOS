@@ -301,6 +301,79 @@ describe("applyProposal — rollback semantics", () => {
     expect(rec.snapshotsRestored).toBe(0);
   });
 
+  it("calls migrations.persist after tx commits and before git", async () => {
+    const rec = makeRecorder();
+    const callOrder: string[] = [];
+    const deps = makeDeps(rec, {
+      migrations: {
+        async generate() {
+          return { sql: "ALTER TABLE x ADD COLUMN y text;", tag: "T1" };
+        },
+        async apply() {
+          callOrder.push("apply");
+        },
+        async persist() {
+          callOrder.push("persist");
+        },
+      },
+      git: {
+        async addAndCommit() {
+          callOrder.push("git");
+        },
+      },
+    });
+    const proposal = await finalizedProposal();
+    const r = await applyProposal(proposal, deps);
+    expect(r.ok).toBe(true);
+    expect(callOrder).toEqual(["apply", "persist", "git"]);
+  });
+
+  it("does NOT call migrations.persist when the postgres tx rolls back", async () => {
+    const rec = makeRecorder();
+    let persistCalled = false;
+    const deps = makeDeps(rec, {
+      migrations: {
+        async generate() {
+          return { sql: "X", tag: "T1" };
+        },
+        async apply() {},
+        async persist() {
+          persistCalled = true;
+        },
+      },
+      inbox: {
+        async migrate() {
+          throw new Error("inbox boom");
+        },
+      },
+    });
+    const proposal = await finalizedProposal();
+    const r = await applyProposal(proposal, deps);
+    expect(r.ok).toBe(false);
+    expect(persistCalled).toBe(false);
+  });
+
+  it("returns ok=false when migrations.persist throws", async () => {
+    const rec = makeRecorder();
+    const deps = makeDeps(rec, {
+      migrations: {
+        async generate() {
+          return { sql: "X", tag: "T1" };
+        },
+        async apply() {},
+        async persist() {
+          throw new Error("disk full");
+        },
+      },
+    });
+    const proposal = await finalizedProposal();
+    const r = await applyProposal(proposal, deps);
+    expect(r.ok).toBe(false);
+    expect(r.error?.message).toMatch(/disk full/);
+    // tx already committed; status update happened before persist
+    expect(rec.statusUpdates).toEqual([{ id: proposal.id, status: "applied" }]);
+  });
+
   it("surfaces YAML writer failure before touching db or codegen", async () => {
     const rec = makeRecorder();
     const deps = makeDeps(rec, {

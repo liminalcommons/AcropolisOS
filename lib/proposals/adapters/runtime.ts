@@ -4,6 +4,8 @@
 
 import { randomUUID } from "node:crypto";
 import { exec as execCb } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { promisify } from "node:util";
 import { sql } from "drizzle-orm";
 import { stringify as stringifyYaml } from "yaml";
@@ -89,10 +91,25 @@ function pgColumnType(prop: Record<string, unknown>): string {
 //  • new many-to-many link types — CREATE TABLE for the join
 // Everything else (deletes, renames, type changes) is intentionally a no-op
 // until a richer migration generator exists.
+interface JournalEntry {
+  idx: number;
+  version: string;
+  when: number;
+  tag: string;
+  breakpoints: boolean;
+}
+
+interface DrizzleJournal {
+  version: string;
+  dialect: string;
+  entries: JournalEntry[];
+}
+
 export class DiffMigrationRunner implements MigrationRunner {
   constructor(
     private readonly diff: ProposalDiff,
     private readonly db: Database,
+    private readonly packageRoot: string = process.cwd(),
   ) {}
 
   async generate(): Promise<MigrationPlan> {
@@ -148,6 +165,45 @@ export class DiffMigrationRunner implements MigrationRunner {
     await withTx(tx, async (drizzle) => {
       await drizzle.execute(sql.raw(plan.sql));
     });
+  }
+
+  // After the postgres tx commits, write the SQL plan + journal entry to
+  // disk so the apply leaves a reproducible artifact alongside the audit row.
+  // Idempotent: re-running for the same tag is a no-op. Skips entirely when
+  // the SQL plan is empty.
+  async persist(plan: MigrationPlan): Promise<void> {
+    if (!plan.sql.trim()) return;
+    const drizzleDir = path.join(this.packageRoot, "drizzle");
+    const metaDir = path.join(drizzleDir, "meta");
+    await mkdir(metaDir, { recursive: true });
+
+    const sqlPath = path.join(drizzleDir, `${plan.tag}.sql`);
+    await writeFile(sqlPath, plan.sql, "utf8");
+
+    const journalPath = path.join(metaDir, "_journal.json");
+    const raw = await readFile(journalPath, "utf8").catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return null;
+      throw err;
+    });
+    const journal: DrizzleJournal = raw
+      ? (JSON.parse(raw) as DrizzleJournal)
+      : { version: "7", dialect: "postgresql", entries: [] };
+    if (journal.entries.some((e) => e.tag === plan.tag)) return;
+    const lastIdx = journal.entries.length
+      ? journal.entries[journal.entries.length - 1].idx
+      : -1;
+    journal.entries.push({
+      idx: lastIdx + 1,
+      version: journal.version ?? "7",
+      when: Date.now(),
+      tag: plan.tag,
+      breakpoints: true,
+    });
+    await writeFile(
+      journalPath,
+      `${JSON.stringify(journal, null, 2)}\n`,
+      "utf8",
+    );
   }
 
   private async tableExists(table: string): Promise<boolean> {

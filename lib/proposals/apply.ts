@@ -31,6 +31,11 @@ export type Tx = { readonly tag: string };
 export interface MigrationRunner {
   generate(): Promise<MigrationPlan>;
   apply(tx: Tx, plan: MigrationPlan): Promise<void>;
+  // Optional post-commit hook for writing migration artifacts to disk
+  // (drizzle/<tag>.sql + meta/_journal.json). Runs after the postgres tx
+  // commits and before git.addAndCommit. Throwing here fails the apply with
+  // ok=false because the on-disk artifact is part of the audit trail.
+  persist?(plan: MigrationPlan): Promise<void>;
 }
 
 export interface InboxMigrator {
@@ -184,7 +189,19 @@ export async function applyProposal(
   }
 
   // Postgres tx committed. Filesystem now reflects committed state — do
-  // not roll back filesystem from this point on, even if git commit fails.
+  // not roll back filesystem from this point on, even if persist/git fails.
+  try {
+    await deps.migrations.persist?.(migrationPlan);
+  } catch (err) {
+    return {
+      ok: false,
+      proposalId: proposal.id,
+      migrationTag: migrationPlan.tag,
+      inboxRowsMigrated,
+      error: toError(err),
+    };
+  }
+
   try {
     const paths = pathsTouched(yamlSnapshot, codegenSnapshot, migrationPlan.tag);
     await deps.git.addAndCommit(

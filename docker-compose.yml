@@ -57,6 +57,10 @@ services:
       - ./ontology:/app/ontology
       - ./functions:/app/functions
       - ./uploads:/app/uploads
+      # drizzle/ is bind-mounted so DiffMigrationRunner.persist() can write
+      # drizzle/<tag>.sql + append meta/_journal.json on the host after every
+      # apply. Without this the SQL artifacts vanish on container rebuild.
+      - ./drizzle:/app/drizzle
       # .env is bind-mounted read-write so the setup wizard can persist
       # LLM_* keys back to it (docker-compose re-reads it on `compose up`).
       - ./.env:/app/.env

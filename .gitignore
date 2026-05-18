@@ -17,4 +17,8 @@ data/
 lib/actions/__test_fixtures__/
 functions/__sandbox_fixtures__/
 
+# Vitest scratch dir for fixtures that must live inside the project root per
+# [[gotcha-vitest-vite-fixture-root]] (runtime-persist.test.ts)
+.tmp/
+
 .DS_Store

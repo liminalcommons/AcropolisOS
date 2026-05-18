@@ -55,7 +55,7 @@ export async function POST(
   const result = await applyProposal(proposal, {
     yamlWriter: new FsYamlWriter(),
     codegen: new GeneratedFilesCodegen({ packageRoot }),
-    migrations: new DiffMigrationRunner(proposal.diff, db),
+    migrations: new DiffMigrationRunner(proposal.diff, db, packageRoot),
     inbox: new PgInboxMigrator(),
     audit: new PgAuditStore(db),
     proposals: new PgProposalStatusStore(),
