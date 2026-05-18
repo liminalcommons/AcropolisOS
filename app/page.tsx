@@ -8,14 +8,27 @@ import { LiveHome } from "@/components/home/live-home";
 
 export const dynamic = "force-dynamic";
 
-const IDENT = /^[a-z][a-z0-9_]*$/;
+// Ontology keys are PascalCase (Member, MeetingMinute). Drizzle codegen emits
+// snake_case lowercase table names (member, meeting_minute) — see
+// lib/db/schema.generated.ts. Convert PascalCase → snake_case before
+// interpolating into the SELECT, and accept either form in the SQL-injection
+// guard so PascalCase keys are no longer rejected.
+const IDENT = /^[A-Za-z][A-Za-z0-9_]*$/;
+
+function toSnakeCase(key: string): string {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .toLowerCase();
+}
 
 async function countByType(typeKey: string): Promise<number | null> {
   if (!IDENT.test(typeKey)) return null;
+  const table = toSnakeCase(typeKey);
   try {
     const db = getDb();
     const rows = await db.$client.unsafe<{ n: number }[]>(
-      `SELECT COUNT(*)::int AS n FROM "${typeKey}"`,
+      `SELECT COUNT(*)::int AS n FROM "${table}"`,
     );
     return rows[0]?.n ?? 0;
   } catch {

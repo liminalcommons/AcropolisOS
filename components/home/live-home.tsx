@@ -1,7 +1,10 @@
 import Link from "next/link";
 import type { Ontology } from "@/lib/ontology/schema";
 import type { Proposal } from "@/lib/proposals/store";
+import type { ProposalDiff } from "@/lib/proposals/diff";
 import { cn } from "@/lib/utils";
+import { prettify } from "@/lib/prettify";
+import { formatRelative } from "@/lib/relative-time";
 import { PromptButton } from "./prompt-button";
 
 // S5 · Pure adaptive-layout helper. Exported so a vitest can lock the
@@ -23,29 +26,176 @@ export function computeAdaptiveLayout(pendingCount: number): AdaptiveLayout {
   };
 }
 
-function summarizeDiff(diff: Proposal["diff"]): string {
-  const counts: string[] = [];
-  const n = (o: Record<string, unknown>) => Object.keys(o).length;
-  if (n(diff.new_object_types) > 0)
-    counts.push(`${n(diff.new_object_types)} object type(s)`);
-  if (n(diff.new_link_types) > 0)
-    counts.push(`${n(diff.new_link_types)} link type(s)`);
-  if (n(diff.new_action_types) > 0)
-    counts.push(`${n(diff.new_action_types)} action(s)`);
-  if (n(diff.new_shared_properties) > 0)
-    counts.push(`${n(diff.new_shared_properties)} property(ies)`);
-  if (n(diff.new_views) > 0) counts.push(`${n(diff.new_views)} view(s)`);
-  if (n(diff.new_seeds) > 0) counts.push(`${n(diff.new_seeds)} seed(s)`);
-  if (n(diff.new_ingests) > 0) counts.push(`${n(diff.new_ingests)} ingest(s)`);
-  return counts.length > 0 ? counts.join(" · ") : "empty diff";
+// Semantic intent of a proposal — drives card colour + badge text.
+// Maps onto the spec's violet (review) / emerald (approve) / amber (assign)
+// vocabulary.
+export type ProposalIntent = "review" | "approve" | "assign";
+
+const n = (o: Record<string, unknown>): number => Object.keys(o).length;
+
+function hasSchemaChanges(diff: ProposalDiff): boolean {
+  return (
+    n(diff.new_object_types) > 0 ||
+    n(diff.new_link_types) > 0 ||
+    n(diff.new_action_types) > 0 ||
+    n(diff.new_shared_properties) > 0 ||
+    n(diff.modified_properties) > 0
+  );
 }
 
-function prettify(key: string): string {
-  return key
-    .split("_")
-    .map((w) => (w.length > 0 ? w[0]!.toUpperCase() + w.slice(1) : w))
-    .join(" ");
+function hasDataLanding(diff: ProposalDiff): boolean {
+  return n(diff.new_seeds) > 0 || n(diff.new_ingests) > 0;
 }
+
+// Classify a proposal into one of three intents. Order matters:
+//   schema-touching ⇒ review (violet)
+//   data-only       ⇒ approve (emerald)
+//   views/roles     ⇒ assign  (amber)
+//   ambiguous       ⇒ review  (default)
+export function classifyProposal(diff: ProposalDiff): ProposalIntent {
+  if (hasSchemaChanges(diff)) return "review";
+  if (hasDataLanding(diff)) return "approve";
+  if (n(diff.new_views) > 0) return "assign";
+  return "review";
+}
+
+// Pick the most-relevant entity type for the summary line. Ranking:
+//   1. first new_object_type key
+//   2. first impacted_tables entry
+//   3. first new_seed/new_ingest/new_view target
+//   4. first link / action / shared-property key (last resort)
+//   5. null (no entity to mention)
+function pickEntityKey(diff: ProposalDiff): string | null {
+  const objKeys = Object.keys(diff.new_object_types);
+  if (objKeys.length > 0) return objKeys[0]!;
+  if (diff.impacted_tables.length > 0) return diff.impacted_tables[0]!;
+  const seedKeys = Object.keys(diff.new_seeds);
+  if (seedKeys.length > 0) {
+    const seed = diff.new_seeds[seedKeys[0]!];
+    return seed?.object_type ?? seedKeys[0]!;
+  }
+  const ingestKeys = Object.keys(diff.new_ingests);
+  if (ingestKeys.length > 0) {
+    const ingest = diff.new_ingests[ingestKeys[0]!];
+    return ingest?.target_object_type ?? ingestKeys[0]!;
+  }
+  const viewKeys = Object.keys(diff.new_views);
+  if (viewKeys.length > 0) {
+    const view = diff.new_views[viewKeys[0]!];
+    return view?.object_type ?? viewKeys[0]!;
+  }
+  const linkKeys = Object.keys(diff.new_link_types);
+  if (linkKeys.length > 0) return linkKeys[0]!;
+  const actionKeys = Object.keys(diff.new_action_types);
+  if (actionKeys.length > 0) return actionKeys[0]!;
+  const propKeys = Object.keys(diff.new_shared_properties);
+  if (propKeys.length > 0) return propKeys[0]!;
+  return null;
+}
+
+// Count distinct types touched so we can append "(+N more)" if multiple.
+function distinctTypesTouched(diff: ProposalDiff): number {
+  const set = new Set<string>();
+  for (const k of Object.keys(diff.new_object_types)) set.add(k);
+  for (const k of diff.impacted_tables) set.add(k);
+  for (const seed of Object.values(diff.new_seeds)) set.add(seed.object_type);
+  for (const ingest of Object.values(diff.new_ingests))
+    set.add(ingest.target_object_type);
+  for (const view of Object.values(diff.new_views)) set.add(view.object_type);
+  return set.size;
+}
+
+// Describe the change in entity-aware terms.
+//   schema add property:    "add pronouns property (string?)"
+//   schema add object:      "add Fund object type"
+//   schema add link:        "add role link"
+//   schema add action:      "add invite_member action"
+//   data seed:              "seed 3 rows"
+//   data ingest:            "ingest 2 items"
+//   view:                   "add summary view"
+//   fallback:               "update"
+function describeChange(diff: ProposalDiff): string {
+  const sharedKeys = Object.keys(diff.new_shared_properties);
+  if (sharedKeys.length > 0) {
+    const propName = sharedKeys[0]!;
+    const prop = diff.new_shared_properties[propName]!;
+    const required = prop.required === true;
+    const typeLabel = `${prop.type}${required ? "" : "?"}`;
+    return `add ${propName} property (${typeLabel})`;
+  }
+  const modifiedKeys = Object.keys(diff.modified_properties);
+  if (modifiedKeys.length > 0) {
+    const propName = modifiedKeys[0]!;
+    return `update ${propName} property`;
+  }
+  const objKeys = Object.keys(diff.new_object_types);
+  if (objKeys.length > 0) {
+    return `add ${prettify(objKeys[0]!)} object type`;
+  }
+  const linkKeys = Object.keys(diff.new_link_types);
+  if (linkKeys.length > 0) {
+    return `add ${linkKeys[0]!} link`;
+  }
+  const actionKeys = Object.keys(diff.new_action_types);
+  if (actionKeys.length > 0) {
+    return `add ${actionKeys[0]!} action`;
+  }
+  const seedKeys = Object.keys(diff.new_seeds);
+  if (seedKeys.length > 0) {
+    const seed = diff.new_seeds[seedKeys[0]!]!;
+    const rowCount = seed.rows_jsonl
+      .split("\n")
+      .filter((line) => line.trim().length > 0).length;
+    return `seed ${rowCount} row${rowCount === 1 ? "" : "s"}`;
+  }
+  const ingestKeys = Object.keys(diff.new_ingests);
+  if (ingestKeys.length > 0) {
+    const ingest = diff.new_ingests[ingestKeys[0]!]!;
+    return `ingest ${ingest.inbox_ids.length} item${ingest.inbox_ids.length === 1 ? "" : "s"}`;
+  }
+  const viewKeys = Object.keys(diff.new_views);
+  if (viewKeys.length > 0) {
+    const view = diff.new_views[viewKeys[0]!]!;
+    return `add ${view.view} view`;
+  }
+  return "update";
+}
+
+// Entity-aware proposal summary. Format: "Member · add pronouns property (string?)"
+// with a "(+N more)" suffix when multiple types are touched.
+export function summarizeDiff(diff: ProposalDiff): string {
+  const entity = pickEntityKey(diff);
+  const change = describeChange(diff);
+  const distinct = distinctTypesTouched(diff);
+  const suffix = distinct > 1 ? ` (+${distinct - 1} more)` : "";
+  if (entity === null) {
+    return `${change}${suffix}`;
+  }
+  return `${prettify(entity)} · ${change}${suffix}`;
+}
+
+// Static visual treatment per intent. Tailwind class strings — kept inline so
+// the JIT picks them up.
+const INTENT_STYLES: Record<
+  ProposalIntent,
+  { card: string; badge: string }
+> = {
+  review: {
+    card:
+      "border-violet-500/30 bg-violet-500/[0.04] hover:border-violet-500/60 hover:bg-violet-500/[0.08]",
+    badge: "bg-violet-500/15 text-violet-300",
+  },
+  approve: {
+    card:
+      "border-emerald-500/30 bg-emerald-500/[0.04] hover:border-emerald-500/60 hover:bg-emerald-500/[0.08]",
+    badge: "bg-emerald-500/15 text-emerald-300",
+  },
+  assign: {
+    card:
+      "border-amber-500/30 bg-amber-500/[0.04] hover:border-amber-500/60 hover:bg-amber-500/[0.08]",
+    badge: "bg-amber-500/15 text-amber-300",
+  },
+};
 
 const SUGGESTIONS = [
   "Add a pronouns property to Member",
@@ -190,42 +340,52 @@ export function LiveHome({
 
           {pending.length > 0 ? (
             <ul className="space-y-2">
-              {pending.map((p) => (
-                <li key={p.id}>
-                  <Link
-                    href={`/proposals/${p.id}`}
-                    data-testid={`action-${p.id}`}
-                    className="group block rounded-md border border-zinc-800 bg-zinc-900/40 px-4 py-3 transition hover:border-violet-500/50 hover:bg-violet-500/[0.04]"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-sm bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-violet-300">
-                            review
-                          </span>
-                          <span className="font-mono text-xs text-zinc-500">
-                            {p.id.slice(0, 8)}
-                          </span>
-                        </div>
-                        <div className="mt-1.5 text-sm text-zinc-100">
-                          {summarizeDiff(p.diff)}
-                        </div>
-                        {p.diff.impacted_tables.length > 0 ? (
-                          <div className="mt-1 text-xs text-zinc-500">
-                            impacts: {p.diff.impacted_tables.join(", ")}
+              {pending.map((p) => {
+                const intent = classifyProposal(p.diff);
+                const styles = INTENT_STYLES[intent];
+                return (
+                  <li key={p.id}>
+                    <Link
+                      href={`/proposals/${p.id}`}
+                      data-testid={`action-${p.id}`}
+                      data-intent={intent}
+                      className={cn(
+                        "group block rounded-md border px-4 py-3 transition",
+                        styles.card,
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                "rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest",
+                                styles.badge,
+                              )}
+                            >
+                              {intent}
+                            </span>
+                            <span className="font-mono text-xs text-zinc-500">
+                              {p.id.slice(0, 8)}
+                            </span>
                           </div>
-                        ) : null}
+                          <div className="mt-1.5 text-sm text-zinc-100">
+                            {summarizeDiff(p.diff)}
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-500">
+                            proposed by agent · {formatRelative(p.created_at)}
+                          </div>
+                          {p.diff.impacted_tables.length > 0 ? (
+                            <div className="mt-1 text-xs text-zinc-500">
+                              impacts: {p.diff.impacted_tables.join(", ")}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
-                      <time
-                        dateTime={p.created_at}
-                        className="shrink-0 text-xs text-zinc-500"
-                      >
-                        {p.created_at.slice(0, 10)}
-                      </time>
-                    </div>
-                  </Link>
-                </li>
-              ))}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/20 px-6 py-10">

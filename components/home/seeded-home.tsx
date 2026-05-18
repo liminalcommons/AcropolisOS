@@ -1,13 +1,7 @@
 import Link from "next/link";
 import type { Ontology } from "@/lib/ontology/schema";
+import { prettify } from "@/lib/prettify";
 import { PromptButton } from "./prompt-button";
-
-function prettify(key: string): string {
-  return key
-    .split("_")
-    .map((w) => (w.length > 0 ? w[0]!.toUpperCase() + w.slice(1) : w))
-    .join(" ");
-}
 
 function describeProps(
   props: Record<string, { description?: string }>,

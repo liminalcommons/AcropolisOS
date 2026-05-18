@@ -51,6 +51,7 @@ interface DroppedFile {
 interface ChatPanelProps {
   actorRole?: BuiltInRole | null;
   actorEmail?: string;
+  modelName?: string;
 }
 
 function getMessageText(message: UIMessage): string {
@@ -93,6 +94,7 @@ function serverChatSessionSnapshot(): string {
 export function ChatPanel({
   actorRole = null,
   actorEmail,
+  modelName,
 }: ChatPanelProps = {}): React.ReactNode {
   const [input, setInput] = useState("");
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
@@ -223,6 +225,36 @@ export function ChatPanel({
     return () => clearTimeout(id);
   }, [streaming]);
 
+  // Broadcast useChat status so the global TopProgressBar can show/hide.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent("acropolisos:chat-status", { detail: { status } }),
+    );
+  }, [status]);
+
+  // Track elapsed ms from submit → ready; renders as "N.Ns" in the
+  // thinking-strip header.
+  const [thinkingStartMs, setThinkingStartMs] = useState<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  useEffect(() => {
+    if (streaming) {
+      if (thinkingStartMs === null) {
+        setThinkingStartMs(Date.now());
+        setElapsedMs(0);
+      }
+    } else {
+      setThinkingStartMs(null);
+    }
+  }, [streaming, thinkingStartMs]);
+  useEffect(() => {
+    if (thinkingStartMs === null) return;
+    const id = setInterval(() => {
+      setElapsedMs(Date.now() - thinkingStartMs);
+    }, 100);
+    return () => clearInterval(id);
+  }, [thinkingStartMs]);
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const text = input.trim();
@@ -269,12 +301,47 @@ export function ChatPanel({
     >
       <div className="absolute inset-x-0 top-0 bottom-11 flex flex-col">
         <header className="flex items-center gap-2 border-b border-zinc-800 px-4 py-2 text-sm font-medium">
-          <MessageSquare className="h-4 w-4 text-zinc-400" aria-hidden />
-          <span>chat</span>
-          <span className="ml-auto text-[10px] uppercase tracking-widest text-zinc-500">
-            always on
-          </span>
+          {streaming ? (
+            <>
+              <span
+                className="inline-block h-2 w-2 rounded-full bg-violet-400"
+                style={{ animation: "acro-pulse 1.4s ease-in-out infinite" }}
+                aria-hidden
+              />
+              <span className="text-xs uppercase tracking-widest text-violet-300">
+                agent {status === "submitted" ? "thinking" : "working"}
+              </span>
+              <span className="ml-auto font-mono text-[10px] text-zinc-500">
+                {modelName ? `${modelName} · ` : ""}
+                {(elapsedMs / 1000).toFixed(1)}s
+              </span>
+            </>
+          ) : (
+            <>
+              <MessageSquare className="h-4 w-4 text-zinc-400" aria-hidden />
+              <span>chat</span>
+              <span className="ml-auto text-[10px] uppercase tracking-widest text-zinc-500">
+                always on
+              </span>
+            </>
+          )}
         </header>
+        <style>{`
+          @keyframes acro-pulse {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.15); }
+          }
+          @keyframes acro-cursor-blink { 50% { opacity: 0; } }
+          .acro-stream-cursor {
+            display: inline-block;
+            width: 0.5em;
+            height: 1em;
+            background: #a78bfa;
+            margin-left: 2px;
+            vertical-align: text-bottom;
+            animation: acro-cursor-blink 1s steps(2) infinite;
+          }
+        `}</style>
 
         <div
           ref={scrollRef}
@@ -288,9 +355,11 @@ export function ChatPanel({
           </p>
         ) : (
           <ul className="space-y-3">
-            {messages.map((m) => {
+            {messages.map((m, idx) => {
               const text = getMessageText(m);
               const isUser = m.role === "user";
+              const isLast = idx === messages.length - 1;
+              const showCursor = !isUser && isLast && streaming;
               return (
                 <li
                   key={m.id}
@@ -308,6 +377,9 @@ export function ChatPanel({
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {text}
                     </ReactMarkdown>
+                    {showCursor ? (
+                      <span className="acro-stream-cursor" aria-hidden />
+                    ) : null}
                   </div>
                 </li>
               );
@@ -376,6 +448,14 @@ export function ChatPanel({
 
       </div>
 
+      {expanded ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-11 z-10 border-t border-zinc-800/50 bg-zinc-950/85 px-4 py-1 text-[10px] text-zinc-500 backdrop-blur">
+          <span className="font-mono text-zinc-400">↵</span> to send ·{" "}
+          <span className="font-mono text-zinc-400">shift+↵</span> for newline ·{" "}
+          <span className="font-mono text-zinc-400">esc</span> to clear
+        </div>
+      ) : null}
+
       <form
         onSubmit={submit}
         className="absolute inset-x-0 bottom-0 flex h-11 items-center gap-2 border-t border-zinc-800 bg-zinc-950/90 px-4"
@@ -388,9 +468,12 @@ export function ChatPanel({
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               submit(e);
+            } else if (e.key === "Escape") {
+              setInput("");
+              (e.currentTarget as HTMLTextAreaElement).blur();
             }
           }}
-          placeholder="ask the agent…"
+          placeholder={streaming ? "agent is responding…" : "ask the agent…"}
           rows={1}
           disabled={status !== "ready"}
           className="flex-1 resize-none rounded-md bg-zinc-900 px-3 py-1.5 text-sm leading-tight text-zinc-100 placeholder-zinc-500 ring-1 ring-zinc-800 focus:outline-none focus:ring-zinc-600 disabled:opacity-50"
