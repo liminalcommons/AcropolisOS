@@ -44,6 +44,38 @@ function singleEntryYaml(name: string, body: unknown): string {
   return stringifyYaml({ [name]: body });
 }
 
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+// Merge a proposed object_type body into an existing one so applying a
+// proposal that carries only new properties for an existing type adds them
+// instead of clobbering metadata. `properties` is merged property-by-property;
+// other top-level keys (description, permissions, title_property, …) prefer
+// the proposal when present.
+function mergeObjectTypeBody(
+  existing: unknown,
+  proposed: unknown,
+): Record<string, unknown> {
+  const base: Record<string, unknown> = isPlainObject(existing)
+    ? { ...existing }
+    : {};
+  const incoming: Record<string, unknown> = isPlainObject(proposed)
+    ? { ...proposed }
+    : {};
+  const mergedProperties: Record<string, unknown> = {
+    ...(isPlainObject(base.properties) ? base.properties : {}),
+    ...(isPlainObject(incoming.properties) ? incoming.properties : {}),
+  };
+  return {
+    ...base,
+    ...incoming,
+    ...(Object.keys(mergedProperties).length > 0
+      ? { properties: mergedProperties }
+      : {}),
+  };
+}
+
 export class FsYamlWriter implements YamlWriter {
   async writeUpdates(
     diff: ProposalDiff,
@@ -77,7 +109,11 @@ export class FsYamlWriter implements YamlWriter {
       );
     }
 
-    // object-types/<snake>.yaml — one file per new object type
+    // object-types/<snake>.yaml — one file per object type. If the file
+    // already exists (proposal carries only added properties for an existing
+    // type), deep-merge the proposed body into the existing payload so
+    // unrelated metadata (permissions, title_property, original properties)
+    // is preserved.
     for (const [name, body] of Object.entries(diff.new_object_types)) {
       const file = path.join(
         ontologyRoot,
@@ -85,7 +121,15 @@ export class FsYamlWriter implements YamlWriter {
         `${snakeCase(name)}.yaml`,
       );
       entries.push(await snapshotPath(file));
-      await writeStable(file, singleEntryYaml(name, body));
+      const existingRaw = await readIfExists(file);
+      if (existingRaw) {
+        const parsed = parseYaml(existingRaw) as Record<string, unknown>;
+        const existingBody = parsed?.[name];
+        const merged = mergeObjectTypeBody(existingBody, body);
+        await writeStable(file, singleEntryYaml(name, merged));
+      } else {
+        await writeStable(file, singleEntryYaml(name, body));
+      }
     }
 
     // action-types/<snake>.yaml — one file per new action type
