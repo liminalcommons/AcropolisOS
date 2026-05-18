@@ -1,6 +1,26 @@
 import Link from "next/link";
 import type { Ontology } from "@/lib/ontology/schema";
 import type { Proposal } from "@/lib/proposals/store";
+import { cn } from "@/lib/utils";
+
+// S5 · Pure adaptive-layout helper. Exported so a vitest can lock the
+// queue-dominant ↔ types-dominant column-span swap without rendering JSX.
+export interface AdaptiveLayout {
+  queueDominant: boolean;
+  typesSpan: string;
+  centerSpan: string;
+  centerOrder: string;
+}
+
+export function computeAdaptiveLayout(pendingCount: number): AdaptiveLayout {
+  const queueDominant = pendingCount > 0;
+  return {
+    queueDominant,
+    typesSpan: queueDominant ? "md:col-span-4 md:order-2" : "md:col-span-3",
+    centerSpan: queueDominant ? "md:col-span-8" : "md:col-span-9",
+    centerOrder: queueDominant ? "md:order-1" : "",
+  };
+}
 
 function summarizeDiff(diff: Proposal["diff"]): string {
   const counts: string[] = [];
@@ -50,10 +70,17 @@ export function LiveHome({
   linkCount,
 }: LiveHomeProps): React.ReactElement {
   void _ontology;
+  // S5 · When at least one proposal is pending, the queue dominates: 8-col
+  // queue on the left + 4-col types sidebar on the right. With an empty
+  // queue we stay on the 3/9 "types-left, suggestions-right" layout so the
+  // suggestion chips stay prominent.
+  const { queueDominant, typesSpan, centerSpan, centerOrder } =
+    computeAdaptiveLayout(pending.length);
   return (
     <main
       className="min-h-screen bg-zinc-950 text-zinc-100"
       data-state="live"
+      data-queue-dominant={queueDominant ? "true" : "false"}
     >
       <header className="sticky top-0 z-30 border-b border-zinc-900 bg-zinc-950/85 backdrop-blur">
         <div className="flex h-12 items-center gap-4 px-5">
@@ -78,8 +105,14 @@ export function LiveHome({
       </header>
 
       <div className="mx-auto grid w-full max-w-[1400px] grid-cols-12 gap-0">
-        {/* LEFT RAIL — Types */}
-        <aside className="col-span-12 border-r border-zinc-900 px-4 py-6 md:col-span-3 md:min-h-[calc(100vh-3rem)]">
+        {/* Types rail — defaults to col-span-3 left; S5 swaps to col-span-4 right (order-2) when the queue takes over */}
+        <aside
+          data-testid="types-rail"
+          className={cn(
+            "col-span-12 border-r border-zinc-900 px-4 py-6 md:min-h-[calc(100vh-3rem)]",
+            typesSpan,
+          )}
+        >
           <div className="mb-3 flex items-center justify-between">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
               Types · {typeKeys.length}
@@ -133,7 +166,10 @@ export function LiveHome({
         </aside>
 
         {/* CENTER — Action queue */}
-        <section className="col-span-12 px-6 py-8 md:col-span-9">
+        <section
+          data-testid="queue-pane"
+          className={cn("col-span-12 px-6 py-8", centerSpan, centerOrder)}
+        >
           <div className="mb-6">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-violet-400">
               Actions for you
