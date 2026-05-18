@@ -133,6 +133,27 @@ export function ChatPanel({
   // runs after every stream.
   const lastBroadcastIdRef = useRef<string | null>(null);
 
+  // Home → chat prompt staging. PromptButton dispatches `acropolisos:prompt`
+  // when a CTA / suggestion chip is clicked. We populate the textarea and
+  // focus it so the user can review/edit before sending.
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const handler = (e: Event): void => {
+      const prompt = (e as CustomEvent<{ prompt?: string }>).detail?.prompt;
+      if (!prompt) return;
+      setInput(prompt);
+      requestAnimationFrame(() => {
+        const ta = textareaRef.current;
+        if (ta) {
+          ta.focus();
+          ta.setSelectionRange(prompt.length, prompt.length);
+        }
+      });
+    };
+    window.addEventListener("acropolisos:prompt", handler);
+    return () => window.removeEventListener("acropolisos:prompt", handler);
+  }, []);
+
   const pollLatestProposal = useCallback(async (): Promise<void> => {
     if (!chatSessionId) return;
     try {
@@ -360,6 +381,7 @@ export function ChatPanel({
         className="absolute inset-x-0 bottom-0 flex h-11 items-center gap-2 border-t border-zinc-800 bg-zinc-950/90 px-4"
       >
         <textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Ontology } from "@/lib/ontology/schema";
 import type { Proposal } from "@/lib/proposals/store";
 import { cn } from "@/lib/utils";
+import { PromptButton } from "./prompt-button";
 
 // S5 · Pure adaptive-layout helper. Exported so a vitest can lock the
 // queue-dominant ↔ types-dominant column-span swap without rendering JSX.
@@ -233,12 +234,13 @@ export function LiveHome({
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {SUGGESTIONS.map((s) => (
-                  <span
+                  <PromptButton
                     key={s}
-                    className="rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs text-zinc-300"
+                    prompt={s}
+                    className="rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs text-zinc-300 transition hover:border-violet-500/50 hover:text-violet-200"
                   >
                     {s}
-                  </span>
+                  </PromptButton>
                 ))}
               </div>
               <p className="mt-5 text-xs text-zinc-500">

@@ -1,4 +1,6 @@
+import Link from "next/link";
 import type { Ontology } from "@/lib/ontology/schema";
+import { PromptButton } from "./prompt-button";
 
 function prettify(key: string): string {
   return key
@@ -42,6 +44,20 @@ export function SeededHome({
             {typeKeys.length} types · 0 entities · {actionCount} actions ·{" "}
             {linkCount} links
           </span>
+          <div className="ml-auto flex items-center gap-3 text-xs">
+            <Link
+              href="/proposals"
+              className="text-zinc-400 hover:text-zinc-100"
+            >
+              Proposals
+            </Link>
+            <Link
+              href="/chat"
+              className="text-zinc-400 hover:text-zinc-100"
+            >
+              Full chat
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -68,7 +84,7 @@ export function SeededHome({
                 key={k}
                 data-testid={`type-card-${k}`}
                 data-type={k}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-4 transition"
+                className="flex flex-col rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-4 transition"
               >
                 <p className="text-[10px] uppercase tracking-widest text-zinc-500">
                   {prettify(k)}
@@ -77,9 +93,12 @@ export function SeededHome({
                 <p className="mt-1 truncate text-[11px] text-zinc-500">
                   {description}
                 </p>
-                <p className="mt-3 text-[10px] text-violet-300">
+                <PromptButton
+                  prompt={`Help me add a ${prettify(k)}. Suggest reasonable starter values for: ${description}.`}
+                  className="mt-3 self-start rounded text-left text-[11px] text-violet-300 transition hover:text-violet-200"
+                >
                   + add your first {prettify(k).toLowerCase()} →
-                </p>
+                </PromptButton>
               </div>
             );
           })}

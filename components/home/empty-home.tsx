@@ -1,7 +1,21 @@
-const PROMPT_SEEDS = [
-  "A small housing co-op",
-  "A monthly meditation group",
-  "A volunteer fire brigade",
+import { PromptButton } from "./prompt-button";
+
+const PROMPT_SEEDS: { label: string; prompt: string }[] = [
+  {
+    label: "A small housing co-op",
+    prompt:
+      "Set up an ontology for a small housing co-op — members, units, meetings, decisions. Propose the starter types.",
+  },
+  {
+    label: "A monthly meditation group",
+    prompt:
+      "Set up an ontology for a monthly meditation group — members, sessions, attendance, notes. Propose the starter types.",
+  },
+  {
+    label: "A volunteer fire brigade",
+    prompt:
+      "Set up an ontology for a volunteer fire brigade — members, shifts, incidents, equipment. Propose the starter types.",
+  },
 ];
 
 export function EmptyHome(): React.ReactElement {
@@ -23,12 +37,13 @@ export function EmptyHome(): React.ReactElement {
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           {PROMPT_SEEDS.map((seed) => (
-            <span
-              key={seed}
-              className="rounded-full border border-violet-500/30 bg-violet-500/5 px-3 py-1 text-xs text-violet-200"
+            <PromptButton
+              key={seed.label}
+              prompt={seed.prompt}
+              className="rounded-full border border-violet-500/30 bg-violet-500/5 px-3 py-1 text-xs text-violet-200 transition hover:border-violet-400 hover:bg-violet-500/15"
             >
-              {seed}
-            </span>
+              {seed.label}
+            </PromptButton>
           ))}
         </div>
         <p className="mt-8 text-[11px] text-zinc-500">
