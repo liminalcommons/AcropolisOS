@@ -295,7 +295,7 @@ export function ChatPanel({
       aria-label="Chat panel"
       data-state={expanded ? "expanded" : "idle"}
       className={cn(
-        "fixed inset-x-4 bottom-4 z-50 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/95 text-zinc-100 shadow-2xl backdrop-blur transition-[height] duration-200 ease-out md:inset-x-6 md:bottom-6",
+        "fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] -translate-x-1/2 overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-950/50 text-zinc-100 shadow-2xl backdrop-blur-md transition-[height] duration-200 ease-out md:bottom-6 md:w-[70%]",
         expanded ? "h-[min(30vh,320px)]" : "h-11",
       )}
     >
