@@ -40,6 +40,9 @@ export const member = pgTable("member", {
   joined_at: date("joined_at").notNull(),
   tier: text("tier").notNull().default("basic"),
   notes: text("notes").notNull(),
+  user_id: text("user_id"),
+  invite_code: text("invite_code"),
+  invite_expires_at: timestamp("invite_expires_at", { withTimezone: true }),
 });
 
 export const notification = pgTable("notification", {

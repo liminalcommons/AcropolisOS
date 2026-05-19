@@ -31,6 +31,9 @@ export const MemberSchema = z.object({
   "joined_at": z.iso.date(),
   "tier": z.enum(["basic", "sustaining", "lifetime"]).default("basic"),
   "notes": z.string(),
+  "user_id": z.string().optional(),
+  "invite_code": z.string().optional(),
+  "invite_expires_at": z.iso.datetime({ offset: true }).optional(),
 });
 export type Member = z.infer<typeof MemberSchema>;
 
