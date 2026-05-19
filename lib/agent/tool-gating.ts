@@ -96,8 +96,14 @@ export async function runApplyActionTool(input: {
   // US-026: optional policy gate. When supplied, agent_policy is consulted
   // before dispatch. Omitting it preserves pre-US-026 behavior.
   policy?: ApplyActionPolicyGate;
+  // M2.2: when true, skip the policy gate even if it would otherwise return
+  // confirmation_required. Set by the chat panel after a user clicks Confirm
+  // on the inline action card. The audit row records bypass_confirmation in
+  // its metadata so the call is auditably distinguishable from an
+  // unrestricted dispatch.
+  bypassConfirmation?: boolean;
 }): Promise<ApplyActionResult> {
-  if (input.policy) {
+  if (input.policy && !input.bypassConfirmation) {
     const decision = await resolveActionPolicy({
       ontology: input.policy.ontology,
       actionName: input.action,
