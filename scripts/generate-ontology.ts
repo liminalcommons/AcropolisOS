@@ -16,7 +16,11 @@ const __dirname = path.dirname(__filename);
 async function main(): Promise<void> {
   const seedName = process.argv[2] ?? "small-community";
   const pkgRoot = path.resolve(__dirname, "..");
-  const seedRoot = path.join(pkgRoot, "seed", seedName, "ontology");
+  // Seeds live at packages/acropolisos/seed/<name>/ directly (action-types,
+  // object-types, properties.yaml, roles.yaml). The historical "/ontology"
+  // suffix predated the seed layout; loadOntology resolves against the
+  // top-level seed root.
+  const seedRoot = path.join(pkgRoot, "seed", seedName);
   const ontologyOutDir = path.join(pkgRoot, "lib", "ontology");
   const agentOutDir = path.join(pkgRoot, "lib", "agent");
   const dbOutDir = path.join(pkgRoot, "lib", "db");

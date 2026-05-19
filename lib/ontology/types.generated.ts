@@ -69,6 +69,11 @@ export const DeleteMemberParamsSchema = z.object({
 });
 export type DeleteMemberParams = z.infer<typeof DeleteMemberParamsSchema>;
 
+export const PromoteToStewardParamsSchema = z.object({
+  "member": z.string(),
+});
+export type PromoteToStewardParams = z.infer<typeof PromoteToStewardParamsSchema>;
+
 export const RecordAttendanceParamsSchema = z.object({
   "member": z.string(),
   "event": z.string(),
