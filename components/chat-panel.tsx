@@ -42,6 +42,12 @@ import {
   pickLatestProposalForSession,
 } from "./inline-proposal-panel-state";
 import { InlineProposalPanel } from "./inline-proposal-panel";
+// M2.2 step-6: inline confirmation card for policy-gated apply_action.
+import { ActionConfirmationCard } from "./chat/action-confirmation-card";
+import {
+  pickPendingConfirmation,
+  type ChatLikeMessage,
+} from "./chat/action-confirmation-state";
 
 interface DroppedFile {
   name: string;
@@ -106,6 +112,11 @@ export function ChatPanel({
   const [dismissedProposals, setDismissedProposals] = useState<Set<string>>(
     () => new Set(),
   );
+  // M2.2 step-6: track confirmations the user explicitly dismissed so they
+  // don't re-render after subsequent message updates. Keyed by toolCallId.
+  const [dismissedConfirmations, setDismissedConfirmations] = useState<
+    Set<string>
+  >(() => new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Stable per-browser chat session id; SSR returns "" to avoid touching
@@ -460,6 +471,43 @@ export function ChatPanel({
             />
           </div>
         ) : null}
+        {(() => {
+          // M2.2 step-6: render confirmation card if the latest tool output
+          // surfaced a confirmation_required envelope. Confirm sends a
+          // follow-up cue the agent translates to apply_action with
+          // bypass_confirmation:true; Cancel only dismisses the card.
+          const pending = pickPendingConfirmation(
+            messages as unknown as ChatLikeMessage[],
+            dismissedConfirmations,
+          );
+          if (!pending) return null;
+          return (
+            <div className="mt-3" data-testid="chat-panel-confirmation-slot">
+              <ActionConfirmationCard
+                toolCallId={pending.toolCallId}
+                envelope={pending.envelope}
+                onConfirm={({ action, params, toolCallId }) => {
+                  setDismissedConfirmations((prev) => {
+                    const next = new Set(prev);
+                    next.add(toolCallId);
+                    return next;
+                  });
+                  const cue =
+                    `Confirmed. Re-apply the previous action with bypass:` +
+                    `\n\napply_action({ action: "${action}", params: ${JSON.stringify(params)}, bypass_confirmation: true })`;
+                  sendMessage({ text: cue });
+                }}
+                onCancel={(toolCallId) => {
+                  setDismissedConfirmations((prev) => {
+                    const next = new Set(prev);
+                    next.add(toolCallId);
+                    return next;
+                  });
+                }}
+              />
+            </div>
+          );
+        })()}
         {error ? (
           <p className="mt-3 rounded-md bg-red-950/40 px-3 py-2 text-xs text-red-300 ring-1 ring-red-900">
             {error.message}
