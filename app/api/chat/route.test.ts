@@ -6,6 +6,37 @@ import {
 } from "ai/test";
 import type { LanguageModelV3StreamPart } from "@ai-sdk/provider";
 
+// M2.2: route now imports chat-runtime which pulls NextAuth. Stub it so this
+// suite stays focused on the streaming surface.
+vi.mock("@/lib/agent/chat-runtime", async () => {
+  const path = await import("node:path");
+  const { loadOntology } = await import("@/lib/ontology/load");
+  const { createCtx, createInMemoryStore } = await import("@/lib/ontology/ctx");
+  const { InMemoryAuditStore } = await import("@/lib/audit/writer");
+  const PKG_ROOT = path.resolve(__dirname, "..", "..", "..");
+  const ontology = await loadOntology(
+    path.join(PKG_ROOT, "seed", "small-community"),
+  );
+  return {
+    buildChatRuntime: async () => {
+      const db = createInMemoryStore();
+      const audit = new InMemoryAuditStore();
+      const actor = {
+        userId: "u",
+        email: "u@x",
+        role: "steward" as const,
+        customRoles: [] as string[],
+      };
+      return {
+        actor,
+        ctx: createCtx({ db, actor, audit }),
+        ontology,
+        functionsDir: path.join(PKG_ROOT, "functions"),
+      };
+    },
+  };
+});
+
 vi.mock("@/lib/agent/mastra", () => ({
   AGENT_INSTRUCTIONS: "stub instructions",
   buildLanguageModel: () =>

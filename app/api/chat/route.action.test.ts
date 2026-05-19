@@ -51,15 +51,21 @@ let sharedAudit: InMemoryAuditStore;
 
 // Stub the chat-runtime hook to inject our test ctx + actor instead of the
 // production session-derived ones. M2.2 step 5 creates this hook in route.ts
-// so the test can replace it.
+// so the test can replace it. Factory must be hoist-safe: no module-scope
+// reference may leak in (vi.mock is hoisted above the import block).
 vi.mock("@/lib/agent/chat-runtime", async () => {
-  const ontology = await loadOntology(SEED_ROOT);
+  const path = await import("node:path");
+  const { loadOntology } = await import("@/lib/ontology/load");
+  const PKG_ROOT_INNER = path.resolve(__dirname, "..", "..", "..");
+  const ontology = await loadOntology(
+    path.join(PKG_ROOT_INNER, "seed", "small-community"),
+  );
   return {
     buildChatRuntime: async () => ({
       actor: stewardActor,
       ctx: createCtx({ db: sharedDb, actor: stewardActor, audit: sharedAudit }),
       ontology,
-      functionsDir: FUNCTIONS_DIR,
+      functionsDir: path.join(PKG_ROOT_INNER, "functions"),
     }),
   };
 });
