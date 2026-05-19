@@ -1,0 +1,33 @@
+// M4.1 step-6: tiny unread-count endpoint for the chat panel header badge.
+//
+// Returns { count: number } for the authenticated actor. Anonymous /
+// no-actor requests get count=0 — the chat panel doesn't render the badge
+// in that case anyway, but returning 0 is friendlier than a 401 that the
+// fetcher would have to special-case.
+
+import { auth } from "@/lib/auth";
+import { getDb } from "@/lib/db/client";
+import { PgNotificationStore } from "@/lib/notifications/store";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+export async function GET(): Promise<Response> {
+  try {
+    const session = await auth().catch(() => null);
+    const userInfo = session?.user as
+      | { userId?: string }
+      | undefined;
+    const userId = userInfo?.userId ? String(userInfo.userId) : null;
+    if (!userId) {
+      return Response.json({ count: 0 });
+    }
+    const store = new PgNotificationStore(getDb());
+    const count = await store.unreadCount(userId);
+    return Response.json({ count });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[api/notifications/unread-count] ${msg}`);
+    return Response.json({ count: 0 }, { status: 200 });
+  }
+}
