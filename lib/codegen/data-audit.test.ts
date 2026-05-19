@@ -8,12 +8,10 @@ import {
 } from "./data-audit";
 
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
-const SMALL_COMMUNITY = path.join(
-  PKG_ROOT,
-  "seed",
-  "small-community",
-  "ontology",
-);
+// Seed root layout is: seed/<community>/{properties.yaml, roles.yaml,
+// link-types.yaml, object-types/, action-types/}. There is no nested
+// `ontology/` directory — loadOntology takes the community root directly.
+const SMALL_COMMUNITY = path.join(PKG_ROOT, "seed", "small-community");
 
 describe("DATA_AUDIT_TABLE_DDL", () => {
   it("declares the generic data_audit table with the required columns", () => {
@@ -129,5 +127,28 @@ describe("generateDataAuditMigration", () => {
     expect(generateDataAuditMigration(onto)).toBe(
       generateDataAuditMigration(onto),
     );
+  });
+});
+
+// US-034: prove the end-to-end opt-in pipeline through the real loader:
+//   YAML field (data_audit: true) → loadOntology → generateDataAuditMigration
+//   → trigger SQL on the concrete table. This is the contract the shipped
+//   drizzle/0003_data_audit.sql encodes; if Member's opt-in regresses (the
+//   YAML flag goes missing, or the loader stops surfacing it) the migration
+//   regen would silently drop the member trigger and direct psql writes
+//   would stop being audited. See gotcha-acropolisos-generated-files-not-bind-mounted.
+describe("US-034 Member opt-in (end-to-end)", () => {
+  it("seed YAML opts Member into data_audit via the loader", async () => {
+    const onto = await loadOntology(SMALL_COMMUNITY);
+    expect(onto.object_types.Member).toBeDefined();
+    expect(onto.object_types.Member.data_audit).toBe(true);
+  });
+
+  it("loader-driven migration emits the member trigger pair on the real seed", async () => {
+    const onto = await loadOntology(SMALL_COMMUNITY);
+    const sql = generateDataAuditMigration(onto);
+    expect(sql).toMatch(/CREATE OR REPLACE FUNCTION\s+"?member_data_audit_fn"?/i);
+    expect(sql).toMatch(/CREATE TRIGGER\s+"?member_data_audit_trg"?/i);
+    expect(sql).toMatch(/AFTER\s+INSERT\s+OR\s+UPDATE\s+OR\s+DELETE\s+ON\s+"?member"?/i);
   });
 });
