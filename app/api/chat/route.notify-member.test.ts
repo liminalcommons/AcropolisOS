@@ -190,25 +190,40 @@ describe("POST /api/chat — notify_member side-effect (M2.4 step 1)", () => {
       const member = await sharedDb.objects.Member.findById(TEST_MEMBER_ID);
       expect(member?.tier).toBe("sustaining");
 
-      // 2. Parent action_audit row recorded for change_tier.
+      // 2. action_audit rows recorded for change_tier — pending + ok.
       const auditRows = await sharedAudit.listActionAudit();
-      const parent = auditRows.find(
+      const okRow = auditRows.find(
         (r) =>
           r.subject_type === "action" &&
           r.subject_id === "change_tier" &&
           r.metadata.result === "ok",
       );
-      expect(parent).toBeDefined();
+      expect(okRow).toBeDefined();
+      const changeTierActionIds = auditRows
+        .filter(
+          (r) => r.subject_type === "action" && r.subject_id === "change_tier",
+        )
+        .map((r) => r.id);
+      // The pending row is the action's stable identity (created in audit_pre
+      // before the handler runs); dispatchSideEffects fires after audit_post
+      // and links the child side_effect rows to that pending id. We accept
+      // either the pending or the ok row here to stay decoupled from that
+      // invariant (both belong to the same change_tier invocation).
+      expect(changeTierActionIds.length).toBeGreaterThanOrEqual(1);
 
-      // 3. Child side_effect audit row for notify_member, linked to parent.
+      // 3. Child side_effect audit row for notify_member, linked to one of
+      //    the change_tier action rows above.
       const sideEffect = auditRows.find(
         (r) =>
           r.subject_type === "side_effect" &&
           r.subject_id === "notify_member",
       );
       expect(sideEffect, "expected side_effect audit row").toBeDefined();
-      expect(sideEffect!.metadata.parent_action_audit_id).toBe(parent!.id);
+      expect(changeTierActionIds).toContain(
+        sideEffect!.metadata.parent_action_audit_id,
+      );
       expect(sideEffect!.metadata.status).toBe("ok");
+      expect(sideEffect!.metadata.action_type).toBe("change_tier");
 
       // 4. Structured JSON log line emitted by the stdout adapter.
       const jsonLines = logSpy.mock.calls

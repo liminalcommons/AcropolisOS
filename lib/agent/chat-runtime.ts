@@ -21,12 +21,22 @@ import {
 } from "../ontology/ctx-runtime";
 import type { OntologyCtx } from "../ontology/ctx";
 import { getRuntimeOntologyDir } from "../setup/paths";
+import {
+  loadSideEffectConfigFromEnv,
+  type SideEffectAdapters,
+} from "../actions/side-effects";
+import { resolveSideEffectAdapters } from "../actions/side-effects-runtime";
 
 export interface ChatRuntime {
   actor: Actor | null;
   ctx: OntologyCtx;
   ontology: Ontology;
   functionsDir: string;
+  // M2.4: side-effect adapters chosen by env (Resend if RESEND_API_KEY
+  // present, structured-JSON stdout otherwise). The route forwards these
+  // into createInProcessDispatcher so notify_member fires after every
+  // successful apply_action.
+  sideEffectAdapters: SideEffectAdapters;
 }
 
 // Lazily-cached ontology — disk reads are non-trivial and the ontology
@@ -72,5 +82,8 @@ export async function buildChatRuntime(): Promise<ChatRuntime> {
     process.env.ACROPOLISOS_PKG_ROOT ?? process.cwd(),
     "functions",
   );
-  return { actor, ctx, ontology, functionsDir };
+  const sideEffectAdapters = resolveSideEffectAdapters(
+    loadSideEffectConfigFromEnv(process.env),
+  );
+  return { actor, ctx, ontology, functionsDir, sideEffectAdapters };
 }

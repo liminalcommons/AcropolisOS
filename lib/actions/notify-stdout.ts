@@ -11,12 +11,13 @@
 import type { SendMail } from "./side-effects";
 
 export function makeStdoutMailer(): SendMail {
-  return async ({ to, subject, body }) => {
+  return async ({ to, subject, body, action_type }) => {
     const line = JSON.stringify({
       event: "notify_member",
       recipient: to,
       subject,
       body,
+      ...(action_type ? { action_type } : {}),
       at: new Date().toISOString(),
     });
     console.log(line);

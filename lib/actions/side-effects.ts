@@ -35,6 +35,9 @@ export interface SendMailInput {
   to: string;
   subject: string;
   body: string;
+  // M2.4: optional structured-event context. The stdout adapter writes
+  // this into the JSON line; Resend/SMTP ignore it (they're free-form).
+  action_type?: string;
 }
 
 export type SendMail = (input: SendMailInput) => Promise<void>;
@@ -119,6 +122,7 @@ async function runNotifyMember(
         null,
         2,
       ),
+      action_type: input.actionName,
     });
     return { channel: "notify_member", status: "ok" };
   } catch (err) {

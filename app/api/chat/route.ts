@@ -74,6 +74,10 @@ export async function POST(req: Request): Promise<Response> {
     ctx: runtime.ctx,
     ontology: runtime.ontology,
     functionsDir: runtime.functionsDir,
+    // M2.4: forward env-resolved adapters so notify_member fires after
+    // every successful apply_action and the dispatch results land as
+    // child action_audit rows linked to the parent.
+    sideEffectAdapters: runtime.sideEffectAdapters,
   });
 
   const applyActionTool = buildApplyActionAiSdkTool({
