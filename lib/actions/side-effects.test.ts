@@ -20,6 +20,7 @@ import {
   type OntologyCtx,
   type OntologyStore,
 } from "../ontology/ctx";
+import { InMemoryAuditStore } from "../audit/writer";
 import type { Ontology } from "../ontology/schema";
 import {
   dispatchSideEffects,
@@ -336,6 +337,87 @@ describe("dispatchSideEffects — failure isolation", () => {
     const stewardR = results.find((r) => r.channel === "notify_steward");
     expect(stewardR?.status).toBe("skipped");
     expect(sendMail).not.toHaveBeenCalled();
+  });
+});
+
+describe("dispatchSideEffects — audit child rows (M2.4)", () => {
+  // Schema decision: instead of a dedicated side_effect_audit table we
+  // reuse the existing action_audit store with subject_type="side_effect",
+  // subject_id=channel name, and metadata.parent_action_audit_id pointing
+  // at the parent action's audit row. Same query surface, no migration,
+  // and the call tree stays in one place.
+  it("writes one side_effect row per dispatched channel, linked to the parent auditId", async () => {
+    const audit = new InMemoryAuditStore();
+    const ctxWithAudit = createCtx({
+      db,
+      actor: memberActor,
+      audit,
+    });
+    await dispatchSideEffects({
+      ctx: ctxWithAudit,
+      ontology: makeOntology(),
+      actionName: "change_tier",
+      params: { member: "m-1", new_tier: "lifetime" },
+      result: { ok: true, new_tier: "lifetime" },
+      auditId: "parent-audit-1",
+      adapters,
+    });
+    const rows = await audit.listActionAudit();
+    const sideEffectRows = rows.filter((r) => r.subject_type === "side_effect");
+    // change_tier declares [audit, notify_member]; "audit" channel is a
+    // no-op for persistence (the middleware already wrote the parent row),
+    // so we expect ONE side_effect row for notify_member.
+    expect(sideEffectRows).toHaveLength(1);
+    const notify = sideEffectRows[0];
+    expect(notify.subject_id).toBe("notify_member");
+    expect(notify.metadata.parent_action_audit_id).toBe("parent-audit-1");
+    expect(notify.metadata.status).toBe("ok");
+    expect(notify.metadata.action_type).toBe("change_tier");
+  });
+
+  it("records status=error with error message when an adapter throws", async () => {
+    const audit = new InMemoryAuditStore();
+    sendMail.mockRejectedValueOnce(new Error("SMTP unreachable"));
+    const ctxWithAudit = createCtx({
+      db,
+      actor: memberActor,
+      audit,
+    });
+    await dispatchSideEffects({
+      ctx: ctxWithAudit,
+      ontology: makeOntology(),
+      actionName: "change_tier",
+      params: {},
+      result: { ok: true },
+      auditId: "parent-audit-2",
+      adapters,
+    });
+    const rows = await audit.listActionAudit();
+    const notify = rows.find(
+      (r) =>
+        r.subject_type === "side_effect" &&
+        r.subject_id === "notify_member",
+    );
+    expect(notify).toBeDefined();
+    expect(notify!.metadata.status).toBe("error");
+    expect(String(notify!.metadata.error)).toMatch(/SMTP unreachable/);
+  });
+
+  it("does not persist anything when ctx.audit is absent", async () => {
+    // Bare ctx (no audit) must still dispatch and return results in memory
+    // without throwing — back-compat for unit-test callers.
+    const results = await dispatchSideEffects({
+      ctx: ctxMember,
+      ontology: makeOntology(),
+      actionName: "change_tier",
+      params: {},
+      result: { ok: true },
+      auditId: "parent-audit-3",
+      adapters,
+    });
+    expect(results.find((r) => r.channel === "notify_member")?.status).toBe(
+      "ok",
+    );
   });
 });
 

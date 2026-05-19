@@ -213,6 +213,45 @@ async function runWebhook(
   }
 }
 
+// M2.4: persist each non-skipped, non-audit channel dispatch as its own
+// child row in action_audit. Schema decision recorded in CHANGE TIER YAML +
+// side-effects.test.ts: subject_type="side_effect", subject_id=channel name,
+// metadata.parent_action_audit_id=<parent>. Reuses the existing audit store
+// — no migration, no new table, queryable through the same reader.
+//
+// The audit_pre/audit_post middleware already wrote the parent row by the
+// time dispatch fires; the `audit` channel therefore stays a documented
+// no-op here. Skipped channels (no config, no email) are NOT persisted
+// because they have no externally-observable side effect — recording every
+// no-op would clog the audit timeline.
+async function persistSideEffectAudit(
+  input: DispatchSideEffectsInput,
+  result: SideEffectResult,
+): Promise<void> {
+  if (!input.ctx.audit) return;
+  if (result.channel === "audit") return;
+  if (result.status === "skipped") return;
+  const actor = input.ctx.actor;
+  await input.ctx.audit.insertActionAudit({
+    actor: actor?.userId ?? "<anonymous>",
+    actor_role: actor?.role ?? "<anonymous>",
+    via: "side_effect",
+    subject_type: "side_effect",
+    subject_id: result.channel,
+    before: null,
+    after: null,
+    metadata: {
+      action_type: input.actionName,
+      status: result.status,
+      ...(result.error ? { error: result.error } : {}),
+      ...(result.detail ? { detail: result.detail } : {}),
+      ...(input.auditId
+        ? { parent_action_audit_id: input.auditId }
+        : {}),
+    },
+  });
+}
+
 export async function dispatchSideEffects(
   input: DispatchSideEffectsInput,
 ): Promise<SideEffectResult[]> {
@@ -223,27 +262,40 @@ export async function dispatchSideEffects(
   const results: SideEffectResult[] = [];
 
   for (const channel of def.side_effects) {
+    let result: SideEffectResult;
     switch (channel) {
       case "audit":
-        results.push({
+        result = {
           channel: "audit",
           status: "skipped",
           detail: "handled by US-030 audit middleware",
-        });
+        };
         break;
       case "notify_member":
-        results.push(await runNotifyMember(input));
+        result = await runNotifyMember(input);
         break;
       case "notify_steward":
-        results.push(await runNotifySteward(input, perActionConfig));
+        result = await runNotifySteward(input, perActionConfig);
         break;
       case "webhook":
-        results.push(await runWebhook(input, perActionConfig));
+        result = await runWebhook(input, perActionConfig);
         break;
       default: {
         const _exhaustive: never = channel;
         void _exhaustive;
+        continue;
       }
+    }
+    results.push(result);
+    // Persist after returning the per-channel result so an audit-write
+    // failure does not poison the dispatcher contract — it's logged + the
+    // rest of the channels still fan out.
+    try {
+      await persistSideEffectAudit(input, result);
+    } catch (err) {
+      console.error(
+        `[side-effects] failed to persist audit row for ${channel} of ${input.actionName}: ${errorMessage(err)}`,
+      );
     }
   }
 
