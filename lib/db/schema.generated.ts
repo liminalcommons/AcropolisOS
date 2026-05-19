@@ -16,7 +16,7 @@ import {
 // === Object types ===
 
 export const event = pgTable("event", {
-  id: uuid("id").primaryKey().notNull(),
+  id: uuid("id").primaryKey().defaultRandom().notNull(),
   title: text("title").notNull(),
   starts_at: timestamp("starts_at", { withTimezone: true }).notNull(),
   location: text("location").notNull(),
@@ -25,7 +25,7 @@ export const event = pgTable("event", {
 });
 
 export const meeting_minute = pgTable("meeting_minute", {
-  id: uuid("id").primaryKey().notNull(),
+  id: uuid("id").primaryKey().defaultRandom().notNull(),
   title: text("title").notNull(),
   body: text("body").notNull(),
   event_id: uuid("event_id").notNull().references(() => event.id),
@@ -34,7 +34,7 @@ export const meeting_minute = pgTable("meeting_minute", {
 });
 
 export const member = pgTable("member", {
-  id: uuid("id").primaryKey().notNull(),
+  id: uuid("id").primaryKey().defaultRandom().notNull(),
   full_name: text("full_name").notNull(),
   email: text("email").notNull(),
   joined_at: date("joined_at").notNull(),

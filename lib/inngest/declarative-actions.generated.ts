@@ -24,7 +24,7 @@ const defaultAdapters: SideEffectAdapters = resolveSideEffectAdapters(
 );
 
 const ontology: Ontology = JSON.parse(
-  "{\"properties\":{\"email\":{\"description\":\"Primary contact email\",\"type\":\"email\"},\"joined_at\":{\"description\":\"When the entity joined the community\",\"type\":\"date\"},\"created_at\":{\"description\":\"When this record was created\",\"type\":\"timestamp\"}},\"roles\":{\"member\":{\"description\":\"Anyone with a verified account in the community\"},\"steward\":{\"description\":\"Trusted operator able to record actions on others' behalf\"}},\"object_types\":{\"Event\":{\"description\":\"A community event open to members\",\"title_property\":\"title\",\"permissions\":{\"read\":[\"*\"],\"write\":[\"steward\"]},\"properties\":{\"id\":{\"primary_key\":true,\"type\":\"uuid\"},\"title\":{\"type\":\"string\"},\"starts_at\":{\"type\":\"timestamp\"},\"location\":{\"type\":\"string\"},\"description\":{\"type\":\"string\"},\"created_at\":{\"ref\":\"created_at\"}}},\"MeetingMinute\":{\"description\":\"Notes captured from a community event\",\"title_property\":\"title\",\"permissions\":{\"read\":[\"*\"],\"write\":[\"steward\"]},\"properties\":{\"id\":{\"primary_key\":true,\"type\":\"uuid\"},\"title\":{\"type\":\"string\"},\"body\":{\"type\":\"string\"},\"event_id\":{\"type\":\"ref\",\"target\":\"Event\"},\"created_at\":{\"ref\":\"created_at\"}}},\"Member\":{\"description\":\"A person belonging to the community\",\"title_property\":\"full_name\",\"permissions\":{\"read\":[\"*\"],\"write\":[\"steward\",\"member_self\"]},\"properties\":{\"id\":{\"primary_key\":true,\"type\":\"uuid\"},\"full_name\":{\"type\":\"string\"},\"email\":{\"ref\":\"email\"},\"joined_at\":{\"ref\":\"joined_at\"},\"tier\":{\"default\":\"basic\",\"type\":\"enum\",\"values\":[\"basic\",\"sustaining\",\"lifetime\"]},\"notes\":{\"permissions\":{\"read\":[\"steward\"],\"write\":[\"steward\"]},\"type\":\"string\"}}}},\"link_types\":{\"attended\":{\"from\":\"Member\",\"to\":\"Event\",\"cardinality\":\"many-to-many\",\"description\":\"A member attended an event\",\"properties\":{\"attended_at\":{\"type\":\"timestamp\"},\"role\":{\"default\":\"attendee\",\"type\":\"enum\",\"values\":[\"attendee\",\"organizer\",\"speaker\"]}}},\"authored\":{\"from\":\"Member\",\"to\":\"MeetingMinute\",\"cardinality\":\"one-to-many\",\"description\":\"A member authored a meeting minute\"}},\"action_types\":{\"add_meeting_minute\":{\"description\":\"Capture meeting minutes for an event\",\"creates_object\":\"MeetingMinute\",\"parameters\":{\"title\":{\"required\":true,\"type\":\"string\"},\"body\":{\"required\":true,\"type\":\"string\"},\"event\":{\"required\":true,\"type\":\"ref\",\"target\":\"Event\"}},\"permissions\":[\"steward\",\"member\"],\"agent_policy\":\"always_confirm\",\"side_effects\":[\"audit\"]},\"add_member\":{\"description\":\"Add a new member to the community\",\"creates_object\":\"Member\",\"parameters\":{\"full_name\":{\"required\":true,\"type\":\"string\"},\"email\":{\"required\":true,\"type\":\"email\"},\"tier\":{\"default\":\"basic\",\"type\":\"enum\",\"values\":[\"basic\",\"sustaining\",\"lifetime\"]}},\"permissions\":[\"steward\"],\"agent_policy\":\"always_confirm\",\"side_effects\":[\"audit\"]},\"change_tier\":{\"description\":\"Move a member to a different tier\",\"function\":\"change-tier\",\"parameters\":{\"member\":{\"required\":true,\"type\":\"ref\",\"target\":\"Member\"},\"new_tier\":{\"required\":true,\"type\":\"enum\",\"values\":[\"basic\",\"sustaining\",\"lifetime\"]}},\"permissions\":[\"steward\"],\"agent_policy\":\"always_confirm\",\"side_effects\":[\"audit\",\"notify_member\"]},\"record_attendance\":{\"description\":\"Record that a member attended an event\",\"creates_link\":\"attended\",\"parameters\":{\"member\":{\"required\":true,\"type\":\"ref\",\"target\":\"Member\"},\"event\":{\"required\":true,\"type\":\"ref\",\"target\":\"Event\"},\"role\":{\"default\":\"attendee\",\"type\":\"enum\",\"values\":[\"attendee\",\"organizer\",\"speaker\"]}},\"permissions\":[\"steward\",\"member_self\"],\"agent_policy\":\"auto_apply\",\"side_effects\":[\"audit\"]}}}",
+  "{\"properties\":{\"email\":{\"description\":\"Primary contact email\",\"type\":\"email\"},\"joined_at\":{\"description\":\"When the entity joined the community\",\"type\":\"date\"},\"created_at\":{\"description\":\"When this record was created\",\"type\":\"timestamp\"}},\"roles\":{\"member\":{\"description\":\"Anyone with a verified account in the community\"},\"steward\":{\"description\":\"Trusted operator able to record actions on others' behalf\"}},\"object_types\":{\"Event\":{\"description\":\"A community event open to members\",\"title_property\":\"title\",\"permissions\":{\"read\":[\"*\"],\"write\":[\"steward\"]},\"properties\":{\"id\":{\"primary_key\":true,\"type\":\"uuid\"},\"title\":{\"type\":\"string\"},\"starts_at\":{\"type\":\"timestamp\"},\"location\":{\"type\":\"string\"},\"description\":{\"type\":\"string\"},\"created_at\":{\"ref\":\"created_at\"}}},\"MeetingMinute\":{\"description\":\"Notes captured from a community event\",\"title_property\":\"title\",\"permissions\":{\"read\":[\"*\"],\"write\":[\"steward\"]},\"properties\":{\"id\":{\"primary_key\":true,\"type\":\"uuid\"},\"title\":{\"type\":\"string\"},\"body\":{\"type\":\"string\"},\"event_id\":{\"type\":\"ref\",\"target\":\"Event\"},\"created_at\":{\"ref\":\"created_at\"}}},\"Member\":{\"description\":\"A person belonging to the community\",\"title_property\":\"full_name\",\"permissions\":{\"read\":[\"*\"],\"write\":[\"steward\",\"member_self\"]},\"data_audit\":true,\"properties\":{\"id\":{\"primary_key\":true,\"type\":\"uuid\"},\"full_name\":{\"type\":\"string\"},\"email\":{\"ref\":\"email\"},\"joined_at\":{\"ref\":\"joined_at\"},\"tier\":{\"default\":\"basic\",\"type\":\"enum\",\"values\":[\"basic\",\"sustaining\",\"lifetime\"]},\"notes\":{\"permissions\":{\"read\":[\"steward\"],\"write\":[\"steward\"]},\"type\":\"string\"}}}},\"link_types\":{\"attended\":{\"from\":\"Member\",\"to\":\"Event\",\"cardinality\":\"many-to-many\",\"description\":\"A member attended an event\",\"properties\":{\"attended_at\":{\"type\":\"timestamp\"},\"role\":{\"default\":\"attendee\",\"type\":\"enum\",\"values\":[\"attendee\",\"organizer\",\"speaker\"]}}},\"authored\":{\"from\":\"Member\",\"to\":\"MeetingMinute\",\"cardinality\":\"one-to-many\",\"description\":\"A member authored a meeting minute\"}},\"action_types\":{\"add_meeting_minute\":{\"description\":\"Capture meeting minutes for an event\",\"creates_object\":\"MeetingMinute\",\"parameters\":{\"title\":{\"required\":true,\"type\":\"string\"},\"body\":{\"required\":true,\"type\":\"string\"},\"event\":{\"required\":true,\"type\":\"ref\",\"target\":\"Event\"}},\"permissions\":[\"steward\",\"member\"],\"agent_policy\":\"always_confirm\",\"side_effects\":[\"audit\"]},\"add_member\":{\"description\":\"Add a new member to the community\",\"creates_object\":\"Member\",\"parameters\":{\"full_name\":{\"required\":true,\"type\":\"string\"},\"email\":{\"required\":true,\"type\":\"email\"},\"tier\":{\"default\":\"basic\",\"type\":\"enum\",\"values\":[\"basic\",\"sustaining\",\"lifetime\"]}},\"permissions\":[\"steward\"],\"agent_policy\":\"always_confirm\",\"side_effects\":[\"audit\"]},\"change_tier\":{\"description\":\"Move a member to a different tier\",\"function\":\"change-tier\",\"parameters\":{\"member\":{\"required\":true,\"type\":\"ref\",\"target\":\"Member\"},\"new_tier\":{\"required\":true,\"type\":\"enum\",\"values\":[\"basic\",\"sustaining\",\"lifetime\"]}},\"permissions\":[\"steward\"],\"agent_policy\":\"always_confirm\",\"side_effects\":[\"audit\",\"notify_member\"]},\"delete_member\":{\"description\":\"Permanently remove a member from the community (irreversible)\",\"deletes\":\"Member\",\"parameters\":{\"id\":{\"required\":true,\"type\":\"uuid\"}},\"permissions\":[\"steward\"],\"agent_policy\":\"confirm_if_unfamiliar\",\"side_effects\":[\"audit\"]},\"record_attendance\":{\"description\":\"Record that a member attended an event\",\"creates_link\":\"attended\",\"parameters\":{\"member\":{\"required\":true,\"type\":\"ref\",\"target\":\"Member\"},\"event\":{\"required\":true,\"type\":\"ref\",\"target\":\"Event\"},\"role\":{\"default\":\"attendee\",\"type\":\"enum\",\"values\":[\"attendee\",\"organizer\",\"speaker\"]}},\"permissions\":[\"steward\",\"member_self\"],\"agent_policy\":\"auto_apply\",\"side_effects\":[\"audit\"]}}}",
 ) as Ontology;
 
 export const actionAddMeetingMinute = inngest.createFunction(
@@ -215,6 +215,100 @@ export const actionAddMember = inngest.createFunction(
   },
 );
 
+export const actionDeleteMember = inngest.createFunction(
+  {
+    id: "acropolisos-action-delete_member",
+    name: "acropolisos action delete_member",
+    triggers: [{ event: "acropolisos/action.delete_member" }],
+  },
+  async ({ event, step }) => {
+    const payload = (event.data ?? {}) as {
+      params?: unknown;
+      ctx?: OntologyCtx;
+      parentAuditId?: string;
+    };
+    const ctx = payload.ctx;
+    if (!ctx) {
+      throw new Error(
+        `acropolisos-action-delete_member: event.data.ctx is required (OntologyCtx must be passed in event payload)`,
+      );
+    }
+    const params = payload.params;
+    const parentAuditId = payload.parentAuditId;
+    const sideEffectAdapters: SideEffectAdapters =
+      (payload as { sideEffectAdapters?: SideEffectAdapters }).sideEffectAdapters ?? defaultAdapters;
+    const pre = await step.run("audit-pre.delete_member", () =>
+      auditPreInvocation({
+        ctx,
+        actionName: "delete_member",
+        params,
+        parentAuditId,
+      }),
+    );
+    if (pre.kind === "replay") {
+      return pre.priorResult;
+    }
+    await step.run("permission-check.delete_member", () =>
+      enforceActionPermission({
+        ontology,
+        actionName: "delete_member",
+        ctx,
+      }),
+    );
+    const startedAt = Date.now();
+    try {
+      const result = await step.run("declarative.delete_member", () =>
+        runDeclarativeAction({
+          actionName: "delete_member",
+          ontology,
+          params,
+          ctx,
+        }),
+      );
+      await step.run("audit-post.delete_member", () =>
+        auditPostInvocation({
+          ctx,
+          actionName: "delete_member",
+          params,
+          pendingAuditId: pre.pendingAuditId,
+          idempotencyKey: pre.idempotencyKey,
+          parentAuditId,
+          status: "ok",
+          durationMs: Date.now() - startedAt,
+          result,
+        }),
+      );
+      await step.run("side-effects.delete_member", () =>
+        dispatchSideEffects({
+          ctx,
+          ontology,
+          actionName: "delete_member",
+          params,
+          result,
+          auditId: pre.pendingAuditId ?? undefined,
+          adapters: sideEffectAdapters,
+        }),
+      );
+      return result;
+    } catch (err) {
+      await step.run("audit-post.delete_member", () =>
+        auditPostInvocation({
+          ctx,
+          actionName: "delete_member",
+          params,
+          pendingAuditId: pre.pendingAuditId,
+          idempotencyKey: pre.idempotencyKey,
+          parentAuditId,
+          status: "error",
+          durationMs: Date.now() - startedAt,
+          error: err,
+        }),
+      );
+      throw err;
+    }
+  },
+);
+
 export const actionRecordAttendance = inngest.createFunction(
   {
     id: "acropolisos-action-record_attendance",
@@ -312,5 +406,6 @@ export const actionRecordAttendance = inngest.createFunction(
 export const declarativeActionFunctions = [
   actionAddMeetingMinute,
   actionAddMember,
+  actionDeleteMember,
   actionRecordAttendance,
 ] as const;

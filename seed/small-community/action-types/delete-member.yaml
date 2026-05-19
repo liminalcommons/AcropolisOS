@@ -1,0 +1,10 @@
+delete_member:
+  description: Permanently remove a member from the community (irreversible)
+  deletes: Member
+  parameters:
+    id:
+      type: uuid
+      required: true
+  permissions: [steward]
+  agent_policy: confirm_if_unfamiliar
+  side_effects: [audit]

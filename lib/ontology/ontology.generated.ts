@@ -9,6 +9,7 @@ import {
   AddMeetingMinuteParamsSchema,
   AddMemberParamsSchema,
   ChangeTierParamsSchema,
+  DeleteMemberParamsSchema,
   RecordAttendanceParamsSchema,
   type Event,
   type MeetingMinute,
@@ -23,6 +24,7 @@ export {
   AddMeetingMinuteParamsSchema,
   AddMemberParamsSchema,
   ChangeTierParamsSchema,
+  DeleteMemberParamsSchema,
   RecordAttendanceParamsSchema,
 } from "./types.generated";
 export type {
@@ -33,6 +35,7 @@ export type {
   AddMeetingMinuteParams,
   AddMemberParams,
   ChangeTierParams,
+  DeleteMemberParams,
   RecordAttendanceParams,
 } from "./types.generated";
 
@@ -56,5 +59,6 @@ export const ActionParamSchemas = {
   AddMeetingMinuteParams: AddMeetingMinuteParamsSchema,
   AddMemberParams: AddMemberParamsSchema,
   ChangeTierParams: ChangeTierParamsSchema,
+  DeleteMemberParams: DeleteMemberParamsSchema,
   RecordAttendanceParams: RecordAttendanceParamsSchema,
 } as const;

@@ -26,6 +26,7 @@ describe("seed: small-community", () => {
       "add_meeting_minute",
       "add_member",
       "change_tier",
+      "delete_member",
       "record_attendance",
     ]);
     expect(Object.keys(onto.roles).sort()).toEqual(["member", "steward"]);

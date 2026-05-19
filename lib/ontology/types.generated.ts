@@ -64,6 +64,11 @@ export const ChangeTierParamsSchema = z.object({
 });
 export type ChangeTierParams = z.infer<typeof ChangeTierParamsSchema>;
 
+export const DeleteMemberParamsSchema = z.object({
+  "id": z.uuid(),
+});
+export type DeleteMemberParams = z.infer<typeof DeleteMemberParamsSchema>;
+
 export const RecordAttendanceParamsSchema = z.object({
   "member": z.string(),
   "event": z.string(),
