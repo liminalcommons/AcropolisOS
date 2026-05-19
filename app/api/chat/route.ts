@@ -101,5 +101,10 @@ export async function POST(req: Request): Promise<Response> {
     tools,
     stopWhen: stepCountIs(8),
   });
-  return result.toTextStreamResponse();
+  // M2.3 step-3: emit the UI message stream so tool outputs (apply_action
+  // confirmation_required envelopes, audit_id, propose_* results) reach the
+  // client's useChat({messages}) state as structured parts. toTextStreamResponse
+  // would concatenate only text deltas and silently drop tool result frames,
+  // leaving the chat panel's confirmation card permanently inert.
+  return result.toUIMessageStreamResponse();
 }

@@ -8,10 +8,14 @@
 // persisted to localStorage via the helpers in chat-panel-state.ts.
 //
 // Streaming integration: uses `useChat` from `@ai-sdk/react` with the
-// `TextStreamChatTransport` because /api/chat returns `toTextStreamResponse()`
-// (plain text protocol). Markdown is rendered with react-markdown + remark-gfm
-// (code fences, tables, strikethrough). The file drop slot accepts files via
-// the native drag-and-drop API and shows their names.
+// `DefaultChatTransport` (UI message stream protocol — SSE). /api/chat now
+// returns `toUIMessageStreamResponse()` so tool result envelopes
+// (apply_action confirmation_required, audit_id, propose_* outputs) land as
+// structured message parts on `useChat({messages})` and the inline
+// ActionConfirmationCard / InlineProposalPanel can detect them.
+// Markdown is rendered with react-markdown + remark-gfm (code fences, tables,
+// strikethrough). The file drop slot accepts files via the native
+// drag-and-drop API and shows their names.
 //
 // Inline proposal panel (US-018): each chat-panel session is identified by a
 // stable client-side UUID stored in localStorage under
@@ -30,7 +34,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useChat } from "@ai-sdk/react";
-import { TextStreamChatTransport, type UIMessage } from "ai";
+import { DefaultChatTransport, type UIMessage } from "ai";
 import { MessageSquare, Paperclip, Send, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -131,9 +135,9 @@ export function ChatPanel({
 
   const transport = useMemo(() => {
     if (!chatSessionId) {
-      return new TextStreamChatTransport({ api: "/api/chat" });
+      return new DefaultChatTransport({ api: "/api/chat" });
     }
-    return new TextStreamChatTransport({
+    return new DefaultChatTransport({
       api: "/api/chat",
       body: { session_id: chatSessionId },
     });

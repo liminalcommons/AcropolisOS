@@ -97,7 +97,11 @@ describe("POST /api/chat", () => {
     expect(res.status).toBe(400);
   });
 
-  it("streams text response for single UIMessage body", async () => {
+  it("streams a UI message stream for a single UIMessage body (M2.3 transport)", async () => {
+    // The route now emits result.toUIMessageStreamResponse() so tool
+    // outputs (apply_action confirmation envelopes, propose_* results) can
+    // round-trip to useChat({messages}). The text deltas show up as
+    // data: {"type":"text-delta",...} SSE frames, not raw concatenated text.
     const req = new Request("http://localhost/api/chat", {
       method: "POST",
       body: JSON.stringify({
@@ -112,10 +116,18 @@ describe("POST /api/chat", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(200);
+    expect(res.headers.get("content-type") ?? "").toContain(
+      "text/event-stream",
+    );
     expect(res.body).toBeTruthy();
     const chunks = await convertReadableStreamToArray(
       res.body!.pipeThrough(new TextDecoderStream()),
     );
-    expect(chunks.join("")).toBe("Hello world");
+    const wire = chunks.join("");
+    // Both text deltas survive as discrete frames.
+    expect(wire).toContain("Hello");
+    expect(wire).toContain("world");
+    // Frames are SSE-formatted.
+    expect(wire).toMatch(/^data: /m);
   });
 });
