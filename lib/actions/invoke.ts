@@ -37,6 +37,28 @@ export interface InvokeActionInput {
   // US-028: optional side-effect adapters. When omitted, side-effect
   // dispatch is skipped — keeps tests + bare invocations unchanged.
   sideEffectAdapters?: SideEffectAdapters;
+  // M2.5: current call depth (root = 0). Increments through
+  // ctx.actions.X composition. Rejected when it would exceed MAX_DEPTH.
+  // Callers should NOT pass this — it's threaded automatically.
+  depth?: number;
+}
+
+// Cap composition chain length. 5 is generous: every real composing action
+// in the seed today is 1-2 deep. A handler hitting 6 is almost certainly a
+// runaway self-call, not a legitimate workflow.
+export const MAX_COMPOSITION_DEPTH = 5;
+
+export class CompositionDepthExceededError extends Error {
+  constructor(
+    readonly actionName: string,
+    readonly depth: number,
+    readonly maxDepth: number,
+  ) {
+    super(
+      `composition depth ${depth} exceeds maximum ${maxDepth} (last action: "${actionName}")`,
+    );
+    this.name = "CompositionDepthExceededError";
+  }
 }
 
 function isFunctionBacked(def: ActionType): def is ActionType & { function: string } {
@@ -52,12 +74,24 @@ export async function invokeAction(input: InvokeActionInput): Promise<unknown> {
     functionsDir,
     parentAuditId,
     sideEffectAdapters,
+    depth = 0,
   } = input;
 
   const def = ontology.action_types[actionName];
   if (!def) {
     throw new Error(
       `invokeAction: unknown action "${actionName}" (not in ontology.action_types)`,
+    );
+  }
+
+  if (depth > MAX_COMPOSITION_DEPTH) {
+    // Throw BEFORE audit_pre so we don't write a pending row for a call we
+    // refuse to execute. The throw still unwinds through any enclosing
+    // parent's audit_post(error), so the chain is visible in audit.
+    throw new CompositionDepthExceededError(
+      actionName,
+      depth,
+      MAX_COMPOSITION_DEPTH,
     );
   }
 
@@ -86,6 +120,7 @@ export async function invokeAction(input: InvokeActionInput): Promise<unknown> {
       functionsDir,
       parentAuditId: childParentId,
       sideEffectAdapters,
+      depth: depth + 1,
     }) as unknown as OntologyCtx["actions"],
   };
 
@@ -153,6 +188,9 @@ export interface CreateActionsDispatcherInput {
   functionsDir: string;
   parentAuditId?: string;
   sideEffectAdapters?: SideEffectAdapters;
+  // M2.5: depth handed to invokeAction for each child call. Defaults to 0
+  // when this dispatcher is the root entrypoint (no enclosing invokeAction).
+  depth?: number;
 }
 
 export type ActionsDispatcher = Record<
@@ -166,8 +204,14 @@ export type ActionsDispatcher = Record<
 export function createActionsDispatcher(
   input: CreateActionsDispatcherInput,
 ): ActionsDispatcher {
-  const { ctx, ontology, functionsDir, parentAuditId, sideEffectAdapters } =
-    input;
+  const {
+    ctx,
+    ontology,
+    functionsDir,
+    parentAuditId,
+    sideEffectAdapters,
+    depth = 0,
+  } = input;
   const dispatcher: ActionsDispatcher = {};
   for (const actionName of Object.keys(ontology.action_types)) {
     dispatcher[actionName] = (params: unknown) =>
@@ -179,6 +223,7 @@ export function createActionsDispatcher(
         functionsDir,
         parentAuditId,
         sideEffectAdapters,
+        depth,
       });
   }
   return dispatcher;
