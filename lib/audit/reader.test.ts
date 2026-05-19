@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildActionChain,
   filterAuditRows,
   filterDataAuditRows,
   type AuditFilter,
@@ -144,5 +145,92 @@ describe("filterDataAuditRows", () => {
       "d3",
       "d2",
     ]);
+  });
+});
+
+describe("buildActionChain — M2.5 action-composition reader", () => {
+  // A composing action's audit log is a tree (parent → many children,
+  // grandchildren, …). buildActionChain takes a root id and returns the
+  // flattened depth-tagged subtree rooted at that id.
+  //
+  // The link is `metadata.parent_action_audit_id` — same field side-effects
+  // (M2.4) AND ctx.actions.X composition write.
+
+  function row(
+    id: string,
+    parentId: string | undefined,
+    at: string,
+    subject_id = "action",
+  ): AuditRow {
+    return auditRow({
+      id,
+      at: new Date(at),
+      subject_id,
+      metadata: parentId
+        ? { result: "ok", parent_action_audit_id: parentId }
+        : { result: "ok" },
+    });
+  }
+
+  it("returns a single-row chain for a leaf with no children", () => {
+    const all = [row("root", undefined, "2026-05-18T10:00:00Z")];
+    const chain = buildActionChain(all, "root");
+    expect(chain.map((c) => ({ id: c.row.id, depth: c.depth }))).toEqual([
+      { id: "root", depth: 0 },
+    ]);
+  });
+
+  it("walks 3 generations: root → child → grandchild", () => {
+    const all = [
+      row("root", undefined, "2026-05-18T10:00:00Z", "promote"),
+      row("child", "root", "2026-05-18T10:00:01Z", "change_tier"),
+      row("grandchild", "child", "2026-05-18T10:00:02Z", "notify"),
+    ];
+    const chain = buildActionChain(all, "root");
+    expect(chain.map((c) => ({ id: c.row.id, depth: c.depth }))).toEqual([
+      { id: "root", depth: 0 },
+      { id: "child", depth: 1 },
+      { id: "grandchild", depth: 2 },
+    ]);
+  });
+
+  it("orders siblings by `at` ascending so the chain reads top-to-bottom", () => {
+    const all = [
+      row("root", undefined, "2026-05-18T10:00:00Z"),
+      row("late", "root", "2026-05-18T10:00:05Z"),
+      row("early", "root", "2026-05-18T10:00:01Z"),
+    ];
+    const chain = buildActionChain(all, "root");
+    expect(chain.map((c) => c.row.id)).toEqual(["root", "early", "late"]);
+  });
+
+  it("ignores unrelated rows (different root)", () => {
+    const all = [
+      row("a", undefined, "2026-05-18T10:00:00Z"),
+      row("b", undefined, "2026-05-18T10:00:01Z"),
+      row("a-child", "a", "2026-05-18T10:00:02Z"),
+      row("b-child", "b", "2026-05-18T10:00:03Z"),
+    ];
+    const chain = buildActionChain(all, "a");
+    expect(chain.map((c) => c.row.id).sort()).toEqual(["a", "a-child"]);
+  });
+
+  it("returns empty when the root id isn't found", () => {
+    const all = [row("a", undefined, "2026-05-18T10:00:00Z")];
+    expect(buildActionChain(all, "missing")).toEqual([]);
+  });
+
+  it("survives a cycle without infinite-looping", () => {
+    // Defensive: real composition can't produce cycles (parent rows are
+    // written before children), but a corrupt DB shouldn't hang the UI.
+    const all = [
+      row("a", "b", "2026-05-18T10:00:00Z"),
+      row("b", "a", "2026-05-18T10:00:01Z"),
+    ];
+    const chain = buildActionChain(all, "a");
+    // a is the requested root; b is a's descendant; if traversal recursed
+    // back into a it would loop. We assert the visited set caps it.
+    expect(chain.length).toBeLessThanOrEqual(2);
+    expect(chain[0].row.id).toBe("a");
   });
 });

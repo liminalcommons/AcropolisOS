@@ -57,6 +57,58 @@ export function filterAuditRows(
     .slice(0, limit);
 }
 
+// M2.5: action-composition reader.
+//
+// A composing action's audit trail is a tree rooted at the parent's pending
+// row, with children pointing back via `metadata.parent_action_audit_id`
+// (same field side-effects use). `buildActionChain` flattens that subtree
+// into a depth-tagged list, sorted within each generation by `at` ASC so
+// the chain reads top-to-bottom the way it executed.
+//
+// Pure / in-memory: the PG reader fetches all rows once and applies this.
+// Audit tables are small enough today that walking in-memory is fine; the
+// alternative (recursive CTE) is reserved for if `action_audit` grows large.
+
+export interface ActionChainEntry {
+  row: AuditRow;
+  depth: number;
+}
+
+export function buildActionChain(
+  rows: AuditRow[],
+  rootId: string,
+): ActionChainEntry[] {
+  const root = rows.find((r) => r.id === rootId);
+  if (!root) return [];
+
+  // Bucket children by parent id, sorted by `at` ASC so siblings come out
+  // in execution order regardless of input order.
+  const byParent = new Map<string, AuditRow[]>();
+  for (const r of rows) {
+    const parent = (r.metadata as { parent_action_audit_id?: string })
+      .parent_action_audit_id;
+    if (!parent) continue;
+    const list = byParent.get(parent) ?? [];
+    list.push(r);
+    byParent.set(parent, list);
+  }
+  for (const list of byParent.values()) {
+    list.sort((a, b) => a.at.getTime() - b.at.getTime());
+  }
+
+  const out: ActionChainEntry[] = [];
+  const visited = new Set<string>();
+  function walk(row: AuditRow, depth: number): void {
+    if (visited.has(row.id)) return; // cycle defence
+    visited.add(row.id);
+    out.push({ row, depth });
+    const kids = byParent.get(row.id) ?? [];
+    for (const k of kids) walk(k, depth + 1);
+  }
+  walk(root, 0);
+  return out;
+}
+
 export function filterDataAuditRows(
   rows: DataAuditRow[],
   filter: DataAuditFilter,
@@ -130,6 +182,15 @@ export class PgAuditReader {
       metadata: unknown;
     }>;
     return filterAuditRows(rows.map(normalizeAuditRow), filter);
+  }
+
+  // M2.5: hydrate the full composition chain rooted at `rootId`.
+  // Pulls all action_audit rows (LIMIT 1000, same as listAction) and walks
+  // the parent_action_audit_id graph in-memory. Returns rows in depth-first
+  // execution order (root first, then each subtree in `at` ASC).
+  async loadActionChain(rootId: string): Promise<ActionChainEntry[]> {
+    const rows = await this.listAction({ limit: 1000 });
+    return buildActionChain(rows, rootId);
   }
 
   async listData(filter: DataAuditFilter = {}): Promise<DataAuditRow[]> {
