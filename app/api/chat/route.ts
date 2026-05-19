@@ -42,13 +42,15 @@ function isChatRequestBody(value: unknown): value is ChatRequestBody {
 }
 
 // Extended instructions: tell the agent when apply_action vs propose_* is
-// appropriate. Keeps the agent from misusing apply_action for schema work.
+// appropriate, and that read tools must come FIRST when the user is asking
+// "what do we have" rather than "let's change something".
 const APPLY_ACTION_INSTRUCTIONS = [
   "",
-  "You have two distinct mutation surfaces:",
+  "You have THREE surfaces:",
+  "  - READ (query_<type>, read_<type>, describe_<type>): inspect existing data. When the user asks about existing data ('what X do we have', 'show me', 'list', 'how many', 'who is …'), use query_<type> or read_<type> FIRST, before proposing anything new. Use describe_<type> when you need to know what fields an object type has.",
   "  - propose_* + finalize_proposal: stage ONTOLOGY changes (new object/link/property/action types, new ingest mappings). These DO NOT mutate live state until a steward reviews and applies the proposal.",
   "  - apply_action: invoke a typed action to mutate LIVE state immediately (e.g., change_tier on an existing Member, record_attendance). These commit when called.",
-  "Use apply_action only when the user asks to do something on the live data and the action_type already exists. If they ask for new behavior, propose first.",
+  "Rules: never propose a new object type the ontology already has — call describe_<type> or query_<type> first to verify. Use apply_action only when the user asks to do something on the live data and the action_type already exists. If they ask for new behavior, propose first.",
   "Some actions have a confirmation policy. If apply_action returns confirmation_required, do NOT silently re-call it with bypass_confirmation — present the requested change in your text reply and let the user click Confirm.",
 ].join(" ");
 
@@ -93,7 +95,10 @@ export async function POST(req: Request): Promise<Response> {
     getInboxStore(),
   );
 
+  const readTools = runtime.readTools ?? {};
+
   const tools = {
+    ...readTools,
     ...proposalTools,
     apply_action: applyActionTool,
   };

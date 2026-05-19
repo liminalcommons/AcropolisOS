@@ -26,6 +26,8 @@ import {
   type SideEffectAdapters,
 } from "../actions/side-effects";
 import { resolveSideEffectAdapters } from "../actions/side-effects-runtime";
+import type { Tool } from "ai";
+import { buildReadToolsAiSdk } from "./read-tools-ai-sdk";
 
 export interface ChatRuntime {
   actor: Actor | null;
@@ -37,6 +39,11 @@ export interface ChatRuntime {
   // into createInProcessDispatcher so notify_member fires after every
   // successful apply_action.
   sideEffectAdapters: SideEffectAdapters;
+  // M2.x: ai-sdk-shaped READ tools (query_<type>, read_<type>, describe_<type>
+  // per ontology object type). Lets the agent answer "what X do we have?"
+  // before proposing anything new. Built per-request so permissions track
+  // the current actor.
+  readTools: Record<string, Tool>;
 }
 
 // Lazily-cached ontology — disk reads are non-trivial and the ontology
@@ -85,5 +92,13 @@ export async function buildChatRuntime(): Promise<ChatRuntime> {
   const sideEffectAdapters = resolveSideEffectAdapters(
     loadSideEffectConfigFromEnv(process.env),
   );
-  return { actor, ctx, ontology, functionsDir, sideEffectAdapters };
+  const readTools = buildReadToolsAiSdk({ ontology, ctx });
+  return {
+    actor,
+    ctx,
+    ontology,
+    functionsDir,
+    sideEffectAdapters,
+    readTools,
+  };
 }
