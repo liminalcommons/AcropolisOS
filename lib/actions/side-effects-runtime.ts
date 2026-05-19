@@ -1,10 +1,9 @@
-// US-028: production wiring for side-effect adapters.
+// US-028 / M2.4: production wiring for side-effect adapters.
 //
 // The dispatcher in side-effects.ts is transport-agnostic; this module
 // chooses concrete implementations based on environment:
-//   - RESEND_API_KEY set  → POST to api.resend.com
-//   - SMTP_HOST set       → log + no-op (real SMTP integration deferred)
-//   - neither             → log-only sendMail (development default)
+//   - RESEND_API_KEY set  → POST to api.resend.com (BYOK)
+//   - otherwise           → structured-JSON stdout adapter (notify-stdout.ts)
 //
 // Webhook posts use the platform fetch (no extra dependency).
 // Failures from these adapters propagate to the dispatcher, which captures
@@ -16,6 +15,7 @@ import type {
   SideEffectAdapters,
 } from "./side-effects";
 import type { SideEffectsConfig } from "../ontology/schema";
+import { makeStdoutMailer } from "./notify-stdout";
 
 function makeResendMailer(apiKey: string, from: string): SendMail {
   return async ({ to, subject, body }) => {
@@ -32,12 +32,6 @@ function makeResendMailer(apiKey: string, from: string): SendMail {
         `resend send to ${to} failed: ${res.status} ${res.statusText}`,
       );
     }
-  };
-}
-
-function makeLogMailer(): SendMail {
-  return async ({ to, subject }) => {
-    console.log(`[side-effects:mail] (no provider) to=${to} subject=${subject}`);
   };
 }
 
@@ -66,7 +60,7 @@ export function resolveSideEffectAdapters(
 
   const sendMail: SendMail = resendKey
     ? makeResendMailer(resendKey, mailFrom)
-    : makeLogMailer();
+    : makeStdoutMailer();
 
   return {
     sendMail,
