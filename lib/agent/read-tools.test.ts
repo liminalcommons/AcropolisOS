@@ -36,8 +36,13 @@ const stewardActor: Actor = {
   customRoles: [],
 };
 
+// IMPORTANT (M3.1 / US-031): for the Member type, `member_self` resolves via
+// `row.id === actor.userId`. The seeded "own" Member row id below
+// (11111111-...111) must equal this userId, otherwise this actor cannot
+// even read their own row under the tightened seed (read: ["steward",
+// "member_self"]).
 const memberActor: Actor = {
-  userId: "u-member",
+  userId: "11111111-1111-1111-1111-111111111111",
   email: "member@example.com",
   role: "member",
   customRoles: [],

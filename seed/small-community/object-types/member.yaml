@@ -3,7 +3,11 @@ Member:
   title_property: full_name
   data_audit: true
   permissions:
-    read: ["*"]
+    # M3.1 / US-031: tightened from `["*"]` to enforce member_self.
+    # A member sees only their own Member row; stewards see all. The wrap
+    # layer (wrapObjectAccess in lib/ontology/ctx.ts) resolves member_self
+    # via row.id === actor.userId (the actor IS the member).
+    read: ["steward", "member_self"]
     write: ["steward", "member_self"]
   properties:
     id:
