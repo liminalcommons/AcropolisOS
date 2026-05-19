@@ -1,0 +1,30 @@
+Harvest:
+  description: A recorded yield from a planting
+  title_property: label
+  permissions:
+    read: ["*"]
+    write: [member, steward, coordinator]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    label:
+      type: string
+    planting:
+      type: ref
+      target: Planting
+    quantity:
+      type: decimal
+    unit:
+      type: enum
+      values: [kg, g, count, bunch, liter, basket]
+      default: kg
+    harvested_at:
+      type: date
+    harvested_by:
+      type: ref
+      target: Member
+    destination:
+      type: enum
+      values: [shared, distributed, market, preserved, compost]
+      default: shared

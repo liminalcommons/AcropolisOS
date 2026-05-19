@@ -1,0 +1,29 @@
+Member:
+  description: Staff or work-trader with a verified login account
+  title_property: full_name
+  data_audit: true
+  permissions:
+    read: ["*"]
+    write: [manager, member_self]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    full_name:
+      type: string
+    email:
+      ref: email
+    phone:
+      ref: phone
+    tier_role:
+      type: enum
+      values: [work_trader, staff, supervisor, manager]
+      default: staff
+    started_at:
+      type: date
+    notes:
+      type: string
+      required: false
+      permissions:
+        read: [manager]
+        write: [manager]

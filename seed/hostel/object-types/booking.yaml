@@ -1,0 +1,38 @@
+Booking:
+  description: A guest's booking into a specific bed for a date range
+  title_property: label
+  data_audit: true
+  permissions:
+    read: [steward, manager]
+    write: [steward, manager]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    label:
+      type: string
+      description: Short label, e.g. "Lena Petrov / D3-A2 / Jun 3-7"
+    guest:
+      type: ref
+      target: Guest
+    bed:
+      type: ref
+      target: Bed
+    from_date:
+      type: date
+    to_date:
+      type: date
+    rate_per_night:
+      type: decimal
+      description: 0 if work-trade
+    currency:
+      type: string
+      default: EUR
+    source:
+      type: enum
+      values: [direct, booking_com, hostelworld, hostelsclub, work_trade, walk_in]
+      default: direct
+    status:
+      type: enum
+      values: [confirmed, checked_in, completed, cancelled, no_show]
+      default: confirmed

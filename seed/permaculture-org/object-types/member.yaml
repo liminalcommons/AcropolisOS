@@ -1,0 +1,28 @@
+Member:
+  description: A person in the permaculture organization
+  title_property: full_name
+  data_audit: true
+  permissions:
+    read: ["*"]
+    write: [steward, member_self]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    full_name:
+      type: string
+    email:
+      ref: email
+    joined_at:
+      ref: joined_at
+    pronouns:
+      ref: pronouns
+    tier_role:
+      type: enum
+      values: [visitor, volunteer, steward, coordinator]
+      default: volunteer
+    skills:
+      ref: skills
+    availability:
+      type: string
+      description: Free-form note ("weekends", "Tues afternoons", "remote only")

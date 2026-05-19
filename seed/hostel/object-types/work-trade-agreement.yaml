@@ -1,0 +1,35 @@
+WorkTradeAgreement:
+  description: Agreement between hostel and a guest to exchange work for stay
+  title_property: label
+  data_audit: true
+  permissions:
+    read: [steward, manager]
+    write: [manager]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    label:
+      type: string
+    guest:
+      type: ref
+      target: Guest
+      required: false
+      description: May be null after graduation if the Guest record has been archived (see hm-004 / Anna Vogt pattern)
+    bed_comp:
+      type: ref
+      target: Bed
+    hours_per_week:
+      type: decimal
+      default: 20
+    start_date:
+      type: date
+    end_date:
+      type: date
+    status:
+      type: enum
+      values: [pending, active, completed, terminated]
+      default: pending
+    notes:
+      type: string
+      required: false

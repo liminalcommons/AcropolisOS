@@ -1,0 +1,11 @@
+claim_shift:
+  description: Self-assign to an open shift
+  function: claim-shift
+  parameters:
+    shift:
+      type: ref
+      target: Shift
+      required: true
+  permissions: [member, steward, manager]
+  agent_policy: auto_apply
+  side_effects: [audit]

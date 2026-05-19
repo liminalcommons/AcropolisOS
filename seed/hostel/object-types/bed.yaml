@@ -1,0 +1,25 @@
+Bed:
+  description: A specific bed in a room
+  title_property: code
+  permissions:
+    read: ["*"]
+    write: [manager]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    code:
+      type: string
+      description: e.g. "D3-A2" (Dorm 3, bunk A, bed 2)
+    room:
+      type: ref
+      target: Room
+    is_bottom_bunk:
+      type: boolean
+      default: true
+    out_of_service:
+      type: boolean
+      default: false
+    notes:
+      type: string
+      required: false

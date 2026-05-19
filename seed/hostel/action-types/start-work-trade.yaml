@@ -1,0 +1,24 @@
+start_work_trade:
+  description: Promote a guest to an active work-trade agreement
+  creates_object: WorkTradeAgreement
+  parameters:
+    guest:
+      type: ref
+      target: Guest
+      required: true
+    bed_comp:
+      type: ref
+      target: Bed
+      required: true
+    hours_per_week:
+      type: decimal
+      default: 20
+    start_date:
+      type: date
+      required: true
+    end_date:
+      type: date
+      required: true
+  permissions: [manager]
+  agent_policy: always_confirm
+  side_effects: [audit]

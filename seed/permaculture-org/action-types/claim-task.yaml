@@ -1,0 +1,11 @@
+claim_task:
+  description: A member self-assigns to an open task
+  function: claim-task
+  parameters:
+    task:
+      type: ref
+      target: Task
+      required: true
+  permissions: [member, steward, coordinator]
+  agent_policy: auto_apply
+  side_effects: [audit]

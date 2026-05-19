@@ -1,0 +1,27 @@
+Site:
+  description: A plot, bed, water feature, or building managed by the org
+  title_property: name
+  permissions:
+    read: ["*"]
+    write: [steward, coordinator]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    name:
+      type: string
+    zone:
+      ref: zone
+    area_m2:
+      type: decimal
+      required: false
+    parent_site:
+      type: ref
+      target: Site
+      required: false
+    soil_type:
+      type: string
+      required: false
+    notes:
+      type: string
+      required: false

@@ -1,0 +1,26 @@
+add_planting:
+  description: Record a new planting at a site
+  creates_object: Planting
+  parameters:
+    label:
+      type: string
+      required: true
+    species:
+      type: string
+      required: true
+    variety:
+      type: string
+      required: false
+    site:
+      type: ref
+      target: Site
+      required: true
+    planted_at:
+      type: date
+      required: true
+    expected_harvest:
+      type: date
+      required: false
+  permissions: [steward, coordinator]
+  agent_policy: always_confirm
+  side_effects: [audit]

@@ -1,0 +1,23 @@
+schedule_work_party:
+  description: Schedule a new work party at a site
+  creates_object: WorkParty
+  parameters:
+    title:
+      type: string
+      required: true
+    starts_at:
+      type: timestamp
+      required: true
+    duration_hours:
+      type: decimal
+      default: 3
+    site:
+      type: ref
+      target: Site
+      required: true
+    description:
+      type: string
+      required: false
+  permissions: [steward, coordinator]
+  agent_policy: always_confirm
+  side_effects: [audit, notify_member]

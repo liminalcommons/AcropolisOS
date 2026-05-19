@@ -1,0 +1,42 @@
+attended:
+  from: Member
+  to: WorkParty
+  cardinality: many-to-many
+  description: A member attended a work party
+  properties:
+    hours_contributed:
+      type: decimal
+    role:
+      type: enum
+      values: [participant, facilitator]
+      default: participant
+
+assigned_to:
+  from: Member
+  to: Task
+  cardinality: one-to-one
+  description: A member is responsible for a task
+
+located_at:
+  from: Planting
+  to: Site
+  cardinality: one-to-one
+  description: Where a planting lives
+
+yielded:
+  from: Planting
+  to: Harvest
+  cardinality: one-to-many
+  description: Harvests from a planting
+
+observed:
+  from: Member
+  to: Observation
+  cardinality: one-to-many
+  description: A member captured an observation
+
+subsite_of:
+  from: Site
+  to: Site
+  cardinality: many-to-many
+  description: Site nested inside a parent site (graph link, parent_site column on Site itself is the canonical scalar)

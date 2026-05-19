@@ -1,0 +1,25 @@
+log_observation:
+  description: Capture an observation about a site or planting
+  creates_object: Observation
+  parameters:
+    summary:
+      type: string
+      required: true
+    body:
+      type: string
+      required: false
+    category:
+      type: enum
+      values: [pest, disease, growth, weather, soil, wildlife, other]
+      default: other
+    site:
+      type: ref
+      target: Site
+      required: false
+    planting:
+      type: ref
+      target: Planting
+      required: false
+  permissions: [member, steward, coordinator]
+  agent_policy: auto_apply
+  side_effects: [audit]

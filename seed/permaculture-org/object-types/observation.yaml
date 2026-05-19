@@ -1,0 +1,32 @@
+Observation:
+  description: A member's note about a site or planting
+  title_property: summary
+  permissions:
+    read: ["*"]
+    write: [member, steward, coordinator]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    summary:
+      type: string
+    body:
+      type: string
+      required: false
+    category:
+      type: enum
+      values: [pest, disease, growth, weather, soil, wildlife, other]
+      default: other
+    site:
+      type: ref
+      target: Site
+      required: false
+    planting:
+      type: ref
+      target: Planting
+      required: false
+    observed_at:
+      type: timestamp
+    author:
+      type: ref
+      target: Member

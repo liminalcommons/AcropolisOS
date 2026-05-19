@@ -1,0 +1,36 @@
+Guest:
+  description: Anyone staying at the hostel — paid, work-trade, or visitor
+  title_property: full_name
+  data_audit: true
+  permissions:
+    read: [steward, manager]
+    write: [steward, manager]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    full_name:
+      type: string
+    email:
+      ref: email
+    country:
+      ref: country
+    phone:
+      ref: phone
+    arrived_at:
+      type: date
+    expected_departure:
+      type: date
+    current_status:
+      type: enum
+      values: [booked, checked_in, checked_out, no_show, cancelled]
+      default: booked
+    is_work_trader:
+      type: boolean
+      default: false
+    notes:
+      type: string
+      required: false
+      permissions:
+        read: [steward, manager]
+        write: [steward, manager]

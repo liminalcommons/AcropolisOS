@@ -1,0 +1,22 @@
+record_harvest:
+  description: Log a harvest from a planting
+  creates_object: Harvest
+  parameters:
+    planting:
+      type: ref
+      target: Planting
+      required: true
+    quantity:
+      type: decimal
+      required: true
+    unit:
+      type: enum
+      values: [kg, g, count, bunch, liter, basket]
+      default: kg
+    destination:
+      type: enum
+      values: [shared, distributed, market, preserved, compost]
+      default: shared
+  permissions: [member, steward, coordinator]
+  agent_policy: auto_apply
+  side_effects: [audit]

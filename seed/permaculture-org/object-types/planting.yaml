@@ -1,0 +1,30 @@
+Planting:
+  description: A specific crop or perennial at a site
+  title_property: label
+  permissions:
+    read: ["*"]
+    write: [steward, coordinator]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    label:
+      type: string
+      description: Short human-readable label, e.g. "Bed-3 Tomatoes 2026"
+    species:
+      type: string
+    variety:
+      type: string
+      required: false
+    site:
+      type: ref
+      target: Site
+    planted_at:
+      type: date
+    expected_harvest:
+      type: date
+      required: false
+    status:
+      type: enum
+      values: [planned, planted, growing, harvested, failed, removed]
+      default: planted

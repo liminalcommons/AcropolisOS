@@ -1,0 +1,30 @@
+WorkParty:
+  description: A scheduled gathering where members work together at a site
+  title_property: title
+  permissions:
+    read: ["*"]
+    write: [steward, coordinator]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    title:
+      type: string
+    starts_at:
+      type: timestamp
+    duration_hours:
+      type: decimal
+      default: 3
+    site:
+      type: ref
+      target: Site
+    coordinator:
+      type: ref
+      target: Member
+    description:
+      type: string
+      required: false
+    status:
+      type: enum
+      values: [scheduled, in_progress, completed, cancelled]
+      default: scheduled

@@ -1,0 +1,24 @@
+Room:
+  description: A physical room at the hostel
+  title_property: code
+  permissions:
+    read: ["*"]
+    write: [manager]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    code:
+      type: string
+      description: Short code, e.g. "D3" or "P5"
+    kind:
+      type: enum
+      values: [dorm_mixed, dorm_female, dorm_male, private, staff]
+    capacity:
+      type: decimal
+    floor:
+      type: decimal
+      required: false
+    notes:
+      type: string
+      required: false

@@ -1,0 +1,8 @@
+member:
+  description: Any verified account in the organization
+
+steward:
+  description: Trusted operator able to record actions on others' behalf
+
+coordinator:
+  description: Can schedule work parties, reorganise sites, and update plantings

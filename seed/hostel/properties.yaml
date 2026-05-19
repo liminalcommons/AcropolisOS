@@ -1,0 +1,13 @@
+email:
+  type: email
+  description: Primary contact email
+created_at:
+  type: timestamp
+  description: When this record was created
+country:
+  type: string
+  description: ISO 3166-1 alpha-2 country code
+phone:
+  type: string
+  required: false
+  description: International phone number
