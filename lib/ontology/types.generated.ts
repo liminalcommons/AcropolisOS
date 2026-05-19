@@ -90,6 +90,11 @@ export const InviteMemberParamsSchema = z.object({
 });
 export type InviteMemberParams = z.infer<typeof InviteMemberParamsSchema>;
 
+export const MarkNotificationReadParamsSchema = z.object({
+  "notification_id": z.string(),
+});
+export type MarkNotificationReadParams = z.infer<typeof MarkNotificationReadParamsSchema>;
+
 export const PromoteToStewardParamsSchema = z.object({
   "member": z.string(),
 });

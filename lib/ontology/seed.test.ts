@@ -29,6 +29,7 @@ describe("seed: small-community", () => {
       "change_tier",
       "delete_member",
       "invite_member",
+      "mark_notification_read",
       "promote_to_steward",
       "record_attendance",
     ]);
