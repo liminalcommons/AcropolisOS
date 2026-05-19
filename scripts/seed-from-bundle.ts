@@ -2,11 +2,18 @@
 // validated against the bundle's ontology YAML.
 //
 // Usage:
-//   tsx scripts/seed-from-bundle.ts <bundle-name> [--dry-run] [--insert]
+//   tsx scripts/seed-from-bundle.ts <bundle-name> [--emit-sql] [--insert]
+//                                                 [--schema=<name>]
 //
-// Default mode is --dry-run: parse the ontology, parse each data file, and
-// report any drift (missing required props, unknown enum values, dangling
-// refs) without touching the database. Pass --insert to actually write rows.
+// Modes:
+//   default     dry-run only: parse + validate, report violations, exit
+//   --emit-sql  also write seed/<bundle>/<bundle>.generated.sql with CREATE
+//               SCHEMA + CREATE TABLE + INSERT statements (no DB touched)
+//   --insert    emit SQL then execute it against Postgres via `docker exec
+//               acropolisos-postgres psql -U acropolisos -d acropolisos`
+//
+// Default schema name is `seed_<bundle>` (e.g. seed_permaculture_org). Override
+// with --schema=<name>.
 //
 // The bundle is expected at:
 //   packages/acropolisos/seed/<bundle-name>/{properties,roles,link-types}.yaml
@@ -17,7 +24,8 @@
 // (e.g. member.json -> object_types.Member) OR a link type (e.g. attended.json).
 // File names are matched case-insensitively after snake-casing the type name.
 import path from "node:path";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadOntology } from "../lib/ontology/load";
 import type {
@@ -28,6 +36,11 @@ import type {
   PropertyDefinition,
   SharedPropertyRegistry,
 } from "../lib/ontology/schema";
+import {
+  emitBundleSql,
+  snakeCase as snakeCaseSql,
+  type BundleData,
+} from "../lib/codegen/sql-bundle";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -404,29 +417,139 @@ function printReport(result: AuditResult): void {
   }
 }
 
+// Re-read data into a BundleData shape (matching sql-bundle's expectations)
+// after the audit succeeds. Walks data/*.json a second time to keep the audit
+// pure (uses generic Record<string, unknown>[]) and the SQL emitter focused.
+async function collectBundleData(
+  bundleName: string,
+  ontology: Ontology,
+): Promise<BundleData> {
+  const pkgRoot = path.resolve(__dirname, "..");
+  const dataDir = path.join(pkgRoot, "seed", bundleName, "data");
+  let names: string[];
+  try {
+    names = await readdir(dataDir);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return { objects: {}, links: {} };
+    }
+    throw err;
+  }
+
+  const objectTypeKeys = Object.keys(ontology.object_types);
+  const linkTypeKeys = Object.keys(ontology.link_types);
+
+  const data: BundleData = { objects: {}, links: {} };
+  for (const name of names) {
+    if (!name.endsWith(".json")) continue;
+    const basename = name.replace(/\.json$/, "");
+    const raw = await readFile(path.join(dataDir, name), "utf8");
+    const rows = JSON.parse(raw) as Record<string, unknown>[];
+
+    const objKey = objectTypeKeys.find((k) => snakeCase(k) === snakeCase(basename));
+    if (objKey) {
+      data.objects[objKey] = rows;
+      continue;
+    }
+    const linkKey = linkTypeKeys.find((k) => snakeCase(k) === snakeCase(basename));
+    if (linkKey) {
+      data.links[linkKey] = rows;
+      continue;
+    }
+  }
+  return data;
+}
+
+function runDockerExecPsql(sql: string): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(
+      "docker",
+      [
+        "exec",
+        "-i",
+        "acropolisos-postgres",
+        "psql",
+        "-U",
+        "acropolisos",
+        "-d",
+        "acropolisos",
+        "-v",
+        "ON_ERROR_STOP=1",
+      ],
+      { stdio: ["pipe", "pipe", "pipe"] },
+    );
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (b) => (stdout += b.toString()));
+    proc.stderr.on("data", (b) => (stderr += b.toString()));
+    proc.on("error", reject);
+    proc.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
+    proc.stdin.write(sql);
+    proc.stdin.end();
+  });
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const bundleName = argv.find((a) => !a.startsWith("--"));
+  const emitSql = argv.includes("--emit-sql");
   const insert = argv.includes("--insert");
+  const schemaArg = argv.find((a) => a.startsWith("--schema="));
+  const schema = schemaArg
+    ? schemaArg.slice("--schema=".length)
+    : bundleName
+      ? `seed_${snakeCaseSql(bundleName)}`
+      : "seed";
 
   if (!bundleName) {
     process.stderr.write(
-      "usage: tsx scripts/seed-from-bundle.ts <bundle-name> [--insert]\n",
+      "usage: tsx scripts/seed-from-bundle.ts <bundle-name> [--emit-sql] [--insert] [--schema=<name>]\n",
     );
     process.exit(2);
   }
 
   const result = await auditBundle(bundleName);
   printReport(result);
-
-  if (insert) {
-    process.stderr.write(
-      "\n--insert not yet implemented. Dry-run is the current default.\n",
-    );
-    process.exit(result.violations.length === 0 ? 0 : 1);
+  if (result.violations.length > 0) {
+    process.stderr.write("\nIntegrity violations present — aborting.\n");
+    process.exit(1);
   }
 
-  process.exit(result.violations.length === 0 ? 0 : 1);
+  if (!emitSql && !insert) {
+    // Pure dry-run path
+    process.exit(0);
+  }
+
+  const pkgRoot = path.resolve(__dirname, "..");
+  const bundleRoot = path.join(pkgRoot, "seed", bundleName);
+  const ontology = await loadOntology(bundleRoot);
+  const data = await collectBundleData(bundleName, ontology);
+  const { combined } = emitBundleSql(ontology, data, {
+    schema,
+    dropFirst: true,
+  });
+
+  const sqlPath = path.join(bundleRoot, `${bundleName}.generated.sql`);
+  await writeFile(sqlPath, combined, "utf8");
+  process.stdout.write(`\nWrote ${sqlPath} (${combined.length} bytes)\n`);
+
+  if (!insert) {
+    process.stdout.write("Skipping --insert (run with --insert to load into Postgres)\n");
+    process.exit(0);
+  }
+
+  process.stdout.write(
+    `\nLoading into Postgres schema "${schema}" via docker exec acropolisos-postgres ...\n`,
+  );
+  const { code, stdout, stderr } = await runDockerExecPsql(combined);
+  if (stdout.trim()) process.stdout.write(stdout);
+  if (stderr.trim()) process.stderr.write(stderr);
+  if (code !== 0) {
+    process.stderr.write(`\npsql exited with code ${code}\n`);
+    process.exit(code);
+  }
+  process.stdout.write(`\n✓ Bundle "${bundleName}" loaded into schema "${schema}"\n`);
+  process.exit(0);
 }
 
 main().catch((err) => {
