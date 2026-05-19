@@ -105,7 +105,8 @@ function effectiveStewardEmails(
 async function runNotifyMember(
   input: DispatchSideEffectsInput,
 ): Promise<SideEffectResult> {
-  const actorEmail = input.ctx.actor?.email;
+  const actor = input.ctx.actor;
+  const actorEmail = actor?.email;
   if (!actorEmail) {
     return {
       channel: "notify_member",
@@ -113,15 +114,43 @@ async function runNotifyMember(
       detail: "actor has no email",
     };
   }
+  const title = `[acropolisOS] ${input.actionName} completed`;
+  const body = JSON.stringify(
+    { action: input.actionName, params: input.params, result: input.result },
+    null,
+    2,
+  );
+
+  // M4.1: persist an inbox row for the actor whenever a NotificationStore is
+  // wired into ctx. Done BEFORE the stdout/email adapter so a downstream
+  // adapter failure doesn't keep the inbox empty. Errors here surface as the
+  // channel result — the audit child row records the failure metadata.
+  if (actor?.userId && input.ctx.notifications) {
+    try {
+      await input.ctx.notifications.create({
+        recipient_member_id: actor.userId,
+        kind: input.actionName,
+        title,
+        body,
+      });
+    } catch (err) {
+      const msg = errorMessage(err);
+      console.error(
+        `[side-effects] notify_member inbox write failed for ${input.actionName}: ${msg}`,
+      );
+      return {
+        channel: "notify_member",
+        status: "error",
+        error: `inbox: ${msg}`,
+      };
+    }
+  }
+
   try {
     await input.adapters.sendMail({
       to: actorEmail,
-      subject: `[acropolisOS] ${input.actionName} completed`,
-      body: JSON.stringify(
-        { action: input.actionName, params: input.params, result: input.result },
-        null,
-        2,
-      ),
+      subject: title,
+      body,
       action_type: input.actionName,
     });
     return { channel: "notify_member", status: "ok" };

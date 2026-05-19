@@ -11,6 +11,7 @@
 
 import type { Database } from "../db/client";
 import type { Actor } from "../ctx";
+import { PgNotificationStore } from "../notifications/store";
 import { PgAuditStore } from "../proposals/adapters/runtime";
 import {
   buildObjectPermissionsMap,
@@ -32,6 +33,7 @@ export function createOntologyCtxForActor(
   const { actor, db, ontology } = input;
   const store = createPgOntologyStore(db);
   const audit = new PgAuditStore(db);
+  const notifications = new PgNotificationStore(db);
   const permissions = buildObjectPermissionsMap(ontology);
-  return createCtx({ db: store, actor, permissions, audit });
+  return createCtx({ db: store, actor, permissions, audit, notifications });
 }

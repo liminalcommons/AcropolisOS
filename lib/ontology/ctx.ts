@@ -8,6 +8,7 @@
 
 import type { AuditStore } from "../audit/writer";
 import type { Actor } from "../ctx";
+import type { NotificationStore } from "../notifications/store";
 import type { Ontology, PermissionsBlock } from "./schema";
 import type {
   AddMeetingMinuteParams,
@@ -114,6 +115,11 @@ function rowOwnedBy(
   if (row.owner_id === actor.userId) return true;
   if (row.owner === actor.userId) return true;
   if (row.userId === actor.userId) return true;
+  // M4.1: Notification rows are owned by their recipient_member_id. The
+  // locked perm spec ("member_self via recipient_member_id") makes this
+  // the natural ownership probe. Generic on field name so any future
+  // object type using the same convention works without code change.
+  if (row.recipient_member_id === actor.userId) return true;
   if (objectTypeName === "Member" && row.id === actor.userId) return true;
   return false;
 }
@@ -286,6 +292,11 @@ export interface CreateCtxInput {
   // rejection rows here; action_audit middleware (US-030) will write success
   // rows here as well.
   audit?: AuditStore;
+  // M4.1: optional notification sink. When provided, the notify_member
+  // side-effect dispatcher writes an inbox row for the actor in addition
+  // to firing the stdout/email adapter. Tests inject InMemoryNotificationStore;
+  // the runtime ctx builder wires PgNotificationStore.
+  notifications?: NotificationStore;
 }
 
 export interface OntologyCtx {
@@ -294,6 +305,7 @@ export interface OntologyCtx {
   links: OntologyStore["links"];
   actions: OntologyActions;
   audit?: AuditStore;
+  notifications?: NotificationStore;
 }
 
 export function createCtx({
@@ -301,6 +313,7 @@ export function createCtx({
   actor,
   permissions,
   audit,
+  notifications,
 }: CreateCtxInput): OntologyCtx {
   const wrap = <T extends { id: string }>(
     access: ObjectAccess<T>,
@@ -330,6 +343,7 @@ export function createCtx({
       record_attendance: stub<RecordAttendanceParams>("record_attendance"),
     },
     ...(audit ? { audit } : {}),
+    ...(notifications ? { notifications } : {}),
   };
 }
 
