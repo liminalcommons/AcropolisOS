@@ -87,7 +87,7 @@ function buildDeps(sb: Sandbox, opts: {
       },
     },
     inbox: {
-      async migrate(_tx, ingests) {
+      async migrate(_tx, ingests, _proposalId) {
         return Object.values(ingests).reduce(
           (acc, i) => acc + i.inbox_ids.length,
           0,

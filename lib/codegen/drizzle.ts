@@ -107,7 +107,13 @@ function buildColumnExpression(
     resolved.inline,
   );
   let expr = builder;
-  if (resolved.primaryKey) expr += ".primaryKey()";
+  if (resolved.primaryKey) {
+    expr += ".primaryKey()";
+    // UUID primary keys need gen_random_uuid() as the DB-level default so
+    // INSERT statements that omit `id` (e.g. from the ingest pipeline) work
+    // without application-side UUID generation.
+    if (resolved.inline.type === "uuid") expr += ".defaultRandom()";
+  }
   if (resolved.required) expr += ".notNull()";
   if (resolved.hasDefault) {
     expr += `.default(${formatDefault(resolved.defaultValue)})`;

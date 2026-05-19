@@ -107,7 +107,7 @@ function makeDeps(
   };
 
   const inbox: InboxMigrator = {
-    async migrate(_tx, ingests) {
+    async migrate(_tx, ingests, _proposalId) {
       const total = Object.values(ingests).reduce(
         (acc, i) => acc + i.inbox_ids.length,
         0,

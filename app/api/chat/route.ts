@@ -7,6 +7,7 @@ import {
 import { AGENT_INSTRUCTIONS, buildLanguageModel } from "@/lib/agent/mastra";
 import { buildAiSdkProposalTools } from "@/lib/proposals/ai-sdk-tools";
 import { getProposalStore } from "@/lib/proposals/singleton";
+import { getInboxStore } from "@/lib/inbox/singleton";
 
 interface ChatRequestBody {
   messages: UIMessage[];
@@ -39,7 +40,7 @@ export async function POST(req: Request): Promise<Response> {
       ? body.session_id
       : `anon-${Math.random().toString(36).slice(2, 10)}`;
 
-  const tools = buildAiSdkProposalTools(getProposalStore(), session_id);
+  const tools = buildAiSdkProposalTools(getProposalStore(), session_id, getInboxStore());
 
   const result = streamText({
     model: buildLanguageModel(),

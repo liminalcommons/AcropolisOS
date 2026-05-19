@@ -42,6 +42,7 @@ export interface InboxMigrator {
   migrate(
     tx: Tx,
     ingests: ProposalDiff["new_ingests"],
+    proposalId: string,
   ): Promise<number>;
 }
 
@@ -147,7 +148,7 @@ export async function applyProposal(
   try {
     await deps.tx.run(async (tx) => {
       await deps.migrations.apply(tx, migrationPlan);
-      inboxRowsMigrated = await deps.inbox.migrate(tx, proposal.diff.new_ingests);
+      inboxRowsMigrated = await deps.inbox.migrate(tx, proposal.diff.new_ingests, proposal.id);
       await deps.audit.insertOntologyAudit({
         actor: deps.actor.id,
         actor_role: deps.actor.role,

@@ -213,11 +213,13 @@ export class DiffMigrationRunner implements MigrationRunner {
 
 // Best-effort inbox → typed-table migration. For each new_ingests entry, fetch
 // inbox rows by id, project them via the proposal's field-mapping, INSERT into
-// the target table, and flag the inbox rows with claimed_by_proposal_id.
+// the target table, and flag the inbox rows with claimed_by_proposal_id set to
+// the actual proposal id (not an inbox row id).
 export class PgInboxMigrator implements InboxMigrator {
   async migrate(
     tx: Tx,
     ingests: ProposalDiff["new_ingests"],
+    proposalId: string,
   ): Promise<number> {
     const entries = Object.values(ingests);
     if (entries.length === 0) return 0;
@@ -230,26 +232,65 @@ export class PgInboxMigrator implements InboxMigrator {
           .from(inbox)
           .where(inArray(inbox.id, ingest.inbox_ids))) as InboxRow[];
         const targetTable = snakeCase(ingest.target_object_type);
+
+        // Introspect NOT NULL columns without DB-level defaults so we can
+        // supply sensible fallbacks when the ingest mapping omits them.
+        // pg_catalog query: columns that are NOT NULL and have no column_default.
+        const notNullNoDefault = await drizzle.execute<{
+          column_name: string;
+          data_type: string;
+        }>(sql`
+          SELECT column_name, data_type
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = ${targetTable}
+            AND is_nullable = 'NO'
+            AND column_default IS NULL
+            AND column_name <> 'id'
+        `);
+        const mappedDsts = Object.values(ingest.mapping).map(snakeCase);
+        const missingCols = (
+          notNullNoDefault as unknown as Array<{ column_name: string; data_type: string }>
+        ).filter((row) => !mappedDsts.includes(row.column_name));
+
         for (const r of rows) {
           const payload = (r.payload ?? {}) as Record<string, unknown>;
-          const cols: string[] = [];
-          const vals: unknown[] = [];
+          // Build a parameterized INSERT using drizzle's sql template tag so
+          // values are properly bound — sql.raw() alone does not bind $N params.
+          const pairs: Array<{ col: string; val: unknown }> = [];
           for (const [src, dst] of Object.entries(ingest.mapping)) {
-            cols.push(`"${snakeCase(dst)}"`);
-            vals.push(payload[src] ?? null);
+            pairs.push({ col: snakeCase(dst), val: payload[src] ?? null });
           }
-          if (!cols.length) continue;
-          const placeholders = vals.map((_, i) => `$${i + 1}`).join(", ");
+          // Supplement with fallbacks for NOT NULL columns missing from mapping
+          for (const m of missingCols) {
+            const fallback = m.data_type === "date"
+              ? new Date().toISOString().slice(0, 10)  // CURRENT_DATE
+              : m.data_type.includes("int")
+                ? 0
+                : m.data_type === "boolean"
+                  ? false
+                  : "";  // empty string for text/varchar
+            pairs.push({ col: m.column_name, val: fallback });
+          }
+          if (!pairs.length) continue;
+          const colList = pairs.map((p) => `"${p.col}"`).join(", ");
+          // Build a single sql template expression with proper placeholders.
+          // sql`...` interpolations become bound parameters; sql.raw() is used
+          // only for identifiers that cannot be bound (table/column names).
+          const valueParts = pairs.map((p) => sql`${p.val}`);
+          const valuesSql = valueParts.reduce(
+            (acc, part, i) =>
+              i === 0 ? part : sql`${acc}, ${part}`,
+          );
           await drizzle.execute(
-            sql.raw(
-              `INSERT INTO "${targetTable}" (${cols.join(", ")}) VALUES (${placeholders})`,
-            ),
+            sql`INSERT INTO ${sql.raw(`"${targetTable}"`)} (${sql.raw(colList)}) VALUES (${valuesSql})`,
           );
           count++;
         }
+        // Fix: use the actual proposal id, not the first inbox row id
         await drizzle
           .update(inbox)
-          .set({ claimed_by_proposal_id: ingest.inbox_ids[0] })
+          .set({ claimed_by_proposal_id: proposalId })
           .where(inArray(inbox.id, ingest.inbox_ids));
       }
     });

@@ -46,6 +46,7 @@ import { InlineProposalPanel } from "./inline-proposal-panel";
 interface DroppedFile {
   name: string;
   size: number;
+  inboxIds?: string[];
 }
 
 interface ChatPanelProps {
@@ -99,6 +100,8 @@ export function ChatPanel({
   const [input, setInput] = useState("");
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadPending, setUploadPending] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
   const [dismissedProposals, setDismissedProposals] = useState<Set<string>>(
     () => new Set(),
@@ -286,16 +289,53 @@ export function ChatPanel({
     setInput("");
   }, [chatSessionId, status, pendingSubmit, input, sendMessage]);
 
-  const onDrop = (e: React.DragEvent) => {
+  const uploadFiles = useCallback(async (files: File[]): Promise<void> => {
+    if (files.length === 0) return;
+    setUploadPending(true);
+    setUploadError(null);
+    try {
+      const fd = new FormData();
+      for (const f of files) fd.append("files", f);
+      const res = await fetch("/api/inbox/upload", { method: "POST", body: fd });
+      const body = (await res.json().catch(() => ({}))) as {
+        inboxIds?: string[];
+        count?: number;
+        error?: string;
+      };
+      if (!res.ok) {
+        setUploadError(body.error ?? `upload failed (${res.status})`);
+        return;
+      }
+      const inboxIds = body.inboxIds ?? [];
+      const rowCount = body.count ?? files.length;
+      setDroppedFiles((prev) => [
+        ...prev,
+        ...files.map((f, i) => ({
+          name: f.name,
+          size: f.size,
+          inboxIds: i === 0 ? inboxIds : [],
+        })),
+      ]);
+      // Fire a cue so the agent picks up the upload immediately.
+      const fileNames = files.map((f) => f.name).join(", ");
+      const cue = `I just dropped ${files.length > 1 ? "files" : "a file"} (${fileNames}) with ${rowCount} row${rowCount === 1 ? "" : "s"} into the inbox. Inbox row ids: ${inboxIds.slice(0, 5).join(", ")}${inboxIds.length > 5 ? ` … and ${inboxIds.length - 5} more` : ""}. Please sample_inbox to inspect the payload, identify the best target object type, and call propose_ingest with the field mapping. Then finalize_proposal.`;
+      window.dispatchEvent(
+        new CustomEvent("acropolisos:prompt", { detail: { prompt: cue } }),
+      );
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "upload failed");
+    } finally {
+      setUploadPending(false);
+    }
+  }, []);
+
+  const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;
-    setDroppedFiles((prev) => [
-      ...prev,
-      ...files.map((f) => ({ name: f.name, size: f.size })),
-    ]);
-  };
+    void uploadFiles(files);
+  }, [uploadFiles]);
 
   const dismissProposal = (id: string): void => {
     setDismissedProposals((prev) => {
@@ -436,15 +476,21 @@ export function ChatPanel({
         onDrop={onDrop}
         className={cn(
           "mx-4 mb-2 flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs transition",
-          isDragOver
-            ? "border-zinc-400 bg-zinc-900 text-zinc-200"
-            : "border-zinc-800 text-zinc-500",
+          uploadError
+            ? "border-red-700 bg-red-950/30 text-red-300"
+            : isDragOver
+              ? "border-zinc-400 bg-zinc-900 text-zinc-200"
+              : "border-zinc-800 text-zinc-500",
         )}
         data-testid="chat-panel-drop"
       >
         <Paperclip className="h-3.5 w-3.5" aria-hidden />
-        {droppedFiles.length === 0 ? (
-          <span>drop files here to attach</span>
+        {uploadPending ? (
+          <span className="animate-pulse">uploading to inbox…</span>
+        ) : uploadError ? (
+          <span className="truncate">{uploadError}</span>
+        ) : droppedFiles.length === 0 ? (
+          <span>drop CSV / JSON here → agent proposes ingest</span>
         ) : (
           <ul className="flex flex-wrap gap-1">
             {droppedFiles.map((f, i) => (

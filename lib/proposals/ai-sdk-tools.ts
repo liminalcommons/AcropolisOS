@@ -23,10 +23,12 @@ import type {
   ViewProposal,
 } from "./diff";
 import type { ProposalDraftStore } from "./store";
+import type { InboxStore } from "../inbox/store";
 
 export function buildAiSdkProposalTools(
   store: ProposalDraftStore,
   session_id: string,
+  inboxStore?: InboxStore,
 ): Record<string, Tool> {
   return {
     propose_object_type: tool({
@@ -167,6 +169,37 @@ export function buildAiSdkProposalTools(
       execute: async () => {
         const proposal = await store.finalize(session_id);
         return { ok: true, proposal };
+      },
+    }),
+
+    sample_inbox: tool({
+      description:
+        "Read a sample of unclaimed inbox rows so you can inspect their payload shape and decide which object type they belong to. Returns up to `limit` rows ordered most-recent first. Use this BEFORE calling propose_ingest to understand the field names in the payload.",
+      inputSchema: z.object({
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(50)
+          .optional()
+          .describe("How many rows to return (default 10, max 50)"),
+      }),
+      execute: async ({ limit }: { limit?: number } = {}) => {
+        if (!inboxStore) {
+          return { rows: [], note: "inbox store not available in this context" };
+        }
+        const rows = await inboxStore.list({
+          unclaimedOnly: true,
+          limit: limit ?? 10,
+        });
+        return {
+          rows: rows.map((r) => ({
+            id: r.id,
+            source_filename: r.source_filename,
+            payload: r.payload,
+          })),
+          count: rows.length,
+        };
       },
     }),
   };
