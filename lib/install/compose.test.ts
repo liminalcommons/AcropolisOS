@@ -179,6 +179,47 @@ describe("scripts/smoke-compose.ts — I3 boot smoke", () => {
     expect(script).toMatch(/Inngest GraphQL|\/v0\/gql/);
     expect(script).toMatch(/docker compose build|"build"/);
   });
+
+  it("allows >=60s for cold-machine boot (image pull + schema push + inngest sync)", () => {
+    // On a clean checkout the first `docker compose up` pulls postgres + inngest
+    // images, runs drizzle-kit push, and waits for inngest's polling sync.
+    // 60s is the lower bound observed on chora-node; tightening below this
+    // produces flaky CI failures that don't reproduce locally. If a future
+    // change reduces the timeout, this test forces an explicit decision.
+    const script = readFileSync(SMOKE_PATH, "utf8");
+    const match = script.match(/BOOT_TIMEOUT_MS\s*=\s*([\d_]+)/);
+    expect(match, "BOOT_TIMEOUT_MS constant must be defined").not.toBeNull();
+    const ms = Number(match![1].replace(/_/g, ""));
+    expect(ms).toBeGreaterThanOrEqual(60_000);
+  });
+
+  it("polls at <=5s intervals so a 60s boot isn't wasted on stale checks", () => {
+    const script = readFileSync(SMOKE_PATH, "utf8");
+    const match = script.match(/POLL_INTERVAL_MS\s*=\s*([\d_]+)/);
+    expect(match, "POLL_INTERVAL_MS constant must be defined").not.toBeNull();
+    const ms = Number(match![1].replace(/_/g, ""));
+    expect(ms).toBeGreaterThan(0);
+    expect(ms).toBeLessThanOrEqual(5_000);
+  });
+
+  it("refuses to clobber an existing stack and exits 2", () => {
+    // Operator-safety: running test:compose on a host with a live acropolisos
+    // stack must NOT tear it down. The script checks `docker ps --filter
+    // name=acropolisos` and exits 2 (distinct from 1 = check-failed) so CI
+    // can flag "wrong environment" vs "real regression".
+    const script = readFileSync(SMOKE_PATH, "utf8");
+    expect(script).toMatch(/docker.*ps.*--filter.*acropolisos/s);
+    expect(script).toMatch(/process\.exit\(2\)/);
+  });
+
+  it("tears down with -v in a finally block so volumes never leak between runs", () => {
+    // Without `down -v` the named pgdata volume survives, so a second smoke
+    // run hits stale schema and skips first-boot migration paths — exactly
+    // the case clean-machine smoke is supposed to catch.
+    const script = readFileSync(SMOKE_PATH, "utf8");
+    expect(script).toMatch(/down["',\s]+["']-v/);
+    expect(script).toMatch(/finally\s*\{[\s\S]*?down\(/);
+  });
 });
 
 describe(".dockerignore — reproducible builds", () => {
