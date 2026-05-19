@@ -42,6 +42,17 @@ export const member = pgTable("member", {
   notes: text("notes").notNull(),
 });
 
+export const notification = pgTable("notification", {
+  id: uuid("id").primaryKey().defaultRandom().notNull(),
+  recipient_member_id: uuid("recipient_member_id").notNull().references(() => member.id),
+  kind: text("kind").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  link_url: text("link_url"),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull(),
+  read_at: timestamp("read_at", { withTimezone: true }),
+});
+
 // === Link tables (many-to-many) ===
 
 export const member_attended_event = pgTable(

@@ -5,6 +5,7 @@ import {
   EventSchema,
   MeetingMinuteSchema,
   MemberSchema,
+  NotificationSchema,
   AttendedLinkSchema,
   AddMeetingMinuteParamsSchema,
   AddMemberParamsSchema,
@@ -15,12 +16,14 @@ import {
   type Event,
   type MeetingMinute,
   type Member,
+  type Notification,
 } from "./types.generated";
 
 export {
   EventSchema,
   MeetingMinuteSchema,
   MemberSchema,
+  NotificationSchema,
   AttendedLinkSchema,
   AddMeetingMinuteParamsSchema,
   AddMemberParamsSchema,
@@ -33,6 +36,7 @@ export type {
   Event,
   MeetingMinute,
   Member,
+  Notification,
   AttendedLink,
   AddMeetingMinuteParams,
   AddMemberParams,
@@ -46,12 +50,14 @@ export type Ontology = {
   Event: Event;
   MeetingMinute: MeetingMinute;
   Member: Member;
+  Notification: Notification;
 };
 
 export const OntologySchemas = {
   Event: EventSchema,
   MeetingMinute: MeetingMinuteSchema,
   Member: MemberSchema,
+  Notification: NotificationSchema,
 } as const;
 
 export const LinkSchemas = {

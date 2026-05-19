@@ -34,6 +34,18 @@ export const MemberSchema = z.object({
 });
 export type Member = z.infer<typeof MemberSchema>;
 
+export const NotificationSchema = z.object({
+  "id": z.uuid(),
+  "recipient_member_id": z.string(),
+  "kind": z.string(),
+  "title": z.string(),
+  "body": z.string(),
+  "link_url": z.string().optional(),
+  "created_at": z.iso.datetime({ offset: true }),
+  "read_at": z.iso.datetime({ offset: true }).optional(),
+});
+export type Notification = z.infer<typeof NotificationSchema>;
+
 // === Link types (with properties) ===
 
 export const AttendedLinkSchema = z.object({
