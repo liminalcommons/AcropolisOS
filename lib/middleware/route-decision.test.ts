@@ -72,6 +72,16 @@ describe("nextRouteForAuth", () => {
     ).toEqual({ type: "next" });
   });
 
+  it("never intercepts /claim (public invite-claim flow, M4.2)", () => {
+    expect(
+      nextRouteForAuth({
+        authenticated: false,
+        setupComplete: true,
+        pathname: "/claim",
+      }),
+    ).toEqual({ type: "next" });
+  });
+
   it("never intercepts Next.js internals", () => {
     expect(
       nextRouteForAuth({
