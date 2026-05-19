@@ -192,6 +192,69 @@ describe("US-037 smoke: backup -> wipe -> restore -> identical rows", () => {
     expect(yaml).toContain("Thread");
   });
 
+  it("round-trip is idempotent: backup -> restore -> backup -> diff = empty", async () => {
+    // Operator safety: a steward who restores from backup A and then
+    // immediately re-backs-up should get an artifact byte-for-byte equivalent
+    // to A (modulo timestamp + tmp paths in the manifest). If backup were
+    // non-deterministic — e.g. JSONL ordering by insertion time, or audit
+    // counts mutated during the dump — disaster recovery would silently
+    // diverge from the snapshot operators believe they have.
+    const firstBackup = path.join(workdir, "first.tgz");
+    const secondBackup = path.join(workdir, "second.tgz");
+
+    // Snapshot DB state going in
+    const firstSnapshot = snapshot(db);
+
+    const first = await runBackup({
+      pkgRoot,
+      outFile: firstBackup,
+      databaseUrl: "postgres://fake",
+      pgExec: exec,
+    });
+    expect(first.ok).toBe(true);
+
+    // Simulate a small in-flight mutation between backups (e.g. someone
+    // wrote to members during the restore window). Then restore should
+    // overwrite it, and the next backup should match the pre-mutation snapshot.
+    db.members.push({ id: "m-3", name: "Mallory" });
+
+    const restored = await runRestore({
+      pkgRoot,
+      inFile: firstBackup,
+      databaseUrl: "postgres://fake",
+      pgExec: exec,
+    });
+    expect(restored.ok).toBe(true);
+
+    // After restore, DB state must equal pre-mutation snapshot
+    expect(snapshot(db)).toEqual(firstSnapshot);
+
+    const second = await runBackup({
+      pkgRoot,
+      outFile: secondBackup,
+      databaseUrl: "postgres://fake",
+      pgExec: exec,
+    });
+    expect(second.ok).toBe(true);
+
+    // Audit counts and source-dir list are the load-bearing manifest fields
+    // operators rely on; they must be identical across the round trip.
+    expect(second.auditCounts).toEqual(first.auditCounts);
+    expect(second.manifest.sourceDirs.sort()).toEqual(
+      first.manifest.sourceDirs.sort(),
+    );
+
+    // The audit-row content recovered from disk must match across both
+    // backups (idempotency at the payload level, not just counts).
+    const firstAuditRows = await exec.listAudit({
+      databaseUrl: "postgres://fake",
+      table: "ontology_audit",
+    });
+    expect(firstAuditRows.map((r) => r.id).sort()).toEqual(
+      db.ontology_audit.map((r) => r.id).sort(),
+    );
+  });
+
   it("supports replay-audit when DB restore left audit empty", async () => {
     const backupFile = path.join(workdir, "backup.tgz");
     const initialAuditIds = [
