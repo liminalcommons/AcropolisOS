@@ -12,6 +12,7 @@ import {
   AddMemberParamsSchema,
   ChangeTierParamsSchema,
   DeleteMemberParamsSchema,
+  InviteMemberParamsSchema,
   PromoteToStewardParamsSchema,
   RecordAttendanceParamsSchema,
 } from "../ontology/types.generated";
@@ -277,6 +278,7 @@ export const applyActionInputSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("add_member"), params: AddMemberParamsSchema }),
   z.object({ action: z.literal("change_tier"), params: ChangeTierParamsSchema }),
   z.object({ action: z.literal("delete_member"), params: DeleteMemberParamsSchema }),
+  z.object({ action: z.literal("invite_member"), params: InviteMemberParamsSchema }),
   z.object({ action: z.literal("promote_to_steward"), params: PromoteToStewardParamsSchema }),
   z.object({ action: z.literal("record_attendance"), params: RecordAttendanceParamsSchema }),
 ]);

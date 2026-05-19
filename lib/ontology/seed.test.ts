@@ -17,6 +17,7 @@ describe("seed: small-community", () => {
       "Event",
       "MeetingMinute",
       "Member",
+      "Notification",
     ]);
     expect(Object.keys(onto.link_types).sort()).toEqual([
       "attended",
@@ -27,6 +28,7 @@ describe("seed: small-community", () => {
       "add_member",
       "change_tier",
       "delete_member",
+      "invite_member",
       "promote_to_steward",
       "record_attendance",
     ]);

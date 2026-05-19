@@ -1,0 +1,24 @@
+invite_member:
+  description: |
+    Generate a single-use invite code + expiry on a placeholder Member row
+    and fire notify_member with a /claim?code=<code> link. The invitee then
+    runs through /claim to create their UserRecord and link it back via
+    Member.user_id.
+
+    Function-backed because we need crypto.randomBytes + result.claim_url
+    pass-through to the notify_member side-effect body. Refuses to re-invite
+    a Member that already has user_id set (use a steward-only "revoke +
+    re-invite" path if/when that becomes a real workflow).
+  function: invite-member
+  parameters:
+    member_id:
+      type: ref
+      target: Member
+      required: true
+    expires_in_days:
+      type: integer
+      required: false
+      default: 7
+  permissions: [steward]
+  agent_policy: auto_apply
+  side_effects: [audit, notify_member]

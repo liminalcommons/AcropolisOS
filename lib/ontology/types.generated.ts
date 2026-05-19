@@ -84,6 +84,12 @@ export const DeleteMemberParamsSchema = z.object({
 });
 export type DeleteMemberParams = z.infer<typeof DeleteMemberParamsSchema>;
 
+export const InviteMemberParamsSchema = z.object({
+  "member_id": z.string(),
+  "expires_in_days": z.number().int().default(7),
+});
+export type InviteMemberParams = z.infer<typeof InviteMemberParamsSchema>;
+
 export const PromoteToStewardParamsSchema = z.object({
   "member": z.string(),
 });
