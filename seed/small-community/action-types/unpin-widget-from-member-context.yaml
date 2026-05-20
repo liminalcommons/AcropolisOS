@@ -4,6 +4,6 @@ unpin_widget_from_member_context:
   parameters:
     member_id: { type: ref, target: Member, required: false }
     widget_id: { type: string, required: true }
-  permissions: [steward, member_self]
+  permissions: [member_self]
   agent_policy: auto_apply
   side_effects: [audit]

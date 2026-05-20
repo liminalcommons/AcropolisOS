@@ -128,7 +128,12 @@ function rowOwnedBy(
   // M4.3: AgentBlocker rows are owned by blocked_actor_id.
   if (row.blocked_actor_id === actor.userId) return true;
   // M4.3: MemberContext rows are owned by member_id.
-  if (row.member_id === actor.userId) return true;
+  // Scoped to these two types only to avoid false-positive ownership on
+  // unrelated types that happen to have a member_id field (e.g. MeetingMinute.member_id = author).
+  if (
+    (objectTypeName === "MemberContext" || objectTypeName === "AgentBlocker") &&
+    row.member_id === actor.userId
+  ) return true;
   if (objectTypeName === "Member" && row.id === actor.userId) return true;
   return false;
 }

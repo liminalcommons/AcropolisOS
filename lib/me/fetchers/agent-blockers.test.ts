@@ -56,6 +56,7 @@ function makeBlocker(id: string, blockedActorId: string, status: AgentBlocker["s
     reason_kind: "confirmation",
     summary: `Blocker ${id}`,
     detail: "Agent needs confirmation",
+    resolution_mode: "pathways",
     status,
     created_at: new Date().toISOString(),
   };

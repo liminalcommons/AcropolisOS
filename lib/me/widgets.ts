@@ -29,6 +29,30 @@ export type ReasonKind =
   | "decision"
   | "risky_action";
 
+export type ResolutionMode = "pathways" | "text_input" | "confirm_binary";
+
+// Reversibility signal shown as dots in the UI — nudges toward cheap-to-undo.
+export type Reversibility = "easy" | "moderate" | "permanent";
+
+export interface BlockerPathway {
+  id: string;
+  label: string;           // short label, e.g. "Auto-prorate to sustaining"
+  rationale: string;       // one-line trade-off
+  action: { type: string; params: Record<string, unknown> };
+  reversibility: Reversibility;
+}
+
+export interface InputSchema {
+  kind: "string" | "number" | "date" | "object_ref";
+  target_type?: string;
+  prompt: string;
+}
+
+export interface ConfirmAction {
+  label: string;
+  action: { type: string; params: Record<string, unknown> };
+}
+
 export type WidgetBundle =
   | {
       id: string;
@@ -40,10 +64,10 @@ export type WidgetBundle =
           summary: string;
           detail: string;
           blocked_work_ref: string | null;
-          unblock_hint: {
-            action_type: string;
-            suggested_params: Record<string, unknown>;
-          } | null;
+          resolution_mode: ResolutionMode;
+          pathways: BlockerPathway[] | null;
+          input_schema: InputSchema | null;
+          confirm_action: ConfirmAction | null;
           created_at: string;
         }>;
       };

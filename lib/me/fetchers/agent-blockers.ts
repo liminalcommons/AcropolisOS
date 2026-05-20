@@ -23,10 +23,10 @@ export async function getAgentBlockers(
       summary: b.summary,
       detail: b.detail,
       blocked_work_ref: b.blocked_work_ref ?? null,
-      unblock_hint: b.unblock_hint as {
-        action_type: string;
-        suggested_params: Record<string, unknown>;
-      } | null,
+      resolution_mode: (b.resolution_mode ?? "pathways") as import("../widgets").ResolutionMode,
+      pathways: (b.pathways ?? null) as import("../widgets").BlockerPathway[] | null,
+      input_schema: (b.input_schema ?? null) as import("../widgets").InputSchema | null,
+      confirm_action: (b.confirm_action ?? null) as import("../widgets").ConfirmAction | null,
       created_at:
         typeof b.created_at === "string"
           ? b.created_at

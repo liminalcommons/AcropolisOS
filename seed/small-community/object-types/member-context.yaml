@@ -18,8 +18,8 @@ MemberContext:
       type: string
       default: "[]"
       description: |
-        JSON-encoded array of { id, kind, config } widget descriptors appended
-        after the default widget set in /me render order.
+        JSON array of { id, kind, config } widget descriptors appended
+        after the default widget set in /me render order. DB column is jsonb.
     created_at:
       ref: created_at
     updated_at:

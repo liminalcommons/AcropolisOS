@@ -1,0 +1,12 @@
+resolve_blocker_with_custom:
+  description: |
+    Human picked "Other (write your own)" escape hatch. Lets the human
+    invoke any action they're permitted to invoke as the resolution;
+    that action_audit becomes resolved_by_action_audit_id.
+  function: resolve-blocker-with-custom
+  parameters:
+    blocker_id:        { type: uuid,   required: true }
+    action_invocation: { type: string, required: true, description: "JSON-encoded { action_type, params }" }
+  permissions: [member_self]
+  agent_policy: always_confirm
+  side_effects: [audit, notify_member]

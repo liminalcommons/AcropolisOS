@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS "member_context" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"member_id" uuid NOT NULL,
-	"pinned_widgets" text NOT NULL DEFAULT '[]',
+	"pinned_widgets" jsonb NOT NULL DEFAULT '[]'::jsonb,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -35,11 +35,15 @@ CREATE TABLE IF NOT EXISTS "agent_blocker" (
 	"summary" text NOT NULL,
 	"detail" text NOT NULL,
 	"blocked_work_ref" text,
-	"unblock_hint" text,
+	"resolution_mode" text NOT NULL DEFAULT 'pathways',
+	"pathways" jsonb,
+	"input_schema" jsonb,
+	"confirm_action" jsonb,
 	"status" text NOT NULL DEFAULT 'open',
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"resolved_at" timestamp with time zone,
-	"resolved_by_action_audit_id" text
+	"resolved_by_action_audit_id" text,
+	"resolved_via_pathway_id" uuid
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_agent_blocker_actor_status" ON "agent_blocker" ("blocked_actor_id", "status");

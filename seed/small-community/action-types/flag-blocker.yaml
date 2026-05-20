@@ -21,10 +21,23 @@ flag_blocker:
     blocked_work_ref:
       type: string
       required: false
-    unblock_hint:
+    resolution_mode:
+      type: enum
+      values: [pathways, text_input, confirm_binary]
+      required: false
+      default: pathways
+    pathways:
       type: string
       required: false
-      description: JSON-encoded { action_type, suggested_params }
+      description: JSON array of pathway objects. DB column is jsonb.
+    input_schema:
+      type: string
+      required: false
+      description: JSON object for text_input resolution. DB column is jsonb.
+    confirm_action:
+      type: string
+      required: false
+      description: JSON object for confirm_binary resolution. DB column is jsonb.
   permissions: [steward]
   agent_policy: auto_apply
   side_effects: [audit, notify_member]

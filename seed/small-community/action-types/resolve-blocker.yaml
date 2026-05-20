@@ -1,12 +1,12 @@
-resolve_blocker:
+resolve_blocker_with_pathway:
   description: |
-    Flip an AgentBlocker to status=resolved. Called by the /me Resolve
-    button or by the audit-middleware backfill when the unblock_hint action
-    fires with matching blocked_work_ref.
-  function: resolve-blocker
+    Human picked one of the agent's curated paths. Middleware fires the
+    pathway's typed action, sets resolved_via_pathway_id, flips status,
+    and backfills resolved_by_action_audit_id.
+  function: resolve-blocker-with-pathway
   parameters:
     blocker_id: { type: uuid, required: true }
-    resolution_action_audit_id: { type: string, required: false }
-  permissions: [steward, member_self]
-  agent_policy: auto_apply
+    pathway_id: { type: uuid, required: true }
+  permissions: [member_self]
+  agent_policy: always_confirm
   side_effects: [audit, notify_member]

@@ -49,7 +49,8 @@ export const NotificationSchema = z.object({
 });
 export type Notification = z.infer<typeof NotificationSchema>;
 
-// M4.3: manually added (codegen not runnable in worktree; mirrors YAML spec)
+// M4.3: manually added (codegen not runnable in worktree; mirrors YAML spec).
+// pinned_widgets is jsonb in DB — Zod uses z.unknown() for the jsonb contract.
 export const MemberContextSchema = z.object({
   "id": z.uuid(),
   "member_id": z.string(),
@@ -69,11 +70,15 @@ export const AgentBlockerSchema = z.object({
   "summary": z.string(),
   "detail": z.string(),
   "blocked_work_ref": z.string().optional(),
-  "unblock_hint": z.unknown().optional(),
+  "resolution_mode": z.enum(["pathways", "text_input", "confirm_binary"]).default("pathways"),
+  "pathways": z.unknown().optional(),
+  "input_schema": z.unknown().optional(),
+  "confirm_action": z.unknown().optional(),
   "status": z.enum(["open", "resolved", "dismissed", "expired"]).default("open"),
   "created_at": z.iso.datetime({ offset: true }),
   "resolved_at": z.iso.datetime({ offset: true }).optional(),
   "resolved_by_action_audit_id": z.string().optional(),
+  "resolved_via_pathway_id": z.string().optional(),
 });
 export type AgentBlocker = z.infer<typeof AgentBlockerSchema>;
 

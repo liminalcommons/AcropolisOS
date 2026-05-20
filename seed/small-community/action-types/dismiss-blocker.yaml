@@ -7,6 +7,6 @@ dismiss_blocker:
   parameters:
     blocker_id: { type: uuid, required: true }
     reason:     { type: string, required: false }
-  permissions: [steward, member_self]
+  permissions: [member_self]
   agent_policy: always_confirm
   side_effects: [audit, notify_member]

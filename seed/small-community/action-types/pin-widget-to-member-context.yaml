@@ -10,6 +10,6 @@ pin_widget_to_member_context:
       type: string
       required: true
       description: JSON-encoded { kind, config? } — server assigns id.
-  permissions: [steward, member_self]
+  permissions: [member_self]
   agent_policy: auto_apply
   side_effects: [audit]

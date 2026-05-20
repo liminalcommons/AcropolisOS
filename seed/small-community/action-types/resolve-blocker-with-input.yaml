@@ -1,0 +1,12 @@
+resolve_blocker_with_input:
+  description: |
+    Human supplied missing data. Middleware validates input against
+    input_schema, fires the blocker's target action with input merged
+    in, and flips status to resolved.
+  function: resolve-blocker-with-input
+  parameters:
+    blocker_id:    { type: uuid,   required: true }
+    input_payload: { type: string, required: true, description: "JSON-encoded input matching the blocker's input_schema" }
+  permissions: [member_self]
+  agent_policy: always_confirm
+  side_effects: [audit, notify_member]
