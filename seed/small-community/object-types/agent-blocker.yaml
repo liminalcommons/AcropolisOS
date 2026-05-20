@@ -6,7 +6,7 @@ AgentBlocker:
   title_property: summary
   permissions:
     read: ["steward", "member_self"]
-    write: ["steward"]
+    write: ["steward", "member_self"]
   properties:
     id:
       type: uuid

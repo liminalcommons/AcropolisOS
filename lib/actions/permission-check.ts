@@ -134,13 +134,15 @@ function isInlineRefParam(
 }
 
 // Owner-field probe matching the convention in ontology/ctx.ts:rowOwnedBy.
-// Notification rows use recipient_member_id; other types fall back to
-// member_id / owner_member_id / owner_id / user_id / userId.
+// Notification rows use recipient_member_id; AgentBlocker rows use blocked_actor_id;
+// other types fall back to member_id / owner_member_id / owner_id / user_id / userId.
 function rowOwnerMatches(
   row: Record<string, unknown>,
   actor: Actor,
 ): boolean {
   if (row.recipient_member_id === actor.userId) return true;
+  // M4.3: AgentBlocker ownership is tracked via blocked_actor_id.
+  if (row.blocked_actor_id === actor.userId) return true;
   if (row.member_id === actor.userId) return true;
   if (row.owner_member_id === actor.userId) return true;
   if (row.owner_id === actor.userId) return true;

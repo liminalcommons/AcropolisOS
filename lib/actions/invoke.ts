@@ -105,7 +105,9 @@ export async function invokeAction(input: InvokeActionInput): Promise<unknown> {
     return pre.priorResult;
   }
 
-  await enforceActionPermission({ ontology, actionName, ctx });
+  // M4.3: pass params so member_self ref-ownership checks (e.g. resolve/dismiss blocker)
+  // can resolve the target row and verify blocked_actor_id === actor.userId.
+  await enforceActionPermission({ ontology, actionName, ctx, params });
 
   // Build a child ctx so any ctx.actions.X calls made INSIDE this handler
   // record THIS action's pending row as their parent. When the audit store
