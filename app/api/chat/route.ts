@@ -27,6 +27,7 @@ import { getInboxStore } from "@/lib/inbox/singleton";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { createInProcessDispatcher } from "@/lib/actions/dispatcher";
 import { buildApplyActionAiSdkTool } from "@/lib/agent/apply-action-ai-sdk";
+import { buildMeReadTools } from "@/lib/agent/read-tools-me";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -104,9 +105,17 @@ export async function POST(req: Request): Promise<Response> {
     getInboxStore(),
   );
 
+  // M4.3: wire /me read tools (query_member_context + query_my_blockers)
+  const meReadTools = buildMeReadTools({
+    ctx: runtime.ctx,
+    actor: runtime.actor,
+    ontology: runtime.ontology,
+  });
+
   const tools = {
     ...proposalTools,
     apply_action: applyActionTool,
+    ...meReadTools,
   };
 
   const result = streamText({
