@@ -8,8 +8,9 @@
 //      audit-pre + permission-check + handler + audit-post pipeline as the
 //      durable Inngest path.
 //   3. buildApplyActionAiSdkTool emits the ai-sdk tool shape (discriminated
-//      union narrowed to actor-permitted action types, plus an opt-in
-//      bypass_confirmation flag the UI sets after Confirm).
+//      union narrowed to actor-permitted action types). M3.8 #35: the schema
+//      does NOT include bypass_confirmation — the Confirm button POSTs
+//      directly to /api/chat/confirm which sets the flag server-side.
 //   4. Tools record merges proposal tools (vibe-coding) + apply_action
 //      (committed mutations). The agent picks the right surface per request.
 
@@ -49,7 +50,7 @@ const APPLY_ACTION_INSTRUCTIONS = [
   "  - propose_* + finalize_proposal: stage ONTOLOGY changes (new object/link/property/action types, new ingest mappings). These DO NOT mutate live state until a steward reviews and applies the proposal.",
   "  - apply_action: invoke a typed action to mutate LIVE state immediately (e.g., change_tier on an existing Member, record_attendance). These commit when called.",
   "Use apply_action only when the user asks to do something on the live data and the action_type already exists. If they ask for new behavior, propose first.",
-  "Some actions have a confirmation policy. If apply_action returns confirmation_required, do NOT silently re-call it with bypass_confirmation — present the requested change in your text reply and let the user click Confirm.",
+  "Some actions have a confirmation policy. If apply_action returns confirmation_required, present the requested change in your text reply and let the user click the Confirm button — do NOT attempt to re-call apply_action yourself.",
 ].join(" ");
 
 export async function POST(req: Request): Promise<Response> {

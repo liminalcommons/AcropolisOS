@@ -529,9 +529,11 @@ export function ChatPanel({
         ) : null}
         {(() => {
           // M2.2 step-6: render confirmation card if the latest tool output
-          // surfaced a confirmation_required envelope. Confirm sends a
-          // follow-up cue the agent translates to apply_action with
-          // bypass_confirmation:true; Cancel only dismisses the card.
+          // surfaced a confirmation_required envelope.
+          // M3.8 #35: Confirm POSTs directly to /api/chat/confirm (server
+          // sets bypassConfirmation=true). We no longer inject a text cue
+          // into the LLM stream — that path allowed prompt injection to
+          // induce a bypass. Cancel only dismisses the card.
           const pending = pickPendingConfirmation(
             messages as unknown as ChatLikeMessage[],
             dismissedConfirmations,
@@ -548,10 +550,13 @@ export function ChatPanel({
                     next.add(toolCallId);
                     return next;
                   });
-                  const cue =
-                    `Confirmed. Re-apply the previous action with bypass:` +
-                    `\n\napply_action({ action: "${action}", params: ${JSON.stringify(params)}, bypass_confirmation: true })`;
-                  sendMessage({ text: cue });
+                  // M3.8 #35: POST directly to server — bypass flag is set
+                  // server-side only, never via LLM tool args.
+                  void fetch("/api/chat/confirm", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action, params }),
+                  });
                 }}
                 onCancel={(toolCallId) => {
                   setDismissedConfirmations((prev) => {
