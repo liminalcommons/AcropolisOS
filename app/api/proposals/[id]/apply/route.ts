@@ -12,7 +12,7 @@ import {
   PgProposalStatusStore,
   PgTransactionRunner,
 } from "@/lib/proposals/adapters/runtime";
-import { auth } from "@/lib/auth";
+import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,15 +25,20 @@ export async function POST(
   _req: Request,
   ctx: RouteCtx,
 ): Promise<Response> {
+  const runtime_ctx = await buildChatRuntime();
+  if (isAnonymous(runtime_ctx.actor)) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   const { id } = await ctx.params;
 
-  // Pull the actor from the active NextAuth session so the audit row carries
-  // who clicked Apply. Falls back to a sentinel when the route is hit outside
-  // an authenticated context (CI smokes, edge cases).
-  const session = await auth().catch(() => null);
-  const actorId =
-    (session?.user?.email as string | undefined) ?? "steward@local";
-  const actorRole = "steward";
+  // M3.8 #46: use the role resolved from the session, never hardcode steward.
+  // Any authenticated non-steward hitting this endpoint gets 403.
+  const actorRole = runtime_ctx.actor.role;
+  if (actorRole !== "steward") {
+    return Response.json({ error: "forbidden" }, { status: 403 });
+  }
+  const actorId = runtime_ctx.actor.email || runtime_ctx.actor.userId;
 
   const store = getProposalStore();
   const proposal = await store.getProposal(id);

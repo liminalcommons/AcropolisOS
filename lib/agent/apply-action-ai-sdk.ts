@@ -7,10 +7,11 @@
 //     same policy gate, same ApplyActionResult contract — we share
 //     `runApplyActionTool` to keep them in lockstep.
 //
-// Bypass semantics: the model can include `bypass_confirmation: true` on
-// re-fire after the chat panel's Confirm button. The schema permits the
-// field; runApplyActionTool skips the policy gate when it's set. Audit row
-// metadata still captures the action + actor, so bypass is fully traceable.
+// M3.8 #35: bypass_confirmation is NOT exposed in the LLM tool schema.
+// The LLM must never be able to set it — only the server-side confirm
+// handler sets bypassConfirmation=true after matching a confirmed
+// confirmation-request-id from the user's explicit Confirm click.
+// Removing the field from the schema is the simplest, strongest fix.
 
 import { tool, type Tool } from "ai";
 import { z, type ZodTypeAny } from "zod";
@@ -33,9 +34,10 @@ export interface BuildApplyActionAiSdkToolInput {
   dispatcher: ApplyActionDispatcher;
 }
 
-// Build the per-actor discriminated-union schema (action+params), then add an
-// optional bypass_confirmation flag. ai-sdk v6 prefers a plain object input
-// schema, so we wrap the union via z.intersection-with-extension.
+// Build the per-actor discriminated-union schema (action+params).
+// M3.8 #35: bypass_confirmation is intentionally absent from this schema.
+// The LLM must never emit it — bypass is set only by the server-side
+// confirm handler after matching an explicit user Confirm click.
 function buildApplyActionInputSchema(
   ontology: Ontology,
   allowedActions: string[],
@@ -50,7 +52,7 @@ function buildApplyActionInputSchema(
     return z.object({
       action: z.literal(name),
       params: paramSchema,
-      bypass_confirmation: z.boolean().optional(),
+      // bypass_confirmation intentionally NOT included — see M3.8 #35.
     });
   });
   if (branches.length === 1) return branches[0];
@@ -75,14 +77,17 @@ export function buildApplyActionAiSdkTool(
       "Apply a named ontology action to mutate live state (members, events, attendance, etc.).",
       "Use this for committed changes, NOT proposals. Schema-changing work (new types/properties) still goes through propose_* + finalize_proposal.",
       "Action types the current actor is permitted to invoke are surfaced as discriminated branches.",
-      "When a policy gate returns `confirmation_required`, the chat UI shows a Confirm button — only call again with `bypass_confirmation: true` after explicit user approval.",
+      "When a policy gate returns `confirmation_required`, present the requested change in your text reply and let the user click the Confirm button in the UI.",
     ].join(" "),
     inputSchema,
     execute: async (raw) => {
+      // M3.8 #35: bypass_confirmation is never read from LLM tool-call args.
+      // Only the server-side confirm handler may set bypassConfirmation=true.
+      // Even if a prompt-injected LLM somehow injects the field (schema
+      // mismatch), we explicitly ignore it here.
       const parsed = raw as {
         action: string;
         params: unknown;
-        bypass_confirmation?: boolean;
       };
       return runApplyActionTool({
         actor,
@@ -90,7 +95,7 @@ export function buildApplyActionAiSdkTool(
         action: parsed.action,
         params: parsed.params,
         policy,
-        bypassConfirmation: parsed.bypass_confirmation === true,
+        bypassConfirmation: false, // always false here — only set by server confirm handler
       });
     },
   });

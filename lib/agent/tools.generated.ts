@@ -7,10 +7,13 @@ import {
   EventSchema,
   MeetingMinuteSchema,
   MemberSchema,
+  NotificationSchema,
   AddMeetingMinuteParamsSchema,
   AddMemberParamsSchema,
   ChangeTierParamsSchema,
   DeleteMemberParamsSchema,
+  InviteMemberParamsSchema,
+  MarkNotificationReadParamsSchema,
   PromoteToStewardParamsSchema,
   RecordAttendanceParamsSchema,
 } from "../ontology/types.generated";
@@ -206,6 +209,69 @@ export const audit_memberTool = createTool({
   execute: async () => { throw new Error("audit_member not implemented (US-014)"); },
 });
 
+export const describe_notificationTool = createTool({
+  id: "describe_notification",
+  description: "Describe the Notification object type (properties, links, permissions).",
+  inputSchema: z.object({}),
+  outputSchema: z.object({
+    name: z.string(),
+    properties: z.record(z.string(), z.unknown()),
+  }),
+  execute: async () => { throw new Error("describe_notification not implemented (US-014)"); },
+});
+
+export const query_notificationTool = createTool({
+  id: "query_notification",
+  description: "Query Notification records by an optional filter.",
+  inputSchema: z.object({
+    filter: z.record(z.string(), z.unknown()).optional(),
+    limit: z.number().int().positive().max(1000).optional(),
+  }),
+  outputSchema: z.object({ results: z.array(NotificationSchema) }),
+  execute: async () => { throw new Error("query_notification not implemented (US-014)"); },
+});
+
+export const traverse_notificationTool = createTool({
+  id: "traverse_notification",
+  description: "Traverse links from a Notification record.",
+  inputSchema: z.object({
+    id: z.string(),
+    link: z.string().optional(),
+  }),
+  outputSchema: z.object({ linked: z.array(z.unknown()) }),
+  execute: async () => { throw new Error("traverse_notification not implemented (US-014)"); },
+});
+
+export const sample_notificationTool = createTool({
+  id: "sample_notification",
+  description: "Return up to N representative Notification records.",
+  inputSchema: z.object({
+    n: z.number().int().positive().max(100).default(5),
+  }),
+  outputSchema: z.object({ samples: z.array(NotificationSchema) }),
+  execute: async () => { throw new Error("sample_notification not implemented (US-014)"); },
+});
+
+export const read_notificationTool = createTool({
+  id: "read_notification",
+  description: "Read a single Notification record by id.",
+  inputSchema: z.object({ id: z.string() }),
+  outputSchema: z.object({ record: NotificationSchema.nullable() }),
+  execute: async () => { throw new Error("read_notification not implemented (US-014)"); },
+});
+
+export const audit_notificationTool = createTool({
+  id: "audit_notification",
+  description: "Return recent audit entries scoped to Notification.",
+  inputSchema: z.object({
+    id: z.string().optional(),
+    since: z.iso.datetime({ offset: true }).optional(),
+    limit: z.number().int().positive().max(1000).optional(),
+  }),
+  outputSchema: z.object({ entries: z.array(z.unknown()) }),
+  execute: async () => { throw new Error("audit_notification not implemented (US-014)"); },
+});
+
 // === apply_action (discriminated union over action types) ===
 
 export const applyActionInputSchema = z.discriminatedUnion("action", [
@@ -213,6 +279,8 @@ export const applyActionInputSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("add_member"), params: AddMemberParamsSchema }),
   z.object({ action: z.literal("change_tier"), params: ChangeTierParamsSchema }),
   z.object({ action: z.literal("delete_member"), params: DeleteMemberParamsSchema }),
+  z.object({ action: z.literal("invite_member"), params: InviteMemberParamsSchema }),
+  z.object({ action: z.literal("mark_notification_read"), params: MarkNotificationReadParamsSchema }),
   z.object({ action: z.literal("promote_to_steward"), params: PromoteToStewardParamsSchema }),
   z.object({ action: z.literal("record_attendance"), params: RecordAttendanceParamsSchema }),
 ]);
@@ -247,5 +315,11 @@ export const tools = {
   "sample_member": sample_memberTool,
   "read_member": read_memberTool,
   "audit_member": audit_memberTool,
+  "describe_notification": describe_notificationTool,
+  "query_notification": query_notificationTool,
+  "traverse_notification": traverse_notificationTool,
+  "sample_notification": sample_notificationTool,
+  "read_notification": read_notificationTool,
+  "audit_notification": audit_notificationTool,
   "apply_action": applyActionTool,
 } as const;

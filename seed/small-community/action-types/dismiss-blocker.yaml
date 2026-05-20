@@ -1,0 +1,15 @@
+dismiss_blocker:
+  description: |
+    Blocked human dismisses a blocker they consider not-actually-blocking.
+    Status flips to dismissed; agent principal is notified so it can
+    re-prompt or take a different approach next iteration.
+  function: dismiss-blocker
+  parameters:
+    blocker_id:
+      type: ref
+      target: AgentBlocker
+      required: true
+    reason: { type: string, required: false }
+  permissions: [member_self]
+  agent_policy: always_confirm
+  side_effects: [audit, notify_member]

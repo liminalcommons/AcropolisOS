@@ -31,8 +31,56 @@ export const MemberSchema = z.object({
   "joined_at": z.iso.date(),
   "tier": z.enum(["basic", "sustaining", "lifetime"]).default("basic"),
   "notes": z.string(),
+  "user_id": z.string().optional(),
+  "invite_code": z.string().optional(),
+  "invite_expires_at": z.iso.datetime({ offset: true }).optional(),
 });
 export type Member = z.infer<typeof MemberSchema>;
+
+export const NotificationSchema = z.object({
+  "id": z.uuid(),
+  "recipient_member_id": z.string(),
+  "kind": z.string(),
+  "title": z.string(),
+  "body": z.string(),
+  "link_url": z.string().optional(),
+  "created_at": z.iso.datetime({ offset: true }),
+  "read_at": z.iso.datetime({ offset: true }).optional(),
+});
+export type Notification = z.infer<typeof NotificationSchema>;
+
+// M4.3: manually added (codegen not runnable in worktree; mirrors YAML spec).
+// pinned_widgets is jsonb in DB — Zod uses z.unknown() for the jsonb contract.
+export const MemberContextSchema = z.object({
+  "id": z.uuid(),
+  "member_id": z.string(),
+  "pinned_widgets": z.unknown().default([]),
+  "created_at": z.iso.datetime({ offset: true }),
+  "updated_at": z.iso.datetime({ offset: true }),
+});
+export type MemberContext = z.infer<typeof MemberContextSchema>;
+
+export const AgentBlockerSchema = z.object({
+  "id": z.uuid(),
+  "blocked_actor_id": z.string(),
+  "reason_kind": z.enum([
+    "approval", "confirmation", "ambiguity", "missing_data",
+    "consent", "decision", "risky_action",
+  ]),
+  "summary": z.string(),
+  "detail": z.string(),
+  "blocked_work_ref": z.string().optional(),
+  "resolution_mode": z.enum(["pathways", "text_input", "confirm_binary"]).default("pathways"),
+  "pathways": z.unknown().optional(),
+  "input_schema": z.unknown().optional(),
+  "confirm_action": z.unknown().optional(),
+  "status": z.enum(["open", "resolved", "dismissed", "expired"]).default("open"),
+  "created_at": z.iso.datetime({ offset: true }),
+  "resolved_at": z.iso.datetime({ offset: true }).optional(),
+  "resolved_by_action_audit_id": z.string().optional(),
+  "resolved_via_pathway_id": z.string().optional(),
+});
+export type AgentBlocker = z.infer<typeof AgentBlockerSchema>;
 
 // === Link types (with properties) ===
 
@@ -68,6 +116,17 @@ export const DeleteMemberParamsSchema = z.object({
   "id": z.uuid(),
 });
 export type DeleteMemberParams = z.infer<typeof DeleteMemberParamsSchema>;
+
+export const InviteMemberParamsSchema = z.object({
+  "member_id": z.string(),
+  "expires_in_days": z.number().int().default(7),
+});
+export type InviteMemberParams = z.infer<typeof InviteMemberParamsSchema>;
+
+export const MarkNotificationReadParamsSchema = z.object({
+  "notification_id": z.string(),
+});
+export type MarkNotificationReadParams = z.infer<typeof MarkNotificationReadParamsSchema>;
 
 export const PromoteToStewardParamsSchema = z.object({
   "member": z.string(),

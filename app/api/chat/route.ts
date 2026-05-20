@@ -8,8 +8,9 @@
 //      audit-pre + permission-check + handler + audit-post pipeline as the
 //      durable Inngest path.
 //   3. buildApplyActionAiSdkTool emits the ai-sdk tool shape (discriminated
-//      union narrowed to actor-permitted action types, plus an opt-in
-//      bypass_confirmation flag the UI sets after Confirm).
+//      union narrowed to actor-permitted action types). M3.8 #35: the schema
+//      does NOT include bypass_confirmation — the Confirm button POSTs
+//      directly to /api/chat/confirm which sets the flag server-side.
 //   4. Tools record merges proposal tools (vibe-coding) + apply_action
 //      (committed mutations). The agent picks the right surface per request.
 
@@ -23,9 +24,10 @@ import { AGENT_INSTRUCTIONS, buildLanguageModel } from "@/lib/agent/mastra";
 import { buildAiSdkProposalTools } from "@/lib/proposals/ai-sdk-tools";
 import { getProposalStore } from "@/lib/proposals/singleton";
 import { getInboxStore } from "@/lib/inbox/singleton";
-import { buildChatRuntime } from "@/lib/agent/chat-runtime";
+import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { createInProcessDispatcher } from "@/lib/actions/dispatcher";
 import { buildApplyActionAiSdkTool } from "@/lib/agent/apply-action-ai-sdk";
+import { buildMeReadTools } from "@/lib/agent/read-tools-me";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -51,7 +53,7 @@ const APPLY_ACTION_INSTRUCTIONS = [
   "  - propose_* + finalize_proposal: stage ONTOLOGY changes (new object/link/property/action types, new ingest mappings). These DO NOT mutate live state until a steward reviews and applies the proposal.",
   "  - apply_action: invoke a typed action to mutate LIVE state immediately (e.g., change_tier on an existing Member, record_attendance). These commit when called.",
   "Rules: never propose a new object type the ontology already has — call describe_<type> or query_<type> first to verify. Use apply_action only when the user asks to do something on the live data and the action_type already exists. If they ask for new behavior, propose first.",
-  "Some actions have a confirmation policy. If apply_action returns confirmation_required, do NOT silently re-call it with bypass_confirmation — present the requested change in your text reply and let the user click Confirm.",
+  "Some actions have a confirmation policy. If apply_action returns confirmation_required, present the requested change in your text reply and let the user click the Confirm button — do NOT attempt to re-call apply_action yourself.",
 ].join(" ");
 
 export async function POST(req: Request): Promise<Response> {
@@ -71,6 +73,16 @@ export async function POST(req: Request): Promise<Response> {
       : `anon-${Math.random().toString(36).slice(2, 10)}`;
 
   const runtime = await buildChatRuntime();
+
+  // M3.8 (#33): refuse anonymous callers BEFORE wiring the dispatcher,
+  // proposal tools, or streamText. Without this gate the steward-local
+  // sentinel previously granted unauthenticated POSTs full apply_action
+  // access. ANONYMOUS_ACTOR now has zero permissions, but we still
+  // short-circuit to avoid building/streaming any agent surface for an
+  // unauthenticated request.
+  if (isAnonymous(runtime.actor)) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
 
   const dispatcher = createInProcessDispatcher({
     ctx: runtime.ctx,
@@ -95,12 +107,22 @@ export async function POST(req: Request): Promise<Response> {
     getInboxStore(),
   );
 
+  // Object-type read tools (query_<type>/read_<type>/describe_<type>) built
+  // per-request in chat-runtime so the actor's permissions are baked in.
   const readTools = runtime.readTools ?? {};
+
+  // M4.3: wire /me read tools (query_member_context + query_my_blockers)
+  const meReadTools = buildMeReadTools({
+    ctx: runtime.ctx,
+    actor: runtime.actor,
+    ontology: runtime.ontology,
+  });
 
   const tools = {
     ...readTools,
     ...proposalTools,
     apply_action: applyActionTool,
+    ...meReadTools,
   };
 
   const result = streamText({

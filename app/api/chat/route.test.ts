@@ -34,6 +34,10 @@ vi.mock("@/lib/agent/chat-runtime", async () => {
         functionsDir: path.join(PKG_ROOT, "functions"),
       };
     },
+    // M3.8 (#33): route now gates on isAnonymous(runtime.actor) before
+    // wiring the dispatcher; mocked actor is authenticated (role: steward)
+    // so we hard-code false.
+    isAnonymous: () => false,
   };
 });
 

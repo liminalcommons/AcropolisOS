@@ -28,3 +28,28 @@ Member:
       permissions:
         read: ["steward"]
         write: ["steward"]
+    # M4.2: user_id links a Member to a UserRecord in users.json (NextAuth
+    # Credentials). Null until the invitee claims the invite via /claim,
+    # which creates the user record and writes its id back here. The
+    # member_self check in lib/ontology/ctx.ts already probes user_id, so
+    # populating it is what makes the row pass the member_self gate from
+    # the user's NextAuth actor.userId — until then, the Member is a
+    # placeholder that only stewards can see/touch.
+    user_id:
+      type: string
+      required: false
+    # invite_code + invite_expires_at are written by the invite_member
+    # action and consumed by the /claim route. Steward-only so a leaked
+    # client read cannot enumerate active invites.
+    invite_code:
+      type: string
+      required: false
+      permissions:
+        read: ["steward"]
+        write: ["steward"]
+    invite_expires_at:
+      type: timestamp
+      required: false
+      permissions:
+        read: ["steward"]
+        write: ["steward"]

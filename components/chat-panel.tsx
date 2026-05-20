@@ -35,7 +35,8 @@ import {
 } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { MessageSquare, Paperclip, Send, X } from "lucide-react";
+import Link from "next/link";
+import { Inbox, MessageSquare, Paperclip, Send, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Proposal } from "@/lib/proposals/store";
@@ -212,6 +213,35 @@ export function ChatPanel({
       // Polling is best-effort; a transient failure is fine.
     }
   }, [chatSessionId]);
+
+  // M4.1 step-6: live unread inbox count for the header badge. Polled
+  // every 15s so a notify_member side-effect on another tab surfaces here
+  // without a manual refresh. The /api/notifications/unread-count handler
+  // returns 0 for anon sessions so this never throws.
+  const [unreadCount, setUnreadCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCount = async (): Promise<void> => {
+      try {
+        const res = await fetch("/api/notifications/unread-count", {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const body = (await res.json()) as { count?: number };
+        if (!cancelled && typeof body.count === "number") {
+          setUnreadCount(body.count);
+        }
+      } catch {
+        // best-effort; transient failures shouldn't poison the chat UI
+      }
+    };
+    void fetchCount();
+    const id = setInterval(() => void fetchCount(), 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
   const { messages, sendMessage, status, error } = useChat({
     transport,
@@ -398,8 +428,30 @@ export function ChatPanel({
             <>
               <MessageSquare className="h-4 w-4 text-zinc-400" aria-hidden />
               <span>chat</span>
-              <span className="ml-auto text-[10px] uppercase tracking-widest text-zinc-500">
-                always on
+              <span className="ml-auto flex items-center gap-3">
+                <Link
+                  href="/inbox"
+                  data-testid="chat-panel-inbox-link"
+                  aria-label={
+                    unreadCount > 0
+                      ? `Inbox (${unreadCount} unread)`
+                      : "Inbox"
+                  }
+                  className="relative inline-flex items-center text-zinc-400 hover:text-zinc-200"
+                >
+                  <Inbox className="h-4 w-4" aria-hidden />
+                  {unreadCount > 0 ? (
+                    <span
+                      data-testid="chat-panel-inbox-badge"
+                      className="absolute -right-2 -top-2 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-violet-500 px-1 font-mono text-[9px] font-semibold leading-none text-zinc-50"
+                    >
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  ) : null}
+                </Link>
+                <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+                  always on
+                </span>
               </span>
             </>
           )}
@@ -477,9 +529,11 @@ export function ChatPanel({
         ) : null}
         {(() => {
           // M2.2 step-6: render confirmation card if the latest tool output
-          // surfaced a confirmation_required envelope. Confirm sends a
-          // follow-up cue the agent translates to apply_action with
-          // bypass_confirmation:true; Cancel only dismisses the card.
+          // surfaced a confirmation_required envelope.
+          // M3.8 #35: Confirm POSTs directly to /api/chat/confirm (server
+          // sets bypassConfirmation=true). We no longer inject a text cue
+          // into the LLM stream — that path allowed prompt injection to
+          // induce a bypass. Cancel only dismisses the card.
           const pending = pickPendingConfirmation(
             messages as unknown as ChatLikeMessage[],
             dismissedConfirmations,
@@ -496,10 +550,13 @@ export function ChatPanel({
                     next.add(toolCallId);
                     return next;
                   });
-                  const cue =
-                    `Confirmed. Re-apply the previous action with bypass:` +
-                    `\n\napply_action({ action: "${action}", params: ${JSON.stringify(params)}, bypass_confirmation: true })`;
-                  sendMessage({ text: cue });
+                  // M3.8 #35: POST directly to server — bypass flag is set
+                  // server-side only, never via LLM tool args.
+                  void fetch("/api/chat/confirm", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action, params }),
+                  });
                 }}
                 onCancel={(toolCallId) => {
                   setDismissedConfirmations((prev) => {

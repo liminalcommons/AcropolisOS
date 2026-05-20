@@ -8,15 +8,18 @@
 
 import type { AuditStore } from "../audit/writer";
 import type { Actor } from "../ctx";
+import type { NotificationStore } from "../notifications/store";
 import type { Ontology, PermissionsBlock } from "./schema";
 import type {
   AddMeetingMinuteParams,
   AddMemberParams,
+  AgentBlocker,
   AttendedLink,
   ChangeTierParams,
   Event,
   MeetingMinute,
   Member,
+  MemberContext,
   RecordAttendanceParams,
 } from "./types.generated";
 
@@ -49,6 +52,9 @@ export interface OntologyStore {
     Member: ObjectAccess<Member>;
     Event: ObjectAccess<Event>;
     MeetingMinute: ObjectAccess<MeetingMinute>;
+    // M4.3: per-member context + agent escalation blockers
+    MemberContext: ObjectAccess<MemberContext>;
+    AgentBlocker: ObjectAccess<AgentBlocker>;
   };
   links: {
     attended: LinkAccess<AttendedLink>;
@@ -114,6 +120,20 @@ function rowOwnedBy(
   if (row.owner_id === actor.userId) return true;
   if (row.owner === actor.userId) return true;
   if (row.userId === actor.userId) return true;
+  // M4.1: Notification rows are owned by their recipient_member_id. The
+  // locked perm spec ("member_self via recipient_member_id") makes this
+  // the natural ownership probe. Generic on field name so any future
+  // object type using the same convention works without code change.
+  if (row.recipient_member_id === actor.userId) return true;
+  // M4.3: AgentBlocker rows are owned by blocked_actor_id.
+  if (row.blocked_actor_id === actor.userId) return true;
+  // M4.3: MemberContext rows are owned by member_id.
+  // Scoped to these two types only to avoid false-positive ownership on
+  // unrelated types that happen to have a member_id field (e.g. MeetingMinute.member_id = author).
+  if (
+    (objectTypeName === "MemberContext" || objectTypeName === "AgentBlocker") &&
+    row.member_id === actor.userId
+  ) return true;
   if (objectTypeName === "Member" && row.id === actor.userId) return true;
   return false;
 }
@@ -286,6 +306,11 @@ export interface CreateCtxInput {
   // rejection rows here; action_audit middleware (US-030) will write success
   // rows here as well.
   audit?: AuditStore;
+  // M4.1: optional notification sink. When provided, the notify_member
+  // side-effect dispatcher writes an inbox row for the actor in addition
+  // to firing the stdout/email adapter. Tests inject InMemoryNotificationStore;
+  // the runtime ctx builder wires PgNotificationStore.
+  notifications?: NotificationStore;
 }
 
 export interface OntologyCtx {
@@ -294,13 +319,20 @@ export interface OntologyCtx {
   links: OntologyStore["links"];
   actions: OntologyActions;
   audit?: AuditStore;
+  notifications?: NotificationStore;
 }
+
+// M4.3: rowOwnedBy extension — AgentBlocker uses blocked_actor_id
+// (already handled by the existing member_self token logic: the function
+// checks the conventional field names including blocked_actor_id below).
+// We extend rowOwnedBy to support the new field name.
 
 export function createCtx({
   db,
   actor,
   permissions,
   audit,
+  notifications,
 }: CreateCtxInput): OntologyCtx {
   const wrap = <T extends { id: string }>(
     access: ObjectAccess<T>,
@@ -321,6 +353,9 @@ export function createCtx({
       Member: wrap(db.objects.Member, "Member"),
       Event: wrap(db.objects.Event, "Event"),
       MeetingMinute: wrap(db.objects.MeetingMinute, "MeetingMinute"),
+      // M4.3: member context + agent escalation blockers
+      MemberContext: wrap(db.objects.MemberContext, "MemberContext"),
+      AgentBlocker: wrap(db.objects.AgentBlocker, "AgentBlocker"),
     },
     links: db.links,
     actions: {
@@ -330,6 +365,7 @@ export function createCtx({
       record_attendance: stub<RecordAttendanceParams>("record_attendance"),
     },
     ...(audit ? { audit } : {}),
+    ...(notifications ? { notifications } : {}),
   };
 }
 
@@ -427,6 +463,9 @@ export function createInMemoryStore(): OntologyStore {
       Member: new InMemoryObjectAccess<Member>(),
       Event: new InMemoryObjectAccess<Event>(),
       MeetingMinute: new InMemoryObjectAccess<MeetingMinute>(),
+      // M4.3: member context + agent escalation blockers
+      MemberContext: new InMemoryObjectAccess<MemberContext>(),
+      AgentBlocker: new InMemoryObjectAccess<AgentBlocker>(),
     },
     links: {
       attended: new InMemoryLinkAccess<AttendedLink>(),
