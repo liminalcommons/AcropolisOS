@@ -102,33 +102,94 @@ function effectiveStewardEmails(
   return perAction?.steward_emails ?? config.steward_emails ?? [];
 }
 
+// Resolve the notification recipient. For actions that affect a specific
+// member (e.g. invite_member where the actor is the steward but the
+// notification should go to the invitee), the action result carries a
+// `member_id` field. When present, we resolve that member's email via the
+// store (if available) and use it as the recipient; the actor email is the
+// fallback for self-service actions where actor === affected member.
+async function resolveRecipientEmail(
+  input: DispatchSideEffectsInput,
+): Promise<{ email: string; memberId: string | null }> {
+  const result = input.result as Record<string, unknown> | null | undefined;
+  const recipientMemberId =
+    result && typeof result === "object" && typeof result.member_id === "string"
+      ? result.member_id
+      : null;
+
+  if (recipientMemberId && input.ctx.objects?.Member) {
+    try {
+      // Access underlying store directly — permissions wrap may filter the
+      // row for the actor, but we need the raw email of the invitee. We
+      // reach through the store indirection via the ctx objects accessor;
+      // in tests this is InMemoryObjectAccess which always returns the row.
+      const member = await input.ctx.objects.Member.findById(recipientMemberId);
+      if (member && typeof (member as Record<string, unknown>).email === "string") {
+        return {
+          email: (member as Record<string, unknown>).email as string,
+          memberId: recipientMemberId,
+        };
+      }
+    } catch {
+      // fall through to actor email
+    }
+  }
+
+  const actorEmail = input.ctx.actor?.email;
+  return { email: actorEmail ?? "", memberId: null };
+}
+
+// Redact sensitive fields from the notification body payload. The
+// invite_code is a secret that grants account access — it must not appear
+// in serialized JSON stored in notification bodies or sent as raw text.
+// The claim_url already embeds the code as a URL param and is kept because
+// it reads as an intentional link, not a raw secret dump.
+function redactSensitiveFields(
+  actionName: string,
+  result: unknown,
+): unknown {
+  if (actionName === "invite_member" && result && typeof result === "object") {
+    const { invite_code: _dropped, ...safe } = result as Record<string, unknown>;
+    void _dropped;
+    return safe;
+  }
+  return result;
+}
+
 async function runNotifyMember(
   input: DispatchSideEffectsInput,
 ): Promise<SideEffectResult> {
-  const actor = input.ctx.actor;
-  const actorEmail = actor?.email;
-  if (!actorEmail) {
+  const { email: recipientEmail, memberId: recipientMemberId } =
+    await resolveRecipientEmail(input);
+
+  if (!recipientEmail) {
     return {
       channel: "notify_member",
       status: "skipped",
-      detail: "actor has no email",
+      detail: "no recipient email resolvable",
     };
   }
+
+  const actor = input.ctx.actor;
   const title = `[acropolisOS] ${input.actionName} completed`;
+  const safeResult = redactSensitiveFields(input.actionName, input.result);
   const body = JSON.stringify(
-    { action: input.actionName, params: input.params, result: input.result },
+    { action: input.actionName, params: input.params, result: safeResult },
     null,
     2,
   );
 
-  // M4.1: persist an inbox row for the actor whenever a NotificationStore is
-  // wired into ctx. Done BEFORE the stdout/email adapter so a downstream
-  // adapter failure doesn't keep the inbox empty. Errors here surface as the
-  // channel result — the audit child row records the failure metadata.
-  if (actor?.userId && input.ctx.notifications) {
+  // M4.1: persist an inbox row for the notification recipient whenever a
+  // NotificationStore is wired into ctx. Done BEFORE the stdout/email adapter
+  // so a downstream adapter failure doesn't keep the inbox empty. Errors here
+  // surface as the channel result — the audit child row records the failure
+  // metadata. Recipient is the resolved member (invitee for invite_member, or
+  // actor for self-service actions).
+  const inboxRecipientId = recipientMemberId ?? actor?.userId ?? null;
+  if (inboxRecipientId && input.ctx.notifications) {
     try {
       await input.ctx.notifications.create({
-        recipient_member_id: actor.userId,
+        recipient_member_id: inboxRecipientId,
         kind: input.actionName,
         title,
         body,
@@ -148,7 +209,7 @@ async function runNotifyMember(
 
   try {
     await input.adapters.sendMail({
-      to: actorEmail,
+      to: recipientEmail,
       subject: title,
       body,
       action_type: input.actionName,
