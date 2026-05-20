@@ -20,3 +20,21 @@ CREATE TABLE IF NOT EXISTS "notification" (
 CREATE INDEX IF NOT EXISTS "notification_recipient_created_at_idx" ON "notification" ("recipient_member_id", "created_at" DESC);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "notification_recipient_unread_idx" ON "notification" ("recipient_member_id") WHERE "read_at" IS NULL;
+--> statement-breakpoint
+-- M4.1 cleanup (#29): add FK from notification.recipient_member_id → member.id.
+-- schema.generated.ts declared this FK but the original SQL omitted it.
+-- Wrapped in a DO block for idempotency (Postgres lacks ADD CONSTRAINT IF NOT EXISTS).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'notification_recipient_member_id_fk'
+      AND table_name = 'notification'
+  ) THEN
+    ALTER TABLE "notification"
+      ADD CONSTRAINT "notification_recipient_member_id_fk"
+      FOREIGN KEY ("recipient_member_id")
+      REFERENCES "member"("id")
+      ON DELETE CASCADE;
+  END IF;
+END $$;
