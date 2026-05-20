@@ -41,14 +41,37 @@ export interface ClaimInviteSuccess {
   member: Member;
 }
 
-async function findMemberByInviteCode(
+// #41: subset projection — only the 3 fields the unauth /claim path needs.
+// Never return the full Member row from the unauthenticated lookup so future
+// callers cannot accidentally leak notes, tier, joined_at, user_id, etc.
+interface MemberInviteProjection {
+  id: string;
+  email: string;
+  full_name: string;
+}
+
+async function findByInviteCode(
   members: ObjectAccess<Member>,
   code: string,
-): Promise<Member | null> {
+): Promise<MemberInviteProjection | null> {
   // findMany is the supported steward-readable surface for invite_code in
   // the in-memory + pg implementations. Filtering by invite_code is safe
   // because we're inside an unauthenticated server action — the gate is
   // "do you possess the code itself", not "does the actor pass member_self".
+  const rows = await members.findMany({ invite_code: code } as Partial<Member>);
+  const row = rows[0];
+  if (!row) return null;
+  // Project to only the 3 needed fields — never expose the full row.
+  return { id: row.id, email: row.email, full_name: row.full_name };
+}
+
+// #40: fetch the full Member row (steward-readable) separately, only after
+// we have the projection. We need invite_code, invite_expires_at, and user_id
+// for validation, but these never leave this function.
+async function findFullMemberByInviteCode(
+  members: ObjectAccess<Member>,
+  code: string,
+): Promise<Member | null> {
   const rows = await members.findMany({ invite_code: code } as Partial<Member>);
   return rows[0] ?? null;
 }
@@ -70,8 +93,17 @@ export async function claimInvite(
     );
   }
 
-  const member = await findMemberByInviteCode(db.objects.Member, code);
+  // #41: use subset projection for the lookup — validates code existence
+  // without exposing private Member fields to the caller.
+  const projection = await findByInviteCode(db.objects.Member, code);
+  if (!projection) {
+    throw new ClaimInviteError(`unknown invite code`, "not_found");
+  }
+
+  // Full row needed for validation fields only — stays internal.
+  const member = await findFullMemberByInviteCode(db.objects.Member, code);
   if (!member) {
+    // Race: code disappeared between the two lookups — treat as not found.
     throw new ClaimInviteError(`unknown invite code`, "not_found");
   }
   if (member.user_id) {
@@ -94,6 +126,11 @@ export async function claimInvite(
     );
   }
 
+  // #40: atomic claim — create the user first, then attempt a conditional
+  // Member.update that only succeeds when user_id is still NULL (preventing
+  // a concurrent /claim from both winning the race). If the update finds the
+  // row already claimed (returns null), roll back by deleting the new user
+  // and reject as already_claimed.
   const user = await userStore.create({
     email: member.email,
     password,
@@ -101,11 +138,23 @@ export async function claimInvite(
     customRoles: [],
   });
 
-  await db.objects.Member.update(member.id, {
+  const updated = await db.objects.Member.update(member.id, {
     user_id: user.id,
     invite_code: null as unknown as undefined,
     invite_expires_at: null as unknown as undefined,
   });
+
+  if (!updated || updated.user_id !== user.id) {
+    // The conditional update lost the race — rollback the orphaned user.
+    await userStore.deleteById(user.id).catch(() => {
+      // Best-effort: if deleteById itself fails, log and continue so the
+      // ClaimInviteError still surfaces cleanly to the caller.
+    });
+    throw new ClaimInviteError(
+      `member ${member.id} already claimed (concurrent race)`,
+      "already_claimed",
+    );
+  }
 
   const refreshed = (await db.objects.Member.findById(member.id)) ?? member;
   return { ok: true, user, member: refreshed };

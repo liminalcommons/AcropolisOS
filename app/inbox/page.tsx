@@ -34,9 +34,12 @@ export default async function InboxPage(): Promise<React.ReactElement> {
   if (isAnonymous(runtime.actor)) {
     redirect("/signin?callbackUrl=/inbox");
   }
-  const recipientId = runtime.actor?.userId ?? null;
+  // actor is guaranteed non-anonymous here (redirect above); pass it so
+  // the store-level permission check (#27) can enforce member_self / steward.
+  const actor = runtime.actor!;
+  const recipientId = actor.userId;
   const store = new PgNotificationStore(getDb());
-  const rows = recipientId ? await store.listForRecipient(recipientId) : [];
+  const rows = await store.listForRecipient(actor, recipientId);
   const unread = rows.filter((r) => r.read_at === null).length;
 
   return (

@@ -8,11 +8,40 @@
 // Persisted rows live in the `notification` table generated from
 // seed/small-community/object-types/notification.yaml — see
 // lib/db/schema.generated.ts.
+//
+// M4.1 cleanup (#27): listForRecipient / markRead / unreadCount now require
+// an Actor and enforce: actor.userId === recipientMemberId OR actor.role ===
+// "steward". This is defense-in-depth — the /inbox route already refuses
+// anonymous (M3.8 #37) and markRead goes through the audit pipeline — but
+// the store-level check ensures no code path can bypass the OntologyStore
+// permission wrappers by calling the store directly.
 
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { Database } from "../db/client";
 import { notification as notificationTable } from "../db/schema.generated";
+import type { Actor } from "../ctx";
+
+// Thrown when an actor attempts to read or mutate another member's notifications
+// without steward privileges.
+export class NotificationPermissionError extends Error {
+  readonly code = "NOTIFICATION_PERMISSION_DENIED" as const;
+  constructor(actorId: string, recipientId: string) {
+    super(
+      `Actor '${actorId}' is not permitted to access notifications for recipient '${recipientId}'. Must be the recipient or a steward.`,
+    );
+    this.name = "NotificationPermissionError";
+  }
+}
+
+function assertActorMayRead(actor: Actor, recipientMemberId: string): void {
+  if (
+    actor.role !== "steward" &&
+    actor.userId !== recipientMemberId
+  ) {
+    throw new NotificationPermissionError(actor.userId, recipientMemberId);
+  }
+}
 
 export interface NotificationRow {
   id: string;
@@ -35,9 +64,12 @@ export interface NotificationCreateInput {
 
 export interface NotificationStore {
   create(input: NotificationCreateInput): Promise<NotificationRow>;
-  listForRecipient(recipientMemberId: string): Promise<NotificationRow[]>;
-  unreadCount(recipientMemberId: string): Promise<number>;
-  markRead(id: string, recipientMemberId: string): Promise<NotificationRow | null>;
+  /** Requires actor.userId === recipientMemberId OR actor.role === "steward". */
+  listForRecipient(actor: Actor, recipientMemberId: string): Promise<NotificationRow[]>;
+  /** Requires actor.userId === recipientMemberId OR actor.role === "steward". */
+  unreadCount(actor: Actor, recipientMemberId: string): Promise<number>;
+  /** Requires actor.userId === recipientMemberId OR actor.role === "steward". */
+  markRead(actor: Actor, id: string, recipientMemberId: string): Promise<NotificationRow | null>;
   markAllRead(recipientMemberId: string): Promise<number>;
   findById(id: string): Promise<NotificationRow | null>;
 }
@@ -60,23 +92,27 @@ export class InMemoryNotificationStore implements NotificationStore {
     return { ...row };
   }
 
-  async listForRecipient(recipientMemberId: string): Promise<NotificationRow[]> {
+  async listForRecipient(actor: Actor, recipientMemberId: string): Promise<NotificationRow[]> {
+    assertActorMayRead(actor, recipientMemberId);
     return this.rows
       .filter((r) => r.recipient_member_id === recipientMemberId)
       .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
       .map((r) => ({ ...r }));
   }
 
-  async unreadCount(recipientMemberId: string): Promise<number> {
+  async unreadCount(actor: Actor, recipientMemberId: string): Promise<number> {
+    assertActorMayRead(actor, recipientMemberId);
     return this.rows.filter(
       (r) => r.recipient_member_id === recipientMemberId && r.read_at === null,
     ).length;
   }
 
   async markRead(
+    actor: Actor,
     id: string,
     recipientMemberId: string,
   ): Promise<NotificationRow | null> {
+    assertActorMayRead(actor, recipientMemberId);
     const row = this.rows.find(
       (r) => r.id === id && r.recipient_member_id === recipientMemberId,
     );
@@ -144,7 +180,8 @@ export class PgNotificationStore implements NotificationStore {
     return mapRow(row);
   }
 
-  async listForRecipient(recipientMemberId: string): Promise<NotificationRow[]> {
+  async listForRecipient(actor: Actor, recipientMemberId: string): Promise<NotificationRow[]> {
+    assertActorMayRead(actor, recipientMemberId);
     const rows = await this.db
       .select()
       .from(notificationTable)
@@ -153,7 +190,8 @@ export class PgNotificationStore implements NotificationStore {
     return rows.map(mapRow);
   }
 
-  async unreadCount(recipientMemberId: string): Promise<number> {
+  async unreadCount(actor: Actor, recipientMemberId: string): Promise<number> {
+    assertActorMayRead(actor, recipientMemberId);
     const rows = await this.db
       .select({ n: sql<number>`count(*)::int` })
       .from(notificationTable)
@@ -168,9 +206,11 @@ export class PgNotificationStore implements NotificationStore {
   }
 
   async markRead(
+    actor: Actor,
     id: string,
     recipientMemberId: string,
   ): Promise<NotificationRow | null> {
+    assertActorMayRead(actor, recipientMemberId);
     const [row] = await this.db
       .update(notificationTable)
       .set({ read_at: new Date() })

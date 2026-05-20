@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
@@ -59,6 +59,9 @@ export interface UserStore {
     role: BuiltInRole;
     customRoles: string[];
   }): Promise<UserRecord>;
+  // #40: deleteById used by claimInvite rollback — if the atomic Member.update
+  // fails after user creation, we delete the orphaned user record.
+  deleteById(id: string): Promise<boolean>;
   authorize(email: string, password: string): Promise<AuthorizedUser | null>;
   countStewards(): Promise<number>;
 }
@@ -82,12 +85,17 @@ export class FileUserStore implements UserStore {
   }
 
   private async writeAll(users: UserRecord[]): Promise<void> {
-    await mkdir(path.dirname(this.file), { recursive: true });
+    const dir = path.dirname(this.file);
+    await mkdir(dir, { recursive: true });
+    // #40: write to a temp file then atomically rename so a crash mid-write
+    // cannot corrupt the canonical users.json.
+    const tmp = path.join(dir, `.users-${randomUUID()}.tmp.json`);
     await writeFile(
-      this.file,
+      tmp,
       JSON.stringify({ users } satisfies FileShape, null, 2),
       "utf8",
     );
+    await rename(tmp, this.file);
   }
 
   async findByEmail(email: string): Promise<UserRecord | null> {
@@ -118,6 +126,15 @@ export class FileUserStore implements UserStore {
     users.push(record);
     await this.writeAll(users);
     return record;
+  }
+
+  async deleteById(id: string): Promise<boolean> {
+    const users = await this.readAll();
+    const idx = users.findIndex((u) => u.id === id);
+    if (idx < 0) return false;
+    users.splice(idx, 1);
+    await this.writeAll(users);
+    return true;
   }
 
   async authorize(

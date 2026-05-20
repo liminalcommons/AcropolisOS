@@ -49,7 +49,11 @@ export default defineAction({
       };
     }
 
+    // Pass actor so the store-level permission check (#27) can enforce
+    // member_self / steward. The ownership check above already ran, but
+    // the store assertion is defense-in-depth.
     const updated = await ctx.notifications.markRead(
+      actor,
       existing.id,
       existing.recipient_member_id,
     );

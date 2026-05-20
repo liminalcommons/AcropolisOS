@@ -80,7 +80,8 @@ describe("notify_member side-effect writes an inbox row (M4.1)", () => {
       adapters,
     });
 
-    const rows = await notifications.listForRecipient(member.userId);
+    // Pass member as actor — the store now enforces actor.userId === recipientMemberId (#27).
+    const rows = await notifications.listForRecipient(member, member.userId);
     expect(rows).toHaveLength(1);
     const row = rows[0];
     expect(row.recipient_member_id).toBe(member.userId);
@@ -140,7 +141,8 @@ describe("notify_member side-effect writes an inbox row (M4.1)", () => {
       result: { ok: true },
       adapters,
     });
-    const rows = await notifications.listForRecipient(member.userId);
+    // Pass member as actor — checking that anon actor wrote no rows for this recipient.
+    const rows = await notifications.listForRecipient(member, member.userId);
     expect(rows).toHaveLength(0);
   });
 });

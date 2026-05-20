@@ -17,19 +17,18 @@ export interface ClaimFormState {
   code?: ClaimInviteFailureCode;
 }
 
-const ERROR_LABEL: Record<ClaimInviteFailureCode, string> = {
-  not_found: "Unknown invite code.",
-  expired: "This invite has expired. Ask a steward for a new one.",
-  already_claimed:
-    "This invite has already been claimed. Try signing in instead.",
-};
+// #42: all failure branches return the same generic message to prevent
+// code-enumeration (attacker cannot distinguish valid-but-claimed vs
+// valid-but-expired vs unknown). The structured ClaimInviteFailureCode is
+// kept internally for logging/metrics only and never reaches the UI.
+const GENERIC_CLAIM_ERROR = "Invalid or expired invite code.";
 
 // Server action invoked by the /claim form. Outcomes:
-//   - success  → redirect("/signin?...&email=...") to let the user log in
-//                with the password they just set. (Programmatic NextAuth v5
-//                signIn() from a server action requires the cookie jar; the
-//                signin redirect is the simpler reliable path and matches
-//                what existing setup wizard flows do.)
+//   - success  → redirect("/signin?callbackUrl=/inbox") — no email param
+//                (#43: email in URL lands in browser history + Referer chain).
+//                (Programmatic NextAuth v5 signIn() from a server action
+//                requires the cookie jar; the signin redirect is the simpler
+//                reliable path and matches what existing setup wizard flows do.)
 //   - failure  → return ClaimFormState, page re-renders with the message.
 export async function submitClaim(
   _prev: ClaimFormState | null,
@@ -49,16 +48,20 @@ export async function submitClaim(
   const db = createPgOntologyStore(getDb());
 
   try {
-    const { user } = await claimInvite({ code, password, userStore, db });
-    redirect(
-      `/signin?callbackUrl=/inbox&email=${encodeURIComponent(user.email)}`,
-    );
+    await claimInvite({ code, password, userStore, db });
+    // #43: drop the email query param — it would land in browser history and
+    // the Referer chain. The user just set their password seconds ago; they
+    // can type their email on the sign-in page. callbackUrl lands them in
+    // /inbox after successful sign-in.
+    redirect(`/signin?callbackUrl=/inbox`);
   } catch (err) {
     if (err instanceof ClaimInviteError) {
+      // #42: return only the generic message — never expose the structured
+      // code to the UI. Code is still available for server-side logging.
       return {
         ok: false,
         code: err.code,
-        error: ERROR_LABEL[err.code] ?? "Could not claim invite.",
+        error: GENERIC_CLAIM_ERROR,
       };
     }
     // `redirect()` throws a NEXT_REDIRECT signal — re-throw so Next handles it.
