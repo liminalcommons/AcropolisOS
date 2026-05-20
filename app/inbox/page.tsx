@@ -107,9 +107,6 @@ export default async function InboxPage(): Promise<React.ReactElement> {
                           {r.kind}
                         </span>
                       </div>
-                      <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded bg-zinc-950 p-2 font-mono text-[11px] leading-snug text-zinc-300 ring-1 ring-zinc-800">
-                        {r.body}
-                      </pre>
                       {r.link_url ? (
                         <div className="mt-2">
                           <Link
