@@ -1,0 +1,9 @@
+unpin_widget_from_member_context:
+  description: Remove a widget by id from pinned_widgets. Default widgets are unaffected.
+  function: unpin-widget-from-member-context
+  parameters:
+    member_id: { type: ref, target: Member, required: false }
+    widget_id: { type: string, required: true }
+  permissions: [member_self]
+  agent_policy: auto_apply
+  side_effects: [audit]

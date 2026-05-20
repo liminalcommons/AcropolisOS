@@ -1,0 +1,36 @@
+Member:
+  description: A community member
+  title_property: full_name
+  data_audit: true
+  permissions:
+    read:
+      - "*"
+    write:
+      - steward
+      - member_self
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    full_name:
+      type: string
+    email:
+      ref: email
+    joined_at:
+      ref: joined_at
+    tier:
+      type: enum
+      values:
+        - basic
+        - sustaining
+        - lifetime
+      default: basic
+    notes:
+      type: string
+      permissions:
+        read:
+          - steward
+        write:
+          - steward
+    pronouns:
+      type: string

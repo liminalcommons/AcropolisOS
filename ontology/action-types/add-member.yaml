@@ -1,0 +1,17 @@
+add_member:
+  description: Add a new member to the community
+  creates_object: Member
+  parameters:
+    full_name:
+      type: string
+      required: true
+    email:
+      type: email
+      required: true
+    tier:
+      type: enum
+      values: [basic, sustaining, lifetime]
+      default: basic
+  permissions: [steward]
+  agent_policy: always_confirm
+  side_effects: [audit]

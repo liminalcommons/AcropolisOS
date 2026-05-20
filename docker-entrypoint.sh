@@ -16,7 +16,7 @@ set -euo pipefail
 # suppress the rename-vs-create prompt on non-TTY stdin (it errors with
 # "Interactive prompts require a TTY terminal"). Pre-creating with CREATE
 # TABLE IF NOT EXISTS sidesteps the question entirely.
-for SQL in drizzle/0004_proposals.sql drizzle/0005_notification.sql; do
+for SQL in drizzle/0004_proposals.sql drizzle/0005_notification.sql drizzle/0006_member_context_and_blockers.sql; do
   if [ -f "$SQL" ]; then
     echo "[entrypoint] applying $SQL..."
     psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$SQL"

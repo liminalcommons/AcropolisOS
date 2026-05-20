@@ -1,0 +1,15 @@
+mark_notification_read:
+  description: |
+    Mark a single Notification row as read by setting read_at = now().
+    member_self: the actor must be the notification's recipient_member_id;
+    a member acting on someone else's notification is denied. Stewards
+    have unrestricted write per the Notification object's permissions.
+  function: mark-notification-read
+  parameters:
+    notification_id:
+      type: ref
+      target: Notification
+      required: true
+  permissions: [member_self, steward]
+  agent_policy: auto_apply
+  side_effects: [audit]
