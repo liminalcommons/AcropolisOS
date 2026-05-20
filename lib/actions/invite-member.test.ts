@@ -19,6 +19,7 @@ import { invokeAction } from "./invoke";
 import type { SideEffectAdapters } from "./side-effects";
 import { loadOntology } from "../ontology/load";
 import {
+  buildObjectPermissionsMap,
   createCtx,
   createInMemoryStore,
   type OntologyCtx,
@@ -67,8 +68,11 @@ beforeEach(async () => {
   ontology = await loadOntology(SEED_ROOT);
   db = createInMemoryStore();
   audit = new InMemoryAuditStore();
-  stewardCtx = createCtx({ db, actor: steward, audit });
-  memberCtx = createCtx({ db, actor: memberActor, audit });
+  // M3.8.32: pass the real permissions map so field-level redaction on
+  // invite_code / invite_expires_at is exercised in all test assertions.
+  const permissions = buildObjectPermissionsMap(ontology);
+  stewardCtx = createCtx({ db, actor: steward, audit, permissions });
+  memberCtx = createCtx({ db, actor: memberActor, audit, permissions });
   adapters = {
     sendMail: vi.fn(async () => undefined),
     postWebhook: vi.fn(async () => ({ status: 200 })),
@@ -134,6 +138,35 @@ describe("invite_member action (M4.2)", () => {
     const persisted = await db.objects.Member.findById(memberId);
     expect(persisted?.invite_code ?? null).toBeNull();
     expect(adapters.sendMail).not.toHaveBeenCalled();
+  });
+
+  it("non-steward findById on an invited Member hides invite_code and invite_expires_at (M3.8.32 permissions gate)", async () => {
+    // Create a placeholder member (no user_id yet) and run the invite as steward.
+    const memberId = "00000000-0000-4000-8000-000000000a05";
+    await db.objects.Member.create(memberRow(memberId));
+
+    const result = (await invokeAction({
+      actionName: "invite_member",
+      params: { member_id: memberId },
+      ctx: stewardCtx,
+      ontology,
+      functionsDir: FUNCTIONS_DIR,
+      sideEffectAdapters: adapters,
+    })) as { invite_code: string };
+
+    // Steward sees invite_code on the raw store row.
+    const asSeenBySteward = await stewardCtx.objects.Member.findById(memberId);
+    expect(asSeenBySteward?.invite_code).toBe(result.invite_code);
+
+    // A different member (not the invitee — they have no user_id link yet so
+    // member_self doesn't match) cannot read invite_code or invite_expires_at.
+    // memberActor has role "member" and userId "u-member" which differs from
+    // the row.id ("00000000-...a05"), so the member_self gate fails and the
+    // row is filtered to null (the object-level read gate also applies).
+    const asSeenByOther = await memberCtx.objects.Member.findById(memberId);
+    // Object-level read gate: member_self fails (different user), steward not
+    // in memberActor.role → findById returns null (no read access at all).
+    expect(asSeenByOther).toBeNull();
   });
 
   it("rejects re-invite when the Member is already claimed (user_id is set)", async () => {
