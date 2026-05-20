@@ -5,10 +5,16 @@
 // with an in-memory fixture via vi.mock — keeping route.ts free of the
 // branching that would otherwise be needed for hermetic tests.
 //
-// Returns the actor (from auth().session, falling back to a steward sentinel
-// so dev / SSR-without-session still functions like the apply route does),
-// the ontology (loaded from disk), the functionsDir (where function-backed
-// action handlers live), and a fully-wrapped OntologyCtx.
+// M3.8 (#33/#37/#38): when auth() returns null we no longer fall back to a
+// steward sentinel — that gave unauthenticated callers steward-level
+// apply_action access through /api/chat, and the same fallback bled into
+// /inbox + the inbox server actions. The fallback now produces an
+// ANONYMOUS actor (role: "anonymous", customRoles: []) which fails every
+// permission check (no action_type lists "anonymous" in its tokens) and
+// every isAnonymous()-gated route returns 401 / redirects to /signin.
+// We keep a sentinel rather than removing the fallback so /setup,
+// /signin, /claim and other public-by-design routes can still transit
+// chat-runtime without crashing on a null actor reference.
 
 import path from "node:path";
 import { getDb } from "../db/client";
@@ -52,27 +58,40 @@ async function getOntologyCached(dir: string): Promise<Ontology> {
   return ontology;
 }
 
+// M3.8: zero-permission sentinel actor. Returned from buildChatRuntime
+// when auth() resolves null. Routes that perform privileged work MUST
+// gate on isAnonymous(runtime.actor) and short-circuit (401, redirect,
+// or thrown error) before invoking the dispatcher, exposing tools, or
+// reading other members' rows.
+export const ANONYMOUS_ACTOR: Actor = Object.freeze({
+  userId: "anonymous",
+  email: "",
+  role: "anonymous",
+  customRoles: [],
+}) as Actor;
+
+export function isAnonymous(actor: Actor | null): boolean {
+  return actor === null || actor.role === "anonymous";
+}
+
 export async function buildChatRuntime(): Promise<ChatRuntime> {
   const session = await auth().catch(() => null);
-  // Mirror the fallback used by /api/proposals/[id]/apply: when no session,
-  // use a steward sentinel so single-user / dev installs still work. Audit
-  // metadata records this sentinel verbatim — it never disappears.
+  // M3.8: no more steward-local fallback. When auth() returns null we
+  // produce the zero-permission ANONYMOUS_ACTOR so the audit pipeline
+  // still records a non-null actor, but every permission check fails
+  // closed. Callers gate on isAnonymous() to reject the request before
+  // any privileged work is performed.
   const userInfo = session?.user as
     | { userId?: string; email?: string; role?: string }
     | undefined;
-  const actor: Actor | null = userInfo?.userId
+  const actor: Actor = userInfo?.userId
     ? {
         userId: String(userInfo.userId),
         email: String(userInfo.email ?? ""),
         role: userInfo.role === "steward" ? "steward" : "member",
         customRoles: [],
       }
-    : {
-        userId: "steward-local",
-        email: "steward@local",
-        role: "steward",
-        customRoles: [],
-      };
+    : ANONYMOUS_ACTOR;
 
   const ontologyDir = getRuntimeOntologyDir();
   const ontology = await getOntologyCached(ontologyDir);

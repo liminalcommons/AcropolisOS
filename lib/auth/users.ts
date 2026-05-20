@@ -3,7 +3,12 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 
-export type BuiltInRole = "member" | "steward";
+// M3.8: "anonymous" is the zero-permission sentinel role assigned by
+// buildChatRuntime when auth() returns null. It is NEVER assigned via
+// enrichSession (a real session always lands as "member" or "steward").
+// Adding it to the union lets the type system surface call-sites that
+// must gate on isAnonymous() before performing privileged work.
+export type BuiltInRole = "member" | "steward" | "anonymous";
 
 export interface UserRecord {
   id: string;
