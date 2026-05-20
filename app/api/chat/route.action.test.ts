@@ -67,6 +67,8 @@ vi.mock("@/lib/agent/chat-runtime", async () => {
       ontology,
       functionsDir: path.join(PKG_ROOT_INNER, "functions"),
     }),
+    // M3.8 (#33): route gates on isAnonymous; this mock supplies steward.
+    isAnonymous: () => false,
   };
 });
 

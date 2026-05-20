@@ -17,6 +17,7 @@ import {
   type OntologyStore,
 } from "../ontology/ctx";
 import { InMemoryAuditStore } from "../audit/writer";
+import { InMemoryNotificationStore } from "../notifications/store";
 import type { Ontology } from "../ontology/schema";
 import {
   ActionPermissionError,
@@ -231,6 +232,147 @@ describe("enforceActionPermission — unknown action", () => {
         ontology,
         actionName: "ghost",
         ctx: stewardCtx,
+      }),
+    ).rejects.toBeInstanceOf(ActionPermissionError);
+  });
+});
+
+// M3.8 #34: member_self must verify the target row's ownership at the
+// action layer. Previously the token was unconditionally accepted as long
+// as it appeared in the action's permissions list — so member A could
+// invoke mark_notification_read against member B's notification row. The
+// row-level check inside the function handler caught it, but a function
+// missing that check (or a future declarative action) would silently
+// allow cross-actor row mutation. The action middleware must look up the
+// `ref` parameter's target row and compare its owner field against
+// actor.userId. Steward bypass: steward in the permissions list always
+// passes.
+describe("enforceActionPermission — member_self row ownership (M3.8 #34)", () => {
+  const memberA: Actor = {
+    userId: "00000000-0000-4000-8000-0000000000aa",
+    email: "ada@example.com",
+    role: "member",
+    customRoles: [],
+  };
+  const memberB: Actor = {
+    userId: "00000000-0000-4000-8000-0000000000bb",
+    email: "bob@example.com",
+    role: "member",
+    customRoles: [],
+  };
+
+  let notifications: InMemoryNotificationStore;
+  let memberACtx: OntologyCtx;
+  let memberBCtx: OntologyCtx;
+  let stewardWithNotifsCtx: OntologyCtx;
+  let memberANoNotifsCtx: OntologyCtx;
+
+  beforeEach(() => {
+    notifications = new InMemoryNotificationStore();
+    memberACtx = createCtx({ db, actor: memberA, audit, notifications });
+    memberBCtx = createCtx({ db, actor: memberB, audit, notifications });
+    stewardWithNotifsCtx = createCtx({
+      db,
+      actor: steward,
+      audit,
+      notifications,
+    });
+    memberANoNotifsCtx = createCtx({ db, actor: memberA, audit });
+  });
+
+  it("REJECTS when member A invokes mark_notification_read against member B's notification", async () => {
+    const created = await notifications.create({
+      recipient_member_id: memberB.userId,
+      kind: "change_tier",
+      title: "tier changed",
+      body: "lifetime",
+    });
+    await expect(
+      enforceActionPermission({
+        ontology,
+        actionName: "mark_notification_read",
+        ctx: memberACtx,
+        params: { notification_id: created.id },
+      }),
+    ).rejects.toBeInstanceOf(ActionPermissionError);
+  });
+
+  it("ALLOWS when member A invokes mark_notification_read against their own notification", async () => {
+    const created = await notifications.create({
+      recipient_member_id: memberA.userId,
+      kind: "change_tier",
+      title: "tier changed",
+      body: "lifetime",
+    });
+    await expect(
+      enforceActionPermission({
+        ontology,
+        actionName: "mark_notification_read",
+        ctx: memberACtx,
+        params: { notification_id: created.id },
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("ALLOWS a steward to invoke mark_notification_read against any member's notification (steward bypass)", async () => {
+    const created = await notifications.create({
+      recipient_member_id: memberA.userId,
+      kind: "promote_to_steward",
+      title: "promoted",
+      body: "lifetime",
+    });
+    await expect(
+      enforceActionPermission({
+        ontology,
+        actionName: "mark_notification_read",
+        ctx: stewardWithNotifsCtx,
+        params: { notification_id: created.id },
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("REJECTS when the target notification row does not exist (cannot verify ownership)", async () => {
+    await expect(
+      enforceActionPermission({
+        ontology,
+        actionName: "mark_notification_read",
+        ctx: memberACtx,
+        params: { notification_id: "00000000-0000-4000-8000-00000000ffff" },
+      }),
+    ).rejects.toBeInstanceOf(ActionPermissionError);
+  });
+
+  it("LEAVES steward-only actions (no member_self in permissions) unaffected", async () => {
+    // delete_member: permissions = [steward]. Member should still be denied
+    // for the role-based reason, not because of any new member_self logic.
+    await expect(
+      enforceActionPermission({
+        ontology,
+        actionName: "delete_member",
+        ctx: memberACtx,
+        params: { id: memberB.userId },
+      }),
+    ).rejects.toBeInstanceOf(ActionPermissionError);
+    // And steward still passes for the same action.
+    await expect(
+      enforceActionPermission({
+        ontology,
+        actionName: "delete_member",
+        ctx: stewardWithNotifsCtx,
+        params: { id: memberA.userId },
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("REJECTS member_self when ctx has no store for the ref target type (cannot resolve ownership)", async () => {
+    // Without ctx.notifications wired, the check cannot fetch the Notification
+    // row, so it must fail closed for the member.
+    await expect(
+      enforceActionPermission({
+        ontology,
+        actionName: "mark_notification_read",
+        ctx: memberANoNotifsCtx,
+        params: { notification_id: "00000000-0000-4000-8000-0000000000ee" },
       }),
     ).rejects.toBeInstanceOf(ActionPermissionError);
   });

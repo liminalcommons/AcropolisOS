@@ -23,7 +23,7 @@ import { AGENT_INSTRUCTIONS, buildLanguageModel } from "@/lib/agent/mastra";
 import { buildAiSdkProposalTools } from "@/lib/proposals/ai-sdk-tools";
 import { getProposalStore } from "@/lib/proposals/singleton";
 import { getInboxStore } from "@/lib/inbox/singleton";
-import { buildChatRuntime } from "@/lib/agent/chat-runtime";
+import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { createInProcessDispatcher } from "@/lib/actions/dispatcher";
 import { buildApplyActionAiSdkTool } from "@/lib/agent/apply-action-ai-sdk";
 
@@ -69,6 +69,16 @@ export async function POST(req: Request): Promise<Response> {
       : `anon-${Math.random().toString(36).slice(2, 10)}`;
 
   const runtime = await buildChatRuntime();
+
+  // M3.8 (#33): refuse anonymous callers BEFORE wiring the dispatcher,
+  // proposal tools, or streamText. Without this gate the steward-local
+  // sentinel previously granted unauthenticated POSTs full apply_action
+  // access. ANONYMOUS_ACTOR now has zero permissions, but we still
+  // short-circuit to avoid building/streaming any agent surface for an
+  // unauthenticated request.
+  if (isAnonymous(runtime.actor)) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
 
   const dispatcher = createInProcessDispatcher({
     ctx: runtime.ctx,

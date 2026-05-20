@@ -74,6 +74,11 @@ export interface EnforceActionPermissionInput {
   ontology: Ontology;
   actionName: string;
   ctx: OntologyCtx;
+  // M3.8 #34: action parameters are required to resolve member_self
+  // ownership at the row level. Optional for callers that pre-date the
+  // row-ownership enforcement; absence is treated as "no ref params" so
+  // a member_self-only permission with no resolvable target row rejects.
+  params?: unknown;
 }
 
 // Audit failures must not mask the permission error. We swallow audit-write
