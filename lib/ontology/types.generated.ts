@@ -49,6 +49,34 @@ export const NotificationSchema = z.object({
 });
 export type Notification = z.infer<typeof NotificationSchema>;
 
+// M4.3: manually added (codegen not runnable in worktree; mirrors YAML spec)
+export const MemberContextSchema = z.object({
+  "id": z.uuid(),
+  "member_id": z.string(),
+  "pinned_widgets": z.unknown().default([]),
+  "created_at": z.iso.datetime({ offset: true }),
+  "updated_at": z.iso.datetime({ offset: true }),
+});
+export type MemberContext = z.infer<typeof MemberContextSchema>;
+
+export const AgentBlockerSchema = z.object({
+  "id": z.uuid(),
+  "blocked_actor_id": z.string(),
+  "reason_kind": z.enum([
+    "approval", "confirmation", "ambiguity", "missing_data",
+    "consent", "decision", "risky_action",
+  ]),
+  "summary": z.string(),
+  "detail": z.string(),
+  "blocked_work_ref": z.string().optional(),
+  "unblock_hint": z.unknown().optional(),
+  "status": z.enum(["open", "resolved", "dismissed", "expired"]).default("open"),
+  "created_at": z.iso.datetime({ offset: true }),
+  "resolved_at": z.iso.datetime({ offset: true }).optional(),
+  "resolved_by_action_audit_id": z.string().optional(),
+});
+export type AgentBlocker = z.infer<typeof AgentBlockerSchema>;
+
 // === Link types (with properties) ===
 
 export const AttendedLinkSchema = z.object({

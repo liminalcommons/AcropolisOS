@@ -56,6 +56,30 @@ export const notification = pgTable("notification", {
   read_at: timestamp("read_at", { withTimezone: true }),
 });
 
+// M4.3: member context + agent escalation blockers (manually added; codegen
+// not runnable in worktree — mirrors YAML specs in seed/small-community/).
+export const member_context = pgTable("member_context", {
+  id: uuid("id").primaryKey().defaultRandom().notNull(),
+  member_id: uuid("member_id").notNull().references(() => member.id),
+  pinned_widgets: text("pinned_widgets").notNull().default("[]"),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull(),
+});
+
+export const agent_blocker = pgTable("agent_blocker", {
+  id: uuid("id").primaryKey().defaultRandom().notNull(),
+  blocked_actor_id: uuid("blocked_actor_id").notNull().references(() => member.id),
+  reason_kind: text("reason_kind").notNull(),
+  summary: text("summary").notNull(),
+  detail: text("detail").notNull(),
+  blocked_work_ref: text("blocked_work_ref"),
+  unblock_hint: text("unblock_hint"),
+  status: text("status").notNull().default("open"),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull(),
+  resolved_at: timestamp("resolved_at", { withTimezone: true }),
+  resolved_by_action_audit_id: text("resolved_by_action_audit_id"),
+});
+
 // === Link tables (many-to-many) ===
 
 export const member_attended_event = pgTable(

@@ -1,0 +1,18 @@
+flag_blocker:
+  description: |
+    Agent-invoked: the agent has hit a wall only `blocked_actor_id` can
+    clear. Creates an AgentBlocker row and notifies the human.
+  function: flag-blocker
+  parameters:
+    blocked_actor_id: { type: ref, target: Member, required: true }
+    reason_kind:
+      type: enum
+      values: [approval, confirmation, ambiguity, missing_data, consent, decision, risky_action]
+      required: true
+    summary: { type: string, required: true }
+    detail:  { type: string, required: true }
+    blocked_work_ref: { type: string, required: false }
+    unblock_hint:    { type: jsonb,  required: false }
+  permissions: [steward]
+  agent_policy: auto_apply
+  side_effects: [audit, notify_member]

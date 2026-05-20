@@ -13,11 +13,13 @@ import type { Ontology, PermissionsBlock } from "./schema";
 import type {
   AddMeetingMinuteParams,
   AddMemberParams,
+  AgentBlocker,
   AttendedLink,
   ChangeTierParams,
   Event,
   MeetingMinute,
   Member,
+  MemberContext,
   RecordAttendanceParams,
 } from "./types.generated";
 
@@ -50,6 +52,9 @@ export interface OntologyStore {
     Member: ObjectAccess<Member>;
     Event: ObjectAccess<Event>;
     MeetingMinute: ObjectAccess<MeetingMinute>;
+    // M4.3: per-member context + agent escalation blockers
+    MemberContext: ObjectAccess<MemberContext>;
+    AgentBlocker: ObjectAccess<AgentBlocker>;
   };
   links: {
     attended: LinkAccess<AttendedLink>;
@@ -120,6 +125,10 @@ function rowOwnedBy(
   // the natural ownership probe. Generic on field name so any future
   // object type using the same convention works without code change.
   if (row.recipient_member_id === actor.userId) return true;
+  // M4.3: AgentBlocker rows are owned by blocked_actor_id.
+  if (row.blocked_actor_id === actor.userId) return true;
+  // M4.3: MemberContext rows are owned by member_id.
+  if (row.member_id === actor.userId) return true;
   if (objectTypeName === "Member" && row.id === actor.userId) return true;
   return false;
 }
@@ -308,6 +317,11 @@ export interface OntologyCtx {
   notifications?: NotificationStore;
 }
 
+// M4.3: rowOwnedBy extension — AgentBlocker uses blocked_actor_id
+// (already handled by the existing member_self token logic: the function
+// checks the conventional field names including blocked_actor_id below).
+// We extend rowOwnedBy to support the new field name.
+
 export function createCtx({
   db,
   actor,
@@ -334,6 +348,9 @@ export function createCtx({
       Member: wrap(db.objects.Member, "Member"),
       Event: wrap(db.objects.Event, "Event"),
       MeetingMinute: wrap(db.objects.MeetingMinute, "MeetingMinute"),
+      // M4.3: member context + agent escalation blockers
+      MemberContext: wrap(db.objects.MemberContext, "MemberContext"),
+      AgentBlocker: wrap(db.objects.AgentBlocker, "AgentBlocker"),
     },
     links: db.links,
     actions: {
@@ -441,6 +458,9 @@ export function createInMemoryStore(): OntologyStore {
       Member: new InMemoryObjectAccess<Member>(),
       Event: new InMemoryObjectAccess<Event>(),
       MeetingMinute: new InMemoryObjectAccess<MeetingMinute>(),
+      // M4.3: member context + agent escalation blockers
+      MemberContext: new InMemoryObjectAccess<MemberContext>(),
+      AgentBlocker: new InMemoryObjectAccess<AgentBlocker>(),
     },
     links: {
       attended: new InMemoryLinkAccess<AttendedLink>(),

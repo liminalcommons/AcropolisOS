@@ -1,0 +1,53 @@
+AgentBlocker:
+  description: |
+    Typed escalation from the agent to a specific human. Written by
+    the flag_blocker action only — humans never edit the row directly
+    (they resolve via the resolve_blocker action or dismiss_blocker).
+  title_property: summary
+  permissions:
+    read: ["steward", "member_self"]
+    write: ["steward"]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    blocked_actor_id:
+      type: ref
+      target: Member
+    reason_kind:
+      type: enum
+      values: [approval, confirmation, ambiguity, missing_data, consent, decision, risky_action]
+    summary:
+      type: string
+      description: One-line human-readable headline.
+    detail:
+      type: string
+      description: Agent's full reasoning / context.
+    blocked_work_ref:
+      type: string
+      required: false
+      description: |
+        Free-form handle to the workstream — chat session id, proposal id,
+        action_audit id.
+    unblock_hint:
+      type: jsonb
+      required: false
+      description: |
+        { action_type: string, suggested_params: object } — lets the
+        widget render a one-click resolver button.
+    status:
+      type: enum
+      values: [open, resolved, dismissed, expired]
+      default: open
+    created_at:
+      ref: created_at
+    resolved_at:
+      type: timestamp
+      required: false
+    resolved_by_action_audit_id:
+      type: string
+      required: false
+      description: action_audit.id of the unblocking action invocation.
+  indexes:
+    - { name: idx_agent_blocker_actor_status, columns: [blocked_actor_id, status] }
+    - { name: idx_agent_blocker_status_created, columns: [status, created_at] }

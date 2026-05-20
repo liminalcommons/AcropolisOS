@@ -22,12 +22,16 @@ import {
   meeting_minute as meetingMinuteTable,
   member as memberTable,
   member_attended_event as attendedTable,
+  member_context as memberContextTable,
+  agent_blocker as agentBlockerTable,
 } from "../db/schema.generated";
 import type {
+  AgentBlocker,
   AttendedLink,
   Event,
   MeetingMinute,
   Member,
+  MemberContext,
 } from "./types.generated";
 import type {
   LinkAccess,
@@ -163,6 +167,15 @@ export function createPgOntologyStore(db: Database): OntologyStore {
       MeetingMinute: buildObjectAccess<MeetingMinute>(
         db,
         meetingMinuteTable as unknown as TableWithId,
+      ),
+      // M4.3: member context + agent escalation blockers
+      MemberContext: buildObjectAccess<MemberContext>(
+        db,
+        memberContextTable as unknown as TableWithId,
+      ),
+      AgentBlocker: buildObjectAccess<AgentBlocker>(
+        db,
+        agentBlockerTable as unknown as TableWithId,
       ),
     },
     links: {

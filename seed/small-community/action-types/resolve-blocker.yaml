@@ -1,0 +1,12 @@
+resolve_blocker:
+  description: |
+    Flip an AgentBlocker to status=resolved. Called by the /me Resolve
+    button or by the audit-middleware backfill when the unblock_hint action
+    fires with matching blocked_work_ref.
+  function: resolve-blocker
+  parameters:
+    blocker_id: { type: uuid, required: true }
+    resolution_action_audit_id: { type: string, required: false }
+  permissions: [steward, member_self]
+  agent_policy: auto_apply
+  side_effects: [audit, notify_member]
