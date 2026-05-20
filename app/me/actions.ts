@@ -22,14 +22,27 @@ function getAdapters() {
   return resolveSideEffectAdapters(loadSideEffectConfigFromEnv(process.env));
 }
 
-export async function resolveBlockerAction(blockerId: string, pathwayId?: string): Promise<void> {
+export async function resolveBlockerAction(
+  blockerId: string,
+  pathwayIdOrForm?: string | FormData,
+): Promise<void> {
   const runtime = await buildChatRuntime();
   if (isAnonymous(runtime.actor)) throw new Error("unauthorized");
+  // Second arg may be a plain string (direct call) or FormData (form action
+  // bound with `resolveBlockerAction.bind(null, b.id)`). When FormData, look
+  // for a `pathway_id` field; missing field falls back to the empty sentinel.
+  const pathwayId =
+    typeof pathwayIdOrForm === "string"
+      ? pathwayIdOrForm
+      : pathwayIdOrForm instanceof FormData
+        ? ((pathwayIdOrForm.get("pathway_id") as string | null) ?? undefined)
+        : undefined;
   await invokeAction({
-    // Uses resolve_blocker_with_pathway by default (no pathway = empty-string sentinel;
-    // handler returns ok:false but status page just revalidates).
     actionName: "resolve_blocker_with_pathway",
-    params: { blocker_id: blockerId, pathway_id: pathwayId ?? "00000000-0000-0000-0000-000000000000" },
+    params: {
+      blocker_id: blockerId,
+      pathway_id: pathwayId ?? "00000000-0000-0000-0000-000000000000",
+    },
     ctx: runtime.ctx,
     ontology: runtime.ontology,
     functionsDir: functionsDir(),
@@ -40,10 +53,16 @@ export async function resolveBlockerAction(blockerId: string, pathwayId?: string
 
 export async function dismissBlockerAction(
   blockerId: string,
-  reason?: string,
+  reasonOrForm?: string | FormData,
 ): Promise<void> {
   const runtime = await buildChatRuntime();
   if (isAnonymous(runtime.actor)) throw new Error("unauthorized");
+  const reason =
+    typeof reasonOrForm === "string"
+      ? reasonOrForm
+      : reasonOrForm instanceof FormData
+        ? ((reasonOrForm.get("reason") as string | null) ?? undefined)
+        : undefined;
   await invokeAction({
     actionName: "dismiss_blocker",
     params: { blocker_id: blockerId, reason },
