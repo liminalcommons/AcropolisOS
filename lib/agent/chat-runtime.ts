@@ -77,7 +77,12 @@ export const ANONYMOUS_ACTOR: Actor = Object.freeze({
   customRoles: [],
 }) as Actor;
 
-export function isAnonymous(actor: Actor | null): boolean {
+// Type-guard: `if (isAnonymous(actor)) return 401` narrows actor to a
+// non-null Actor in the falsy branch, so downstream code can read
+// `runtime.actor.role` / `.userId` without `!`. Callers MUST short-circuit
+// when this returns true — the narrowing is only correct under that
+// assumption.
+export function isAnonymous(actor: Actor | null): actor is null {
   return actor === null || actor.role === "anonymous";
 }
 
