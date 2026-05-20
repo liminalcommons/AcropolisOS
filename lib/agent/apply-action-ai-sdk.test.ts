@@ -3,8 +3,11 @@
 // The Mastra-shaped apply_action in tool-gating.ts targets the Agent API.
 // /api/chat uses ai-sdk v6's streamText, which wants `ai.tool({...})` shape.
 // This module emits the same discriminated input + same dispatch logic but
-// in ai-sdk form, and adds an explicit `bypass_confirmation?: boolean` so
-// the UI's Confirm button can re-fire the call past the always_confirm gate.
+// in ai-sdk form.
+//
+// M3.8 #35: bypass_confirmation is NOT in the tool schema and is NOT honored
+// from tool-call args. The confirm path goes through /api/chat/confirm which
+// sets bypassConfirmation=true server-side.
 
 import { describe, expect, it } from "vitest";
 import path from "node:path";
@@ -86,7 +89,10 @@ describe("buildApplyActionAiSdkTool — M2.2 step 4", () => {
     expect(rows.find((r) => r.metadata.result === "ok")).toBeUndefined();
   });
 
-  it("with bypass_confirmation=true: dispatches the action and mutates the row", async () => {
+  it("M3.8 #35: bypass_confirmation in tool-call args is IGNORED — always returns confirmation_required", async () => {
+    // Even if an attacker (or prompt-injected model) passes bypass_confirmation:true
+    // in the tool-call args, the execute() ignores it. The action still returns
+    // confirmation_required. Bypass only works via /api/chat/confirm (server-side).
     const { ontology, db, audit, ctx, dispatcher } = await setup(steward);
     const tool = buildApplyActionAiSdkTool({
       actor: steward,
@@ -98,20 +104,19 @@ describe("buildApplyActionAiSdkTool — M2.2 step 4", () => {
       {
         action: "change_tier",
         params: { member: MEMBER_ID, new_tier: "sustaining" },
-        bypass_confirmation: true,
+        bypass_confirmation: true, // should be ignored
       } as never,
       {} as never,
-    )) as { ok: boolean; audit_id?: string | null };
+    )) as { ok: boolean; confirmation_required?: unknown };
 
-    expect(out.ok).toBe(true);
-    expect(out.audit_id).toBeTypeOf("string");
+    // Must still require confirmation — bypass_confirmation in args has no effect.
+    expect(out.ok).toBe(false);
+    expect(out.confirmation_required).toBeDefined();
+    // Member tier must NOT have changed.
     const after = await db.objects.Member.findById(MEMBER_ID);
-    expect(after?.tier).toBe("sustaining");
+    expect(after?.tier).toBe("basic");
+    // No ok audit row should exist.
     const rows = await audit.listActionAudit();
-    expect(
-      rows.find(
-        (r) => r.subject_id === "change_tier" && r.metadata.result === "ok",
-      ),
-    ).toBeDefined();
+    expect(rows.find((r) => r.metadata.result === "ok")).toBeUndefined();
   });
 });
