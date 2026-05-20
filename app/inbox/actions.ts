@@ -11,7 +11,7 @@ import { revalidatePath } from "next/cache";
 import { invokeAction } from "@/lib/actions/invoke";
 import { resolveSideEffectAdapters } from "@/lib/actions/side-effects-runtime";
 import { loadSideEffectConfigFromEnv } from "@/lib/actions/side-effects";
-import { buildChatRuntime } from "@/lib/agent/chat-runtime";
+import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 
 function functionsDir(): string {
   return path.join(
@@ -24,6 +24,13 @@ export async function markNotificationReadAction(
   notificationId: string,
 ): Promise<void> {
   const runtime = await buildChatRuntime();
+  // M3.8 (#38): server actions are POSTable from any origin; an
+  // anonymous caller could otherwise mark notifications as read on
+  // someone else's inbox via the steward-local sentinel. Refuse before
+  // we invoke the action.
+  if (isAnonymous(runtime.actor)) {
+    throw new Error("unauthorized");
+  }
   const adapters = resolveSideEffectAdapters(
     loadSideEffectConfigFromEnv(process.env),
   );
@@ -40,6 +47,10 @@ export async function markNotificationReadAction(
 
 export async function markAllNotificationsReadAction(): Promise<void> {
   const runtime = await buildChatRuntime();
+  // M3.8 (#38): refuse anonymous before touching the store.
+  if (isAnonymous(runtime.actor)) {
+    throw new Error("unauthorized");
+  }
   if (!runtime.ctx.notifications || !runtime.actor?.userId) {
     return;
   }

@@ -9,7 +9,8 @@
 // matches /audit.
 
 import Link from "next/link";
-import { buildChatRuntime } from "@/lib/agent/chat-runtime";
+import { redirect } from "next/navigation";
+import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { PgNotificationStore } from "@/lib/notifications/store";
 import { getDb } from "@/lib/db/client";
 import {
@@ -26,6 +27,13 @@ function fmtTime(d: Date): string {
 
 export default async function InboxPage(): Promise<React.ReactElement> {
   const runtime = await buildChatRuntime();
+  // M3.8 (#37): never render another member's inbox to an anonymous
+  // caller. The previous steward-local fallback would have listed the
+  // steward's own notifications to anyone hitting /inbox without a
+  // session. Redirect to signin instead — the inbox is a per-user view.
+  if (isAnonymous(runtime.actor)) {
+    redirect("/signin?callbackUrl=/inbox");
+  }
   const recipientId = runtime.actor?.userId ?? null;
   const store = new PgNotificationStore(getDb());
   const rows = recipientId ? await store.listForRecipient(recipientId) : [];
