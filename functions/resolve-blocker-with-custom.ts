@@ -25,7 +25,10 @@ export default defineAction({
     // Parse the action_invocation reference (validates JSON).
     let invocation: { action_type?: string; params?: unknown } | null = null;
     try {
-      invocation = JSON.parse(params.action_invocation) as typeof invocation;
+      invocation = JSON.parse(params.action_invocation) as {
+        action_type?: string;
+        params?: unknown;
+      };
     } catch {
       return { ok: false as const, reason: "invalid_json" as const };
     }
