@@ -32,8 +32,13 @@ export async function POST(
 
   const { id } = await ctx.params;
 
+  // M3.8 #46: use the role resolved from the session, never hardcode steward.
+  // Any authenticated non-steward hitting this endpoint gets 403.
+  const actorRole = runtime_ctx.actor.role;
+  if (actorRole !== "steward") {
+    return Response.json({ error: "forbidden" }, { status: 403 });
+  }
   const actorId = runtime_ctx.actor.email || runtime_ctx.actor.userId;
-  const actorRole = "steward";
 
   const store = getProposalStore();
   const proposal = await store.getProposal(id);
