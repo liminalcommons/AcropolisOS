@@ -2,11 +2,20 @@
 // Tests verify: visibility (only own blockers), member_self permission,
 // and open-only filter.
 
+import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Actor } from "@/lib/ctx";
-import { createCtx, createInMemoryStore, type OntologyCtx } from "@/lib/ontology/ctx";
+import {
+  buildObjectPermissionsMap,
+  createCtx,
+  createInMemoryStore,
+  type OntologyCtx,
+} from "@/lib/ontology/ctx";
+import { loadOntology } from "@/lib/ontology/load";
 import type { AgentBlocker, Member } from "@/lib/ontology/types.generated";
 import { getAgentBlockers } from "./agent-blockers";
+
+const SEED_ROOT = path.resolve(__dirname, "..", "..", "..", "seed", "small-community");
 
 const memberA: Actor = {
   userId: "00000000-0000-4000-8000-0000000000aa",
@@ -59,9 +68,11 @@ let ctxSteward: OntologyCtx;
 
 beforeEach(async () => {
   db = createInMemoryStore();
-  ctxA = createCtx({ db, actor: memberA });
-  ctxB = createCtx({ db, actor: memberB });
-  ctxSteward = createCtx({ db, actor: steward });
+  const ontology = await loadOntology(SEED_ROOT);
+  const permissions = buildObjectPermissionsMap(ontology);
+  ctxA = createCtx({ db, actor: memberA, permissions });
+  ctxB = createCtx({ db, actor: memberB, permissions });
+  ctxSteward = createCtx({ db, actor: steward, permissions });
 
   // Seed member rows (needed for ownership checks)
   await db.objects.Member.create(makeMember(memberA));

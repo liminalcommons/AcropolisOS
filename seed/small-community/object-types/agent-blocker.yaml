@@ -30,10 +30,10 @@ AgentBlocker:
         Free-form handle to the workstream — chat session id, proposal id,
         action_audit id.
     unblock_hint:
-      type: jsonb
+      type: string
       required: false
       description: |
-        { action_type: string, suggested_params: object } — lets the
+        JSON-encoded { action_type: string, suggested_params: object } — lets the
         widget render a one-click resolver button.
     status:
       type: enum
@@ -48,6 +48,3 @@ AgentBlocker:
       type: string
       required: false
       description: action_audit.id of the unblocking action invocation.
-  indexes:
-    - { name: idx_agent_blocker_actor_status, columns: [blocked_actor_id, status] }
-    - { name: idx_agent_blocker_status_created, columns: [status, created_at] }

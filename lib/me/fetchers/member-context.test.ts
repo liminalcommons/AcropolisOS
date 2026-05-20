@@ -1,10 +1,20 @@
 // M4.3 step-1 RED: MemberContext auto-create + permission tests.
 
+import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Actor } from "@/lib/ctx";
-import { createCtx, createInMemoryStore, type OntologyCtx } from "@/lib/ontology/ctx";
-import type { Member } from "@/lib/ontology/types.generated";
+import {
+  buildObjectPermissionsMap,
+  createCtx,
+  createInMemoryStore,
+  PermissionError,
+  type OntologyCtx,
+} from "@/lib/ontology/ctx";
+import { loadOntology } from "@/lib/ontology/load";
+import type { Member, MemberContext } from "@/lib/ontology/types.generated";
 import { getOrCreateMemberContext } from "./member-context";
+
+const SEED_ROOT = path.resolve(__dirname, "..", "..", "..", "seed", "small-community");
 
 const memberA: Actor = {
   userId: "00000000-0000-4000-8000-0000000000aa",
@@ -45,9 +55,12 @@ let ctxSteward: OntologyCtx;
 
 beforeEach(async () => {
   db = createInMemoryStore();
-  ctxA = createCtx({ db, actor: memberA });
-  ctxB = createCtx({ db, actor: memberB });
-  ctxSteward = createCtx({ db, actor: steward });
+  // Load ontology so permission checks are enforced (member_self, steward).
+  const ontology = await loadOntology(SEED_ROOT);
+  const permissions = buildObjectPermissionsMap(ontology);
+  ctxA = createCtx({ db, actor: memberA, permissions });
+  ctxB = createCtx({ db, actor: memberB, permissions });
+  ctxSteward = createCtx({ db, actor: steward, permissions });
 
   await db.objects.Member.create(makeMember(memberA));
   await db.objects.Member.create(makeMember(memberB));
@@ -77,15 +90,15 @@ describe("getOrCreateMemberContext", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("member A cannot read member B's MemberContext (permission: member_self)", async () => {
-    // Create B's context as steward
+  it("member A cannot write a MemberContext row for member B (PermissionError)", async () => {
+    // Create B's context as steward so a row exists
     await getOrCreateMemberContext(ctxSteward, memberB.userId);
 
-    // A trying to read B's context should get nothing (ctx filters)
-    const mc = await getOrCreateMemberContext(ctxA, memberB.userId);
-    // The function should return null or a new row owned by A — not B's row
-    // In our implementation, we return null when no accessible row exists for that member_id
-    expect(mc.member_id).not.toBe(memberB.userId);
+    // A trying to create/access B's context via ctxA:
+    // findMany returns nothing (A can't see B's rows), then create fails with PermissionError.
+    await expect(getOrCreateMemberContext(ctxA, memberB.userId)).rejects.toBeInstanceOf(
+      PermissionError,
+    );
   });
 
   it("steward can access any member's context", async () => {

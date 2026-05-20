@@ -14,16 +14,14 @@ MemberContext:
     member_id:
       type: ref
       target: Member
-      unique: true
     pinned_widgets:
-      type: jsonb
+      type: string
       default: "[]"
       description: |
-        Array of { id, kind, config } widget descriptors appended after
-        the default widget set in /me render order.
+        JSON-encoded array of { id, kind, config } widget descriptors appended
+        after the default widget set in /me render order.
     created_at:
       ref: created_at
     updated_at:
-      ref: updated_at
-  indexes:
-    - { name: idx_member_context_member, columns: [member_id], unique: true }
+      type: timestamp
+      description: When pinned_widgets was last modified

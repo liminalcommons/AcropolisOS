@@ -2,11 +2,14 @@ pin_widget_to_member_context:
   description: Append a widget to the member's pinned_widgets array.
   function: pin-widget-to-member-context
   parameters:
-    member_id: { type: ref, target: Member, required: false }
+    member_id:
+      type: ref
+      target: Member
+      required: false
     widget:
-      type: jsonb
+      type: string
       required: true
-      description: "{ kind: WidgetKind, config?: object } — server assigns id."
+      description: JSON-encoded { kind, config? } — server assigns id.
   permissions: [steward, member_self]
   agent_policy: auto_apply
   side_effects: [audit]
