@@ -111,10 +111,13 @@ export async function POST(req: Request): Promise<Response> {
   // per-request in chat-runtime so the actor's permissions are baked in.
   const readTools = runtime.readTools ?? {};
 
-  // M4.3: wire /me read tools (query_member_context + query_my_blockers)
+  // M4.3: wire /me read tools (query_member_context + query_my_blockers).
+  // runtime.actor is non-null here: the isAnonymous(runtime.actor) gate above
+  // short-circuits with 401 when actor is null/anonymous, but TS can't narrow
+  // through the helper without a type-guard signature.
   const meReadTools = buildMeReadTools({
     ctx: runtime.ctx,
-    actor: runtime.actor,
+    actor: runtime.actor!,
     ontology: runtime.ontology,
   });
 
