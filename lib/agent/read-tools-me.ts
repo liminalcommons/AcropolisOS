@@ -81,7 +81,7 @@ export function buildMeReadTools({ ctx, actor, ontology: _ontology }: BuildMeRea
         "pinned widgets. Call this FIRST on open-ended self-directed questions ('what should I do?', " +
         "'what's on my plate?', 'help me', 'where are we?'). Read the agent_blockers widget so you " +
         "do NOT re-ask things already queued. Default member_id is the current actor.",
-      parameters: z.object({
+      inputSchema: z.object({
         member_id: z.string().uuid().optional(),
       }),
       execute: async (input: { member_id?: string }) => {
@@ -98,7 +98,7 @@ export function buildMeReadTools({ ctx, actor, ontology: _ontology }: BuildMeRea
       description:
         "Agent-internal: return ALL open AgentBlocker rows the agent has flagged, grouped by " +
         "blocked_actor_id. Used to answer 'where am I stuck and on whom?'. Steward-only.",
-      parameters: z.object({}),
+      inputSchema: z.object({}),
       execute: async () => {
         if (actor.role !== "steward") {
           return { error: "forbidden: agent-only tool" };
