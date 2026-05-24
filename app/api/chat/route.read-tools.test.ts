@@ -59,6 +59,8 @@ vi.mock("@/lib/agent/chat-runtime", async () => {
         readTools,
       };
     },
+    // M3.8 (#33): route gates on isAnonymous; this mock supplies steward.
+    isAnonymous: () => false,
   };
 });
 

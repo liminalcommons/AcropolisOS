@@ -91,9 +91,13 @@ function inlineToColumnBuilder(
   }
 }
 
-function formatDefault(value: unknown): string {
+function formatDefault(value: unknown, colType?: string): string {
   if (typeof value === "string") return JSON.stringify(value);
-  if (typeof value === "number") return String(value);
+  // drizzle-orm numeric() requires string defaults — coerce number to quoted string
+  if (typeof value === "number") {
+    if (colType === "decimal") return JSON.stringify(String(value));
+    return String(value);
+  }
   if (typeof value === "boolean") return String(value);
   return JSON.stringify(value);
 }
@@ -116,10 +120,12 @@ function buildColumnExpression(
   }
   if (resolved.required) expr += ".notNull()";
   if (resolved.hasDefault) {
-    expr += `.default(${formatDefault(resolved.defaultValue)})`;
+    expr += `.default(${formatDefault(resolved.defaultValue, resolved.inline.type)})`;
   }
   if (refTarget) {
-    expr += `.references(() => ${snakeCase(refTarget)}.id)`;
+    // Use explicit AnyPgColumn return type on all FK lambdas to prevent TS
+    // from choking on circular references (e.g. bed ↔ work_trade_agreement).
+    expr += `.references((): AnyPgColumn => ${snakeCase(refTarget)}.id)`;
   }
   return expr;
 }
@@ -136,7 +142,7 @@ function buildLinkFkColumn(
 ): JoinColumn {
   const expr =
     `uuid(${JSON.stringify(columnName)})${nullable ? "" : ".notNull()"}` +
-    `.references(() => ${snakeCase(targetObject)}.id)`;
+    `.references((): AnyPgColumn => ${snakeCase(targetObject)}.id)`;
   return { name: columnName, expr };
 }
 
@@ -253,6 +259,7 @@ export function generateDrizzleModule(ontology: Ontology): string {
       '  text,\n' +
       '  timestamp,\n' +
       '  uuid,\n' +
+      '  type AnyPgColumn,\n' +
       '} from "drizzle-orm/pg-core";\n\n',
   );
 

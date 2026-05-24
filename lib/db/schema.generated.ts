@@ -11,13 +11,14 @@ import {
   text,
   timestamp,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 // === Object types ===
 
 export const agent_blocker = pgTable("agent_blocker", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
-  blocked_actor_id: uuid("blocked_actor_id").notNull().references(() => member.id),
+  blocked_actor_id: uuid("blocked_actor_id").notNull().references((): AnyPgColumn => member.id),
   reason_kind: text("reason_kind").notNull(),
   summary: text("summary").notNull(),
   detail: text("detail").notNull(),
@@ -36,18 +37,18 @@ export const agent_blocker = pgTable("agent_blocker", {
 export const bed = pgTable("bed", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
   code: text("code").notNull(),
-  room: uuid("room").notNull().references(() => room.id),
+  room: uuid("room").notNull().references((): AnyPgColumn => room.id),
   is_bottom_bunk: boolean("is_bottom_bunk").notNull().default(true),
   out_of_service: boolean("out_of_service").notNull().default(false),
   notes: text("notes"),
-  work_trade_agreement_id: uuid("work_trade_agreement_id").references(() => work_trade_agreement.id),
+  work_trade_agreement_id: uuid("work_trade_agreement_id").references((): AnyPgColumn => work_trade_agreement.id),
 });
 
 export const booking = pgTable("booking", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
   label: text("label").notNull(),
-  guest: uuid("guest").notNull().references(() => guest.id),
-  bed: uuid("bed").notNull().references(() => bed.id),
+  guest: uuid("guest").notNull().references((): AnyPgColumn => guest.id),
+  bed: uuid("bed").notNull().references((): AnyPgColumn => bed.id),
   from_date: date("from_date").notNull(),
   to_date: date("to_date").notNull(),
   rate_per_night: numeric("rate_per_night").notNull(),
@@ -60,9 +61,9 @@ export const event = pgTable("event", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
   title: text("title").notNull(),
   starts_at: timestamp("starts_at", { withTimezone: true }).notNull(),
-  duration_hours: numeric("duration_hours").notNull().default(2),
+  duration_hours: numeric("duration_hours").notNull().default("2"),
   attendance_cap: numeric("attendance_cap"),
-  organizer: uuid("organizer").notNull().references(() => member.id),
+  organizer: uuid("organizer").notNull().references((): AnyPgColumn => member.id),
   description: text("description"),
   status: text("status").notNull().default("scheduled"),
 });
@@ -87,7 +88,7 @@ export const incident_log = pgTable("incident_log", {
   category: text("category").notNull(),
   severity: text("severity").notNull().default("low"),
   occurred_at: timestamp("occurred_at", { withTimezone: true }).notNull(),
-  reported_by: uuid("reported_by").notNull().references(() => member.id),
+  reported_by: uuid("reported_by").notNull().references((): AnyPgColumn => member.id),
   resolved: boolean("resolved").notNull().default(false),
   resolution_notes: text("resolution_notes"),
 });
@@ -96,13 +97,13 @@ export const meeting_minute = pgTable("meeting_minute", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
   title: text("title").notNull(),
   body: text("body").notNull(),
-  event_id: uuid("event_id").notNull().references(() => event.id),
+  event_id: uuid("event_id").notNull().references((): AnyPgColumn => event.id),
   created_at: timestamp("created_at", { withTimezone: true }).notNull(),
 });
 
 export const member_context = pgTable("member_context", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
-  member_id: uuid("member_id").notNull().references(() => member.id),
+  member_id: uuid("member_id").notNull().references((): AnyPgColumn => member.id),
   pinned_widgets: text("pinned_widgets").notNull().default("[]"),
   created_at: timestamp("created_at", { withTimezone: true }).notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull(),
@@ -120,7 +121,7 @@ export const member = pgTable("member", {
 
 export const notification = pgTable("notification", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
-  recipient_member_id: uuid("recipient_member_id").notNull().references(() => member.id),
+  recipient_member_id: uuid("recipient_member_id").notNull().references((): AnyPgColumn => member.id),
   kind: text("kind").notNull(),
   title: text("title").notNull(),
   body: text("body").notNull(),
@@ -144,18 +145,18 @@ export const shift = pgTable("shift", {
   kind: text("kind").notNull(),
   starts_at: timestamp("starts_at", { withTimezone: true }).notNull(),
   duration_hours: numeric("duration_hours").notNull(),
-  claimed_by: uuid("claimed_by").references(() => member.id),
+  claimed_by: uuid("claimed_by").references((): AnyPgColumn => member.id),
   status: text("status").notNull().default("open"),
   notes: text("notes"),
-  member_id: uuid("member_id").notNull().references(() => member.id),
+  member_id: uuid("member_id").notNull().references((): AnyPgColumn => member.id),
 });
 
 export const work_trade_agreement = pgTable("work_trade_agreement", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
   label: text("label").notNull(),
-  guest: uuid("guest").references(() => guest.id),
-  bed_comp: uuid("bed_comp").notNull().references(() => bed.id),
-  hours_per_week: numeric("hours_per_week").notNull().default(20),
+  guest: uuid("guest").references((): AnyPgColumn => guest.id),
+  bed_comp: uuid("bed_comp").notNull().references((): AnyPgColumn => bed.id),
+  hours_per_week: numeric("hours_per_week").notNull().default("20"),
   start_date: date("start_date").notNull(),
   end_date: date("end_date").notNull(),
   status: text("status").notNull().default("pending"),
@@ -167,9 +168,9 @@ export const work_trade_agreement = pgTable("work_trade_agreement", {
 export const guest_booked_into_bed = pgTable(
   "guest_booked_into_bed",
   {
-    guest_id: uuid("guest_id").notNull().references(() => guest.id),
-    bed_id: uuid("bed_id").notNull().references(() => bed.id),
-    booking: uuid("booking").notNull().references(() => booking.id),
+    guest_id: uuid("guest_id").notNull().references((): AnyPgColumn => guest.id),
+    bed_id: uuid("bed_id").notNull().references((): AnyPgColumn => bed.id),
+    booking: uuid("booking").notNull().references((): AnyPgColumn => booking.id),
   },
   (t) => [primaryKey({ columns: [t.guest_id, t.bed_id] })],
 );
@@ -177,8 +178,8 @@ export const guest_booked_into_bed = pgTable(
 export const member_attended_event = pgTable(
   "member_attended_event",
   {
-    member_id: uuid("member_id").notNull().references(() => member.id),
-    event_id: uuid("event_id").notNull().references(() => event.id),
+    member_id: uuid("member_id").notNull().references((): AnyPgColumn => member.id),
+    event_id: uuid("event_id").notNull().references((): AnyPgColumn => event.id),
     attended_at: timestamp("attended_at", { withTimezone: true }).notNull(),
     role: text("role").notNull(),
   },
@@ -188,8 +189,8 @@ export const member_attended_event = pgTable(
 export const guest_attended_event_event = pgTable(
   "guest_attended_event_event",
   {
-    guest_id: uuid("guest_id").notNull().references(() => guest.id),
-    event_id: uuid("event_id").notNull().references(() => event.id),
+    guest_id: uuid("guest_id").notNull().references((): AnyPgColumn => guest.id),
+    event_id: uuid("event_id").notNull().references((): AnyPgColumn => event.id),
   },
   (t) => [primaryKey({ columns: [t.guest_id, t.event_id] })],
 );
@@ -197,8 +198,8 @@ export const guest_attended_event_event = pgTable(
 export const incident_log_involves_guest = pgTable(
   "incident_log_involves_guest",
   {
-    incident_log_id: uuid("incident_log_id").notNull().references(() => incident_log.id),
-    guest_id: uuid("guest_id").notNull().references(() => guest.id),
+    incident_log_id: uuid("incident_log_id").notNull().references((): AnyPgColumn => incident_log.id),
+    guest_id: uuid("guest_id").notNull().references((): AnyPgColumn => guest.id),
   },
   (t) => [primaryKey({ columns: [t.incident_log_id, t.guest_id] })],
 );

@@ -42,7 +42,10 @@ until PUSH_OUT=$(npx --no-install drizzle-kit push --force 2>&1); PUSH_RC=$?; ec
   # (e.g. the Postgres container hasn't accepted connections yet). Keep
   # retrying up to MAX_ATTEMPTS. But if the output contains a schema-level
   # error we cannot recover from by waiting, bail immediately.
-  if echo "$PUSH_OUT" | grep -Eq "PostgresError|column .* contains null|relation .* does not exist|violates not-null|ERROR:"; then
+  #
+  # Case-insensitive grep: drizzle-kit emits "Error:" (capital E) on exit 0
+  # in some versions; match both "ERROR:" and "Error:" to avoid missing it.
+  if echo "$PUSH_OUT" | grep -Eiq "PostgresError|column .* contains null|relation .* does not exist|violates not-null|ERROR:|^Error:"; then
     echo "[entrypoint] FATAL: schema sync failed with a schema-level error (rc=$PUSH_RC) — will not retry:" >&2
     echo "$PUSH_OUT" >&2
     exit 1
@@ -56,16 +59,44 @@ until PUSH_OUT=$(npx --no-install drizzle-kit push --force 2>&1); PUSH_RC=$?; ec
   sleep 2
 done
 
-# Secondary guard: even when drizzle-kit exits 0, some versions silently
-# suppress errors in the output. Grep the last push output for known error
-# signatures and abort if found.
-if echo "$PUSH_OUT" | grep -Eq "PostgresError|column .* contains null|relation .* does not exist|ERROR:"; then
-  echo "[entrypoint] FATAL: schema sync appeared to succeed (rc=0) but output contains error markers:" >&2
-  echo "$PUSH_OUT" >&2
+# Post-push schema verification — the ONLY reliable guard against drizzle-kit's
+# known behaviour of exiting 0 even when it silently skips a migration (e.g.
+# when it can't resolve a rename-vs-create prompt on a non-TTY). Even when
+# push exits 0, the columns it was supposed to create may be absent.
+#
+# Strategy: query information_schema for a small set of known-critical columns
+# that span the core schema plus the hand-rolled migrations. If any are absent
+# after push, the sync failed silently and we must not start the app.
+VERIFY_FAIL=0
+
+check_column() {
+  local tbl="$1" col="$2"
+  local result
+  # Use || true so set -e doesn't abort on a psql connectivity error; we treat
+  # any non-"1" result (including psql failure output) as a verification failure.
+  result=$(psql "$DATABASE_URL" -tAc \
+    "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='${tbl}' AND column_name='${col}';" 2>&1) || true
+  if [ "$result" != "1" ]; then
+    echo "[entrypoint] FATAL: post-push verify — ${tbl}.${col} missing (got: ${result:-<empty>})" >&2
+    VERIFY_FAIL=1
+  fi
+}
+
+# Core object-type columns (schema.generated.ts)
+check_column "member"             "tier_role"
+check_column "member"             "started_at"
+# Migration 0005: notification table
+check_column "notification"       "recipient_member_id"
+# Migration 0006: member_context table
+check_column "member_context"     "member_id"
+
+if [ "$VERIFY_FAIL" -ne 0 ]; then
+  echo "[entrypoint] FATAL: schema verification failed after push — one or more critical columns are absent." >&2
+  echo "[entrypoint] This usually means drizzle-kit push exited 0 without applying changes (TTY prompt skipped)." >&2
   exit 1
 fi
 
-echo "[entrypoint] schema sync complete."
+echo "[entrypoint] schema sync complete (push + verification passed)."
 
 # Apply non-table migrations that drizzle-kit push doesn't handle:
 # triggers, functions, grants. 0003_data_audit.sql is idempotent (uses
