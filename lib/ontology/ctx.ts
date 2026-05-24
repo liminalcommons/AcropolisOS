@@ -11,16 +11,10 @@ import type { Actor } from "../ctx";
 import type { NotificationStore } from "../notifications/store";
 import type { Ontology, PermissionsBlock } from "./schema";
 import type {
-  AddMeetingMinuteParams,
-  AddMemberParams,
   AgentBlocker,
-  AttendedLink,
-  ChangeTierParams,
   Event,
-  MeetingMinute,
   Member,
   MemberContext,
-  RecordAttendanceParams,
 } from "./types.generated";
 
 // === Access surface ===
@@ -51,14 +45,13 @@ export interface OntologyStore {
   objects: {
     Member: ObjectAccess<Member>;
     Event: ObjectAccess<Event>;
-    MeetingMinute: ObjectAccess<MeetingMinute>;
     // M4.3: per-member context + agent escalation blockers
     MemberContext: ObjectAccess<MemberContext>;
     AgentBlocker: ObjectAccess<AgentBlocker>;
   };
-  links: {
-    attended: LinkAccess<AttendedLink>;
-  };
+  // 0c-pre2: links typed as open record — attended/authored removed with community schema.
+  // Hostel-domain link types will be added here as they are defined.
+  links: Record<string, LinkAccess<Record<string, unknown>>>;
 }
 
 // === Action stubs (US-027 will implement) ===
@@ -70,12 +63,9 @@ export interface ActionStubResult {
 }
 
 export interface OntologyActions {
-  add_member(params: AddMemberParams): Promise<ActionStubResult>;
-  add_meeting_minute(params: AddMeetingMinuteParams): Promise<ActionStubResult>;
-  change_tier(params: ChangeTierParams): Promise<ActionStubResult>;
-  record_attendance(
-    params: RecordAttendanceParams,
-  ): Promise<ActionStubResult>;
+  // 0c-pre2: add_member/add_meeting_minute/change_tier/record_attendance removed;
+  // those param types no longer exist in types.generated (schema migrated to hostel domain).
+  // Follow-up: wire hostel-domain action stubs here.
 }
 
 // === Permission model ===
@@ -340,30 +330,17 @@ export function createCtx({
   ): ObjectAccess<T> =>
     permissions ? wrapObjectAccess(access, permissions[typeName], actor, typeName) : access;
 
-  const stub =
-    <P>(name: string) =>
-    async (_params: P): Promise<ActionStubResult> => {
-      void _params;
-      return { ok: false, reason: "not_implemented", action: name };
-    };
-
   return {
     actor,
     objects: {
       Member: wrap(db.objects.Member, "Member"),
       Event: wrap(db.objects.Event, "Event"),
-      MeetingMinute: wrap(db.objects.MeetingMinute, "MeetingMinute"),
       // M4.3: member context + agent escalation blockers
       MemberContext: wrap(db.objects.MemberContext, "MemberContext"),
       AgentBlocker: wrap(db.objects.AgentBlocker, "AgentBlocker"),
     },
     links: db.links,
-    actions: {
-      add_member: stub<AddMemberParams>("add_member"),
-      add_meeting_minute: stub<AddMeetingMinuteParams>("add_meeting_minute"),
-      change_tier: stub<ChangeTierParams>("change_tier"),
-      record_attendance: stub<RecordAttendanceParams>("record_attendance"),
-    },
+    actions: {},
     ...(audit ? { audit } : {}),
     ...(notifications ? { notifications } : {}),
   };
@@ -462,13 +439,10 @@ export function createInMemoryStore(): OntologyStore {
     objects: {
       Member: new InMemoryObjectAccess<Member>(),
       Event: new InMemoryObjectAccess<Event>(),
-      MeetingMinute: new InMemoryObjectAccess<MeetingMinute>(),
       // M4.3: member context + agent escalation blockers
       MemberContext: new InMemoryObjectAccess<MemberContext>(),
       AgentBlocker: new InMemoryObjectAccess<AgentBlocker>(),
     },
-    links: {
-      attended: new InMemoryLinkAccess<AttendedLink>(),
-    },
+    links: {},
   };
 }

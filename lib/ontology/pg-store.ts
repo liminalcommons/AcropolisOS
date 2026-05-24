@@ -16,26 +16,21 @@
 //     (a small dictionary keyed by ontology type name → drizzle table).
 
 import { and, eq } from "drizzle-orm";
+// 0c-pre2: meeting_minute + member_attended_event removed (absent from schema.generated)
 import type { Database } from "../db/client";
 import {
   event as eventTable,
-  meeting_minute as meetingMinuteTable,
   member as memberTable,
-  member_attended_event as attendedTable,
   member_context as memberContextTable,
   agent_blocker as agentBlockerTable,
 } from "../db/schema.generated";
 import type {
   AgentBlocker,
-  AttendedLink,
   Event,
-  MeetingMinute,
   Member,
   MemberContext,
 } from "./types.generated";
 import type {
-  LinkAccess,
-  LinkEdge,
   ObjectAccess,
   ObjectFilter,
   OntologyStore,
@@ -102,72 +97,11 @@ function buildObjectAccess<T extends { id: string }>(
   };
 }
 
-function buildAttendedLinkAccess(db: Database): LinkAccess<AttendedLink> {
-  return {
-    async create(input) {
-      await db
-        .insert(attendedTable)
-        .values({
-          member_id: input.from,
-          event_id: input.to,
-          attended_at: new Date(input.properties.attended_at),
-          role: input.properties.role,
-        })
-        .onConflictDoUpdate({
-          target: [attendedTable.member_id, attendedTable.event_id],
-          set: {
-            attended_at: new Date(input.properties.attended_at),
-            role: input.properties.role,
-          },
-        });
-    },
-    async delete(input) {
-      const rows = await db
-        .delete(attendedTable)
-        .where(
-          and(
-            eq(attendedTable.member_id, input.from),
-            eq(attendedTable.event_id, input.to),
-          ),
-        )
-        .returning();
-      return rows.length > 0;
-    },
-    async traverse(input) {
-      const conds = [];
-      if (input.from !== undefined) conds.push(eq(attendedTable.member_id, input.from));
-      if (input.to !== undefined) conds.push(eq(attendedTable.event_id, input.to));
-      const rows =
-        conds.length === 0
-          ? await db.select().from(attendedTable)
-          : await db
-              .select()
-              .from(attendedTable)
-              .where(conds.length === 1 ? conds[0] : and(...conds));
-      return rows.map((r): LinkEdge<AttendedLink> => ({
-        from: r.member_id,
-        to: r.event_id,
-        properties: {
-          attended_at:
-            r.attended_at instanceof Date
-              ? r.attended_at.toISOString()
-              : String(r.attended_at),
-          role: r.role as AttendedLink["role"],
-        },
-      }));
-    },
-  };
-}
-
 export function createPgOntologyStore(db: Database): OntologyStore {
   return {
     objects: {
       Member: buildObjectAccess<Member>(db, memberTable as unknown as TableWithId),
       Event: buildObjectAccess<Event>(db, eventTable as unknown as TableWithId),
-      MeetingMinute: buildObjectAccess<MeetingMinute>(
-        db,
-        meetingMinuteTable as unknown as TableWithId,
-      ),
       // M4.3: member context + agent escalation blockers
       MemberContext: buildObjectAccess<MemberContext>(
         db,
@@ -178,8 +112,6 @@ export function createPgOntologyStore(db: Database): OntologyStore {
         agentBlockerTable as unknown as TableWithId,
       ),
     },
-    links: {
-      attended: buildAttendedLinkAccess(db),
-    },
+    links: {},
   };
 }
