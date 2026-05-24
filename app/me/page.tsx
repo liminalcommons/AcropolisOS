@@ -7,7 +7,6 @@
 // inbox_unread, then any pinned widgets.
 
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { getAgentBlockers } from "@/lib/me/fetchers/agent-blockers";
 import { getOrCreateMemberContext } from "@/lib/me/fetchers/member-context";
@@ -46,13 +45,15 @@ const REASON_COLORS: Record<string, string> = {
 };
 
 export default async function MePage(): Promise<React.ReactElement> {
-  const runtime = await buildChatRuntime();
-  // M3.8 (#37): never expose /me to anonymous callers.
-  if (isAnonymous(runtime.actor)) {
-    redirect("/signin?callbackUrl=/me");
+  // Middleware enforces auth; no redirect needed here — middleware intercepts before page renders.
+  const chatRuntime = await buildChatRuntime();
+  // M3.8 (#37): isAnonymous guard kept as type-narrowing; middleware already blocked anon callers.
+  if (isAnonymous(chatRuntime.actor)) {
+    // unreachable: middleware redirects to /signin before this executes
+    return <></>;
   }
-  const actor = runtime.actor!;
-  const ctx = runtime.ctx;
+  const actor = chatRuntime.actor!;
+  const ctx = chatRuntime.ctx;
 
   // Resolve Member row for the session user
   const members = await ctx.objects.Member.findMany();
@@ -92,8 +93,8 @@ export default async function MePage(): Promise<React.ReactElement> {
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-6xl px-8 py-10 space-y-6">
         <div className="flex items-baseline gap-3">
-          <Link href="/" className="text-xs text-zinc-500 hover:text-zinc-300">
-            ← home
+          <Link href="/ontology-editor" className="text-xs text-zinc-500 hover:text-zinc-300">
+            ← ontology editor
           </Link>
           <span className="text-xs text-zinc-600">/</span>
           <h1 className="font-mono text-2xl font-semibold tracking-tight">

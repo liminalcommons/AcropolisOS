@@ -92,10 +92,10 @@ export default async function ObjectTypeListPage(
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-6xl px-8 py-10">
         <Link
-          href="/"
+          href="/ontology-editor"
           className="text-xs text-zinc-500 hover:text-zinc-300"
         >
-          ← back home
+          ← ontology editor
         </Link>
         <div className="mt-2 flex items-baseline justify-between">
           <div>

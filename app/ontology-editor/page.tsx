@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { loadOntology } from "@/lib/ontology/load";
 import { getRuntimeOntologyDir } from "@/lib/setup/paths";
@@ -65,27 +66,45 @@ export default async function OntologyEditorPage(): Promise<React.ReactElement> 
   );
   const pendingCount = pending.length;
 
+  // Subtle cross-reference: /ontology-editor ↔ /ontology (schema graph)
+  const nav = (
+    <div className="fixed top-2 right-4 z-50">
+      <Link
+        href="/ontology"
+        className="text-xs text-zinc-500 hover:text-zinc-300"
+      >
+        Schema graph →
+      </Link>
+    </div>
+  );
+
   if (typeCount === 0) {
-    return <EmptyHome />;
+    return <>{nav}<EmptyHome /></>;
   }
   if (entityCount === 0 && pendingCount === 0) {
     return (
-      <SeededHome
-        ontology={ontology}
-        typeKeys={typeKeys}
-        actionCount={actionCount}
-        linkCount={linkCount}
-      />
+      <>
+        {nav}
+        <SeededHome
+          ontology={ontology}
+          typeKeys={typeKeys}
+          actionCount={actionCount}
+          linkCount={linkCount}
+        />
+      </>
     );
   }
   return (
-    <LiveHome
-      ontology={ontology}
-      typeKeys={typeKeys}
-      counts={counts}
-      pending={pending}
-      actionCount={actionCount}
-      linkCount={linkCount}
-    />
+    <>
+      {nav}
+      <LiveHome
+        ontology={ontology}
+        typeKeys={typeKeys}
+        counts={counts}
+        pending={pending}
+        actionCount={actionCount}
+        linkCount={linkCount}
+      />
+    </>
   );
 }

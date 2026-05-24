@@ -9,7 +9,6 @@
 // matches /audit.
 
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { PgNotificationStore } from "@/lib/notifications/store";
 import { getDb } from "@/lib/db/client";
@@ -26,17 +25,16 @@ function fmtTime(d: Date): string {
 }
 
 export default async function InboxPage(): Promise<React.ReactElement> {
-  const runtime = await buildChatRuntime();
-  // M3.8 (#37): never render another member's inbox to an anonymous
-  // caller. The previous steward-local fallback would have listed the
-  // steward's own notifications to anyone hitting /inbox without a
-  // session. Redirect to signin instead — the inbox is a per-user view.
-  if (isAnonymous(runtime.actor)) {
-    redirect("/signin?callbackUrl=/inbox");
+  // Middleware enforces auth; no redirect needed here — middleware intercepts before page renders.
+  const chatRuntime = await buildChatRuntime();
+  // M3.8 (#37): isAnonymous guard kept as type-narrowing; middleware already blocked anon callers.
+  if (isAnonymous(chatRuntime.actor)) {
+    // unreachable: middleware redirects to /signin before this executes
+    return <></>;
   }
-  // actor is guaranteed non-anonymous here (redirect above); pass it so
+  // actor is guaranteed non-anonymous here; pass it so
   // the store-level permission check (#27) can enforce member_self / steward.
-  const actor = runtime.actor!;
+  const actor = chatRuntime.actor!;
   const recipientId = actor.userId;
   const store = new PgNotificationStore(getDb());
   const rows = await store.listForRecipient(actor, recipientId);
@@ -45,8 +43,8 @@ export default async function InboxPage(): Promise<React.ReactElement> {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-4xl px-8 py-12">
-        <Link href="/" className="text-xs text-zinc-500 hover:text-zinc-300">
-          ← home
+        <Link href="/ontology-editor" className="text-xs text-zinc-500 hover:text-zinc-300">
+          ← ontology editor
         </Link>
         <div className="mt-1 flex items-baseline justify-between">
           <div>

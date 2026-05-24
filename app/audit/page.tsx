@@ -208,8 +208,8 @@ export default async function AuditPage({
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-6xl px-8 py-12">
-        <Link href="/" className="text-xs text-zinc-500 hover:text-zinc-300">
-          ← home
+        <Link href="/ontology-editor" className="text-xs text-zinc-500 hover:text-zinc-300">
+          ← ontology editor
         </Link>
         <h1 className="mt-1 font-mono text-2xl font-semibold tracking-tight">
           audit
