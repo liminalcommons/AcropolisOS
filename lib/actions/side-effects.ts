@@ -139,20 +139,13 @@ async function resolveRecipientEmail(
   return { email: actorEmail ?? "", memberId: null };
 }
 
-// Redact sensitive fields from the notification body payload. The
-// invite_code is a secret that grants account access — it must not appear
-// in serialized JSON stored in notification bodies or sent as raw text.
-// The claim_url already embeds the code as a URL param and is kept because
-// it reads as an intentional link, not a raw secret dump.
+// Redact sensitive fields from the notification body payload. Extend here
+// if future function-backed actions produce secrets that must not appear
+// in serialized notification bodies.
 function redactSensitiveFields(
-  actionName: string,
+  _actionName: string,
   result: unknown,
 ): unknown {
-  if (actionName === "invite_member" && result && typeof result === "object") {
-    const { invite_code: _dropped, ...safe } = result as Record<string, unknown>;
-    void _dropped;
-    return safe;
-  }
   return result;
 }
 

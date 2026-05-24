@@ -11,7 +11,6 @@ import {
   text,
   timestamp,
   uuid,
-  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 // === Object types ===
@@ -41,7 +40,7 @@ export const bed = pgTable("bed", {
   is_bottom_bunk: boolean("is_bottom_bunk").notNull().default(true),
   out_of_service: boolean("out_of_service").notNull().default(false),
   notes: text("notes"),
-  work_trade_agreement_id: uuid("work_trade_agreement_id").notNull().references((): AnyPgColumn => work_trade_agreement.id),
+  work_trade_agreement_id: uuid("work_trade_agreement_id").references(() => work_trade_agreement.id),
 });
 
 export const booking = pgTable("booking", {
@@ -61,7 +60,7 @@ export const event = pgTable("event", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
   title: text("title").notNull(),
   starts_at: timestamp("starts_at", { withTimezone: true }).notNull(),
-  duration_hours: numeric("duration_hours").notNull().default("2"),
+  duration_hours: numeric("duration_hours").notNull().default(2),
   attendance_cap: numeric("attendance_cap"),
   organizer: uuid("organizer").notNull().references(() => member.id),
   description: text("description"),
@@ -91,6 +90,14 @@ export const incident_log = pgTable("incident_log", {
   reported_by: uuid("reported_by").notNull().references(() => member.id),
   resolved: boolean("resolved").notNull().default(false),
   resolution_notes: text("resolution_notes"),
+});
+
+export const meeting_minute = pgTable("meeting_minute", {
+  id: uuid("id").primaryKey().defaultRandom().notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  event_id: uuid("event_id").notNull().references(() => event.id),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull(),
 });
 
 export const member_context = pgTable("member_context", {
@@ -147,8 +154,8 @@ export const work_trade_agreement = pgTable("work_trade_agreement", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
   label: text("label").notNull(),
   guest: uuid("guest").references(() => guest.id),
-  bed_comp: uuid("bed_comp").notNull().references((): AnyPgColumn => bed.id),
-  hours_per_week: numeric("hours_per_week").notNull().default("20"),
+  bed_comp: uuid("bed_comp").notNull().references(() => bed.id),
+  hours_per_week: numeric("hours_per_week").notNull().default(20),
   start_date: date("start_date").notNull(),
   end_date: date("end_date").notNull(),
   status: text("status").notNull().default("pending"),
@@ -165,6 +172,17 @@ export const guest_booked_into_bed = pgTable(
     booking: uuid("booking").notNull().references(() => booking.id),
   },
   (t) => [primaryKey({ columns: [t.guest_id, t.bed_id] })],
+);
+
+export const member_attended_event = pgTable(
+  "member_attended_event",
+  {
+    member_id: uuid("member_id").notNull().references(() => member.id),
+    event_id: uuid("event_id").notNull().references(() => event.id),
+    attended_at: timestamp("attended_at", { withTimezone: true }).notNull(),
+    role: text("role").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.member_id, t.event_id] })],
 );
 
 export const guest_attended_event_event = pgTable(

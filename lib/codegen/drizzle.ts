@@ -132,9 +132,10 @@ interface JoinColumn {
 function buildLinkFkColumn(
   columnName: string,
   targetObject: string,
+  nullable = false,
 ): JoinColumn {
   const expr =
-    `uuid(${JSON.stringify(columnName)}).notNull()` +
+    `uuid(${JSON.stringify(columnName)})${nullable ? "" : ".notNull()"}` +
     `.references(() => ${snakeCase(targetObject)}.id)`;
   return { name: columnName, expr };
 }
@@ -213,6 +214,7 @@ interface CardinalLinkPlan {
   manySideObject: string;
   fkColumn: string;
   targetObject: string;
+  fkOptional: boolean;
 }
 
 function planCardinalLinks(ontology: Ontology): CardinalLinkPlan[] {
@@ -224,12 +226,14 @@ function planCardinalLinks(ontology: Ontology): CardinalLinkPlan[] {
         manySideObject: link.to,
         fkColumn: `${snakeCase(link.from)}_id`,
         targetObject: link.from,
+        fkOptional: link.fk_optional ?? false,
       });
     } else if (link.cardinality === "one-to-one") {
       plans.push({
         manySideObject: link.to,
         fkColumn: `${snakeCase(link.from)}_id`,
         targetObject: link.from,
+        fkOptional: link.fk_optional ?? false,
       });
     }
   }
@@ -256,7 +260,7 @@ export function generateDrizzleModule(ontology: Ontology): string {
   const inboundByObject = new Map<string, JoinColumn[]>();
   for (const plan of cardinalPlans) {
     const list = inboundByObject.get(plan.manySideObject) ?? [];
-    const fk = buildLinkFkColumn(plan.fkColumn, plan.targetObject);
+    const fk = buildLinkFkColumn(plan.fkColumn, plan.targetObject, plan.fkOptional);
     list.push(fk);
     inboundByObject.set(plan.manySideObject, list);
   }

@@ -10,18 +10,19 @@ import {
   EventSchema,
   GuestSchema,
   IncidentLogSchema,
+  MeetingMinuteSchema,
   MemberContextSchema,
   MemberSchema,
   NotificationSchema,
   RoomSchema,
   ShiftSchema,
   WorkTradeAgreementSchema,
+  ChangeTierParamsSchema,
   CheckInParamsSchema,
   CheckOutParamsSchema,
   ClaimShiftParamsSchema,
   DismissBlockerParamsSchema,
   FlagBlockerParamsSchema,
-  InviteMemberParamsSchema,
   LogIncidentParamsSchema,
   MarkNotificationReadParamsSchema,
   PromoteToStewardParamsSchema,
@@ -411,6 +412,69 @@ export const audit_incident_logTool = createTool({
   execute: async () => { throw new Error("audit_incident_log not implemented (US-014)"); },
 });
 
+export const describe_meeting_minuteTool = createTool({
+  id: "describe_meeting_minute",
+  description: "Describe the MeetingMinute object type (properties, links, permissions).",
+  inputSchema: z.object({}),
+  outputSchema: z.object({
+    name: z.string(),
+    properties: z.record(z.string(), z.unknown()),
+  }),
+  execute: async () => { throw new Error("describe_meeting_minute not implemented (US-014)"); },
+});
+
+export const query_meeting_minuteTool = createTool({
+  id: "query_meeting_minute",
+  description: "Query MeetingMinute records by an optional filter.",
+  inputSchema: z.object({
+    filter: z.record(z.string(), z.unknown()).optional(),
+    limit: z.number().int().positive().max(1000).optional(),
+  }),
+  outputSchema: z.object({ results: z.array(MeetingMinuteSchema) }),
+  execute: async () => { throw new Error("query_meeting_minute not implemented (US-014)"); },
+});
+
+export const traverse_meeting_minuteTool = createTool({
+  id: "traverse_meeting_minute",
+  description: "Traverse links from a MeetingMinute record.",
+  inputSchema: z.object({
+    id: z.string(),
+    link: z.string().optional(),
+  }),
+  outputSchema: z.object({ linked: z.array(z.unknown()) }),
+  execute: async () => { throw new Error("traverse_meeting_minute not implemented (US-014)"); },
+});
+
+export const sample_meeting_minuteTool = createTool({
+  id: "sample_meeting_minute",
+  description: "Return up to N representative MeetingMinute records.",
+  inputSchema: z.object({
+    n: z.number().int().positive().max(100).default(5),
+  }),
+  outputSchema: z.object({ samples: z.array(MeetingMinuteSchema) }),
+  execute: async () => { throw new Error("sample_meeting_minute not implemented (US-014)"); },
+});
+
+export const read_meeting_minuteTool = createTool({
+  id: "read_meeting_minute",
+  description: "Read a single MeetingMinute record by id.",
+  inputSchema: z.object({ id: z.string() }),
+  outputSchema: z.object({ record: MeetingMinuteSchema.nullable() }),
+  execute: async () => { throw new Error("read_meeting_minute not implemented (US-014)"); },
+});
+
+export const audit_meeting_minuteTool = createTool({
+  id: "audit_meeting_minute",
+  description: "Return recent audit entries scoped to MeetingMinute.",
+  inputSchema: z.object({
+    id: z.string().optional(),
+    since: z.iso.datetime({ offset: true }).optional(),
+    limit: z.number().int().positive().max(1000).optional(),
+  }),
+  outputSchema: z.object({ entries: z.array(z.unknown()) }),
+  execute: async () => { throw new Error("audit_meeting_minute not implemented (US-014)"); },
+});
+
 export const describe_member_contextTool = createTool({
   id: "describe_member_context",
   description: "Describe the MemberContext object type (properties, links, permissions).",
@@ -792,12 +856,12 @@ export const audit_work_trade_agreementTool = createTool({
 // === apply_action (discriminated union over action types) ===
 
 export const applyActionInputSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("change_tier"), params: ChangeTierParamsSchema }),
   z.object({ action: z.literal("check_in"), params: CheckInParamsSchema }),
   z.object({ action: z.literal("check_out"), params: CheckOutParamsSchema }),
   z.object({ action: z.literal("claim_shift"), params: ClaimShiftParamsSchema }),
   z.object({ action: z.literal("dismiss_blocker"), params: DismissBlockerParamsSchema }),
   z.object({ action: z.literal("flag_blocker"), params: FlagBlockerParamsSchema }),
-  z.object({ action: z.literal("invite_member"), params: InviteMemberParamsSchema }),
   z.object({ action: z.literal("log_incident"), params: LogIncidentParamsSchema }),
   z.object({ action: z.literal("mark_notification_read"), params: MarkNotificationReadParamsSchema }),
   z.object({ action: z.literal("promote_to_steward"), params: PromoteToStewardParamsSchema }),
@@ -855,6 +919,12 @@ export const tools = {
   "sample_incident_log": sample_incident_logTool,
   "read_incident_log": read_incident_logTool,
   "audit_incident_log": audit_incident_logTool,
+  "describe_meeting_minute": describe_meeting_minuteTool,
+  "query_meeting_minute": query_meeting_minuteTool,
+  "traverse_meeting_minute": traverse_meeting_minuteTool,
+  "sample_meeting_minute": sample_meeting_minuteTool,
+  "read_meeting_minute": read_meeting_minuteTool,
+  "audit_meeting_minute": audit_meeting_minuteTool,
   "describe_member_context": describe_member_contextTool,
   "query_member_context": query_member_contextTool,
   "traverse_member_context": traverse_member_contextTool,

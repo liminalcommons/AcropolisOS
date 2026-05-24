@@ -7,6 +7,7 @@ import {
 } from "../../codegen/zod";
 import { generateMastraToolsModule } from "../../codegen/mastra-tools";
 import { generateDrizzleModule } from "../../codegen/drizzle";
+import { generateInngestActionsModule } from "../../codegen/inngest";
 import type {
   CodegenRunner,
   FileSnapshot,
@@ -18,6 +19,7 @@ export interface CodegenLayout {
   ontologyOutDir?: string;
   agentOutDir?: string;
   dbOutDir?: string;
+  inngestOutDir?: string;
 }
 
 async function readIfExists(filePath: string): Promise<string | null> {
@@ -48,11 +50,14 @@ export class GeneratedFilesCodegen implements CodegenRunner {
     const agentOutDir =
       this.layout.agentOutDir ?? path.join(pkg, "lib", "agent");
     const dbOutDir = this.layout.dbOutDir ?? path.join(pkg, "lib", "db");
+    const inngestOutDir =
+      this.layout.inngestOutDir ?? path.join(pkg, "lib", "inngest");
 
     const typesPath = path.join(ontologyOutDir, "types.generated.ts");
     const combinedPath = path.join(ontologyOutDir, "ontology.generated.ts");
     const toolsPath = path.join(agentOutDir, "tools.generated.ts");
     const drizzlePath = path.join(dbOutDir, "schema.generated.ts");
+    const inngestPath = path.join(inngestOutDir, "declarative-actions.generated.ts");
 
     const ontology = await loadOntology(ontologyRoot);
     const entries: FileSnapshotEntry[] = [
@@ -60,12 +65,14 @@ export class GeneratedFilesCodegen implements CodegenRunner {
       await snapshotPath(combinedPath),
       await snapshotPath(toolsPath),
       await snapshotPath(drizzlePath),
+      await snapshotPath(inngestPath),
     ];
 
     await writeStable(typesPath, generateZodModule(ontology));
     await writeStable(combinedPath, generateOntologyModule(ontology));
     await writeStable(toolsPath, generateMastraToolsModule(ontology));
     await writeStable(drizzlePath, generateDrizzleModule(ontology));
+    await writeStable(inngestPath, generateInngestActionsModule(ontology));
 
     return { files: entries };
   }

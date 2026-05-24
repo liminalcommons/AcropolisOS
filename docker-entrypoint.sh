@@ -37,7 +37,16 @@ echo "[entrypoint] syncing database schema..."
 
 ATTEMPTS=0
 MAX_ATTEMPTS=30
-until npx --no-install drizzle-kit push --force; do
+until PUSH_OUT=$(npx --no-install drizzle-kit push --force 2>&1); PUSH_RC=$?; echo "$PUSH_OUT"; [ $PUSH_RC -eq 0 ]; do
+  # If drizzle-kit exited non-zero it might be a transient DB-not-ready error
+  # (e.g. the Postgres container hasn't accepted connections yet). Keep
+  # retrying up to MAX_ATTEMPTS. But if the output contains a schema-level
+  # error we cannot recover from by waiting, bail immediately.
+  if echo "$PUSH_OUT" | grep -Eq "PostgresError|column .* contains null|relation .* does not exist|violates not-null|ERROR:"; then
+    echo "[entrypoint] FATAL: schema sync failed with a schema-level error (rc=$PUSH_RC) — will not retry:" >&2
+    echo "$PUSH_OUT" >&2
+    exit 1
+  fi
   ATTEMPTS=$((ATTEMPTS + 1))
   if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
     echo "[entrypoint] schema-sync retries exhausted after ${MAX_ATTEMPTS} attempts" >&2
@@ -46,6 +55,15 @@ until npx --no-install drizzle-kit push --force; do
   echo "[entrypoint] schema sync failed (attempt ${ATTEMPTS}/${MAX_ATTEMPTS}); retrying in 2s..."
   sleep 2
 done
+
+# Secondary guard: even when drizzle-kit exits 0, some versions silently
+# suppress errors in the output. Grep the last push output for known error
+# signatures and abort if found.
+if echo "$PUSH_OUT" | grep -Eq "PostgresError|column .* contains null|relation .* does not exist|ERROR:"; then
+  echo "[entrypoint] FATAL: schema sync appeared to succeed (rc=0) but output contains error markers:" >&2
+  echo "$PUSH_OUT" >&2
+  exit 1
+fi
 
 echo "[entrypoint] schema sync complete."
 

@@ -87,6 +87,15 @@ export const IncidentLogSchema = z.object({
 });
 export type IncidentLog = z.infer<typeof IncidentLogSchema>;
 
+export const MeetingMinuteSchema = z.object({
+  "id": z.uuid(),
+  "title": z.string(),
+  "body": z.string(),
+  "event_id": z.string(),
+  "created_at": z.iso.datetime({ offset: true }),
+});
+export type MeetingMinute = z.infer<typeof MeetingMinuteSchema>;
+
 export const MemberContextSchema = z.object({
   "id": z.uuid(),
   "member_id": z.string(),
@@ -161,7 +170,19 @@ export const BookedIntoLinkSchema = z.object({
 });
 export type BookedIntoLink = z.infer<typeof BookedIntoLinkSchema>;
 
+export const AttendedLinkSchema = z.object({
+  "attended_at": z.iso.datetime({ offset: true }),
+  "role": z.enum(["attendee", "organizer", "speaker"]),
+});
+export type AttendedLink = z.infer<typeof AttendedLinkSchema>;
+
 // === Action parameter schemas ===
+
+export const ChangeTierParamsSchema = z.object({
+  "member": z.string(),
+  "new_tier": z.enum(["basic", "sustaining", "lifetime"]),
+});
+export type ChangeTierParams = z.infer<typeof ChangeTierParamsSchema>;
 
 export const CheckInParamsSchema = z.object({
   "booking": z.string(),
@@ -196,12 +217,6 @@ export const FlagBlockerParamsSchema = z.object({
   "confirm_action": z.string().optional(),
 });
 export type FlagBlockerParams = z.infer<typeof FlagBlockerParamsSchema>;
-
-export const InviteMemberParamsSchema = z.object({
-  "member_id": z.string(),
-  "expires_in_days": z.number().int().default(7),
-});
-export type InviteMemberParams = z.infer<typeof InviteMemberParamsSchema>;
 
 export const LogIncidentParamsSchema = z.object({
   "summary": z.string(),

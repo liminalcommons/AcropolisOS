@@ -42,4 +42,5 @@ trading_for:
   from: WorkTradeAgreement
   to: Bed
   cardinality: one-to-one
-  description: Which bed the work-trader holds during the agreement
+  fk_optional: true
+  description: Which bed the work-trader holds during the agreement (most beds have no active agreement)

@@ -17,10 +17,6 @@ export function nextRouteForAuth(input: RouteDecisionInput): RouteDecision {
     return { type: "next" };
   }
 
-  // /claim is public — invitees arrive unauthenticated with a one-time
-  // code in the URL and create their user record on submit (M4.2).
-  if (pathname === "/claim") return { type: "next" };
-
   if (authenticated) return { type: "next" };
 
   if (!setupComplete) {

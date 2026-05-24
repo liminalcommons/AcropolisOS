@@ -111,6 +111,11 @@ export const LinkType = z
     cardinality: LinkCardinality,
     description: z.string().optional(),
     properties: z.record(z.string(), PropertyDefinition).optional(),
+    // When true, the injected FK column on the "to" side of a one-to-one or
+    // one-to-many link is emitted as nullable (no .notNull()). Use when the
+    // relationship is optional — e.g. a Bed that may or may not have an active
+    // WorkTradeAgreement.
+    fk_optional: z.boolean().optional(),
   })
   .strict();
 export type LinkType = z.infer<typeof LinkType>;
