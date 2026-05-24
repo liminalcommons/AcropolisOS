@@ -43,8 +43,6 @@ vi.mock("next/cache", () => ({
 import {
   resolveBlockerAction,
   dismissBlockerAction,
-  pinWidgetAction,
-  unpinWidgetAction,
 } from "./actions";
 
 describe("/me server actions — anonymous rejection (M4.3)", () => {
@@ -58,13 +56,6 @@ describe("/me server actions — anonymous rejection (M4.3)", () => {
     expect(mocks.invokeActionMock).not.toHaveBeenCalled();
   });
 
-  it("pinWidgetAction throws for anonymous actor", async () => {
-    await expect(pinWidgetAction('{"kind":"note"}')).rejects.toThrow("unauthorized");
-    expect(mocks.invokeActionMock).not.toHaveBeenCalled();
-  });
-
-  it("unpinWidgetAction throws for anonymous actor", async () => {
-    await expect(unpinWidgetAction("widget-id")).rejects.toThrow("unauthorized");
-    expect(mocks.invokeActionMock).not.toHaveBeenCalled();
-  });
+  // pinWidgetAction + unpinWidgetAction (M4.3 agent-tool path) deleted.
+  // Surviving write path: app/dashboard/ask/actions.ts#pinWidget (F6).
 });

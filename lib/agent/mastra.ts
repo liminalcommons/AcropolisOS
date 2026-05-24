@@ -84,9 +84,6 @@ export const AGENT_INSTRUCTIONS = [
   // M4.4: READ MEMBER CONTEXT FIRST on open-ended self-directed questions
   "Call query_member_context FIRST when the user asks 'what should I do?', 'what is on my plate?', 'help me', 'where are we?', or any open-ended self-directed question — read the agent_blockers and needed_actions widgets so you do not re-ask things already queued.",
 
-  // M4.4: USE pin_widget_to_member_context for /me shaping
-  "Use pin_widget_to_member_context when the user asks to add something to their /me page or 'pin this to my dashboard'.",
-
   // M4.4: AGENT REASONING CONTRACT for pathways resolution_mode
   // When resolution_mode = pathways, you MUST provide >= 2 genuinely distinct pathways,
   // each with: label, rationale (trade-off), action, and reversibility (easy/moderate/permanent).

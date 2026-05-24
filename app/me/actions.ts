@@ -74,35 +74,6 @@ export async function dismissBlockerAction(
   revalidatePath("/me");
 }
 
-export async function pinWidgetAction(widgetJson: string | FormData): Promise<void> {
-  const runtime = await buildChatRuntime();
-  if (isAnonymous(runtime.actor)) throw new Error("unauthorized");
-  // Handle both direct call (string) and form action (FormData with "widget" key)
-  const json =
-    typeof widgetJson === "string"
-      ? widgetJson
-      : (widgetJson.get("widget") as string | null) ?? "{}";
-  await invokeAction({
-    actionName: "pin_widget_to_member_context",
-    params: { widget: json },
-    ctx: runtime.ctx,
-    ontology: runtime.ontology,
-    functionsDir: functionsDir(),
-    sideEffectAdapters: getAdapters(),
-  });
-  revalidatePath("/me");
-}
-
-export async function unpinWidgetAction(widgetId: string): Promise<void> {
-  const runtime = await buildChatRuntime();
-  if (isAnonymous(runtime.actor)) throw new Error("unauthorized");
-  await invokeAction({
-    actionName: "unpin_widget_from_member_context",
-    params: { widget_id: widgetId },
-    ctx: runtime.ctx,
-    ontology: runtime.ontology,
-    functionsDir: functionsDir(),
-    sideEffectAdapters: getAdapters(),
-  });
-  revalidatePath("/me");
-}
+// pinWidgetAction and unpinWidgetAction (M4.3 agent-tool path) deleted.
+// Surviving write path: app/dashboard/ask/actions.ts#pinWidget (F6).
+// See negativa-cycle-8 #1 — divergent shapes + type-broken write.

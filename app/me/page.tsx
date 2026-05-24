@@ -14,8 +14,6 @@ import { PinnedWidget, type PinnedWidgetShape } from "@/components/dashboard/Pin
 import {
   resolveBlockerAction,
   dismissBlockerAction,
-  pinWidgetAction,
-  unpinWidgetAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -221,21 +219,7 @@ export default async function MePage(): Promise<React.ReactElement> {
             <ul className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {pinnedWidgets.map((w) => (
                 <li key={w.id}>
-                  <div className="relative">
-                    <PinnedWidget widget={w} />
-                    <form
-                      action={unpinWidgetAction.bind(null, w.id)}
-                      className="absolute top-3 right-3"
-                    >
-                      <button
-                        type="submit"
-                        data-testid={`unpin-${w.id}`}
-                        className="text-[10px] text-zinc-600 hover:text-zinc-400"
-                      >
-                        unpin
-                      </button>
-                    </form>
-                  </div>
+                  <PinnedWidget widget={w} />
                 </li>
               ))}
             </ul>
@@ -248,30 +232,14 @@ export default async function MePage(): Promise<React.ReactElement> {
           it needs your input to continue work. Resolve or dismiss each one.
         </p>
 
-        {/* Quick pin affordance */}
-        <section className="rounded-lg border border-zinc-800 bg-zinc-900/20 p-4">
-          <h2 className="text-xs uppercase tracking-widest text-zinc-500 mb-3">
-            Pin a widget
-          </h2>
-          <form action={pinWidgetAction} className="flex gap-2">
-            <select
-              name="widget"
-              className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200"
-            >
-              <option value='{"kind":"inbox_unread"}'>Inbox unread</option>
-              <option value='{"kind":"needed_actions"}'>Needed actions</option>
-              <option value='{"kind":"available_actions"}'>Available actions</option>
-              <option value='{"kind":"recent_context"}'>Recent context</option>
-              <option value='{"kind":"note"}'>Note</option>
-            </select>
-            <button
-              type="submit"
-              className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-700"
-            >
-              Pin
-            </button>
-          </form>
-        </section>
+        {/* Pin widgets via /dashboard/ask — agent-driven pinning (F6) */}
+        <p className="text-xs text-zinc-600 border border-zinc-800 rounded-lg p-4">
+          To pin a widget, use{" "}
+          <Link href="/dashboard/ask" className="text-zinc-400 hover:text-zinc-200 underline">
+            Ask the agent
+          </Link>
+          .
+        </p>
       </div>
     </main>
   );

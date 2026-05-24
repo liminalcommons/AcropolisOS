@@ -6,8 +6,10 @@
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { getOrCreateMemberContext } from "@/lib/me/fetchers/member-context";
+import { WIDGET_KINDS } from "@/lib/me/widgets";
 
 // Widget shape for the ask page — a superset that handles agent-proposed widgets.
 // Stored into MemberContext.pinned_widgets (text column = JSON array).
@@ -17,6 +19,12 @@ export interface DashboardWidget {
   title: string;
   props: Record<string, unknown>;
 }
+
+const PinWidgetInput = z.object({
+  kind: z.enum(WIDGET_KINDS),
+  title: z.string().min(1).max(120),
+  props: z.record(z.string(), z.unknown()).default({}),
+});
 
 // ─── pinWidget ────────────────────────────────────────────────────────────────
 //
@@ -29,6 +37,13 @@ export async function pinWidget(widget: DashboardWidget): Promise<void> {
   if (isAnonymous(runtime.actor)) {
     throw new Error("unauthorized");
   }
+
+  // Input validation — reject unknown widget kinds.
+  const validatedWidget = PinWidgetInput.parse({
+    kind: widget.kind,
+    title: widget.title,
+    props: widget.props,
+  });
 
   const actor = runtime.actor!;
   const ctx = runtime.ctx;
@@ -59,7 +74,7 @@ export async function pinWidget(widget: DashboardWidget): Promise<void> {
 
   // Append the new widget with a guaranteed fresh ID.
   const toPin: DashboardWidget = {
-    ...widget,
+    ...validatedWidget,
     id: `pin_${randomUUID()}`,
   };
   const next = [...pinned, toPin];

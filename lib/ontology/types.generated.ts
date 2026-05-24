@@ -5,35 +5,105 @@ import { z } from "zod";
 
 // === Object types ===
 
+export const AgentBlockerSchema = z.object({
+  "id": z.uuid(),
+  "blocked_actor_id": z.string(),
+  "reason_kind": z.enum(["approval", "confirmation", "ambiguity", "missing_data", "consent", "decision", "risky_action"]),
+  "summary": z.string(),
+  "detail": z.string(),
+  "blocked_work_ref": z.string().optional(),
+  "resolution_mode": z.enum(["pathways", "text_input", "confirm_binary"]).default("pathways"),
+  "pathways": z.string().optional(),
+  "input_schema": z.string().optional(),
+  "confirm_action": z.string().optional(),
+  "status": z.enum(["open", "resolved", "dismissed", "expired"]).default("open"),
+  "created_at": z.iso.datetime({ offset: true }),
+  "resolved_at": z.iso.datetime({ offset: true }).optional(),
+  "resolved_by_action_audit_id": z.string().optional(),
+  "resolved_via_pathway_id": z.uuid().optional(),
+});
+export type AgentBlocker = z.infer<typeof AgentBlockerSchema>;
+
+export const BedSchema = z.object({
+  "id": z.uuid(),
+  "code": z.string(),
+  "room": z.string(),
+  "is_bottom_bunk": z.boolean().default(true),
+  "out_of_service": z.boolean().default(false),
+  "notes": z.string().optional(),
+});
+export type Bed = z.infer<typeof BedSchema>;
+
+export const BookingSchema = z.object({
+  "id": z.uuid(),
+  "label": z.string(),
+  "guest": z.string(),
+  "bed": z.string(),
+  "from_date": z.iso.date(),
+  "to_date": z.iso.date(),
+  "rate_per_night": z.number(),
+  "currency": z.string().default("EUR"),
+  "source": z.enum(["direct", "booking_com", "hostelworld", "hostelsclub", "work_trade", "walk_in"]).default("direct"),
+  "status": z.enum(["confirmed", "checked_in", "completed", "cancelled", "no_show"]).default("confirmed"),
+});
+export type Booking = z.infer<typeof BookingSchema>;
+
 export const EventSchema = z.object({
   "id": z.uuid(),
   "title": z.string(),
   "starts_at": z.iso.datetime({ offset: true }),
-  "location": z.string(),
-  "description": z.string(),
-  "created_at": z.iso.datetime({ offset: true }),
+  "duration_hours": z.number().default(2),
+  "attendance_cap": z.number().optional(),
+  "organizer": z.string(),
+  "description": z.string().optional(),
+  "status": z.enum(["scheduled", "in_progress", "completed", "cancelled"]).default("scheduled"),
 });
 export type Event = z.infer<typeof EventSchema>;
 
-export const MeetingMinuteSchema = z.object({
+export const GuestSchema = z.object({
   "id": z.uuid(),
-  "title": z.string(),
-  "body": z.string(),
-  "event_id": z.string(),
-  "created_at": z.iso.datetime({ offset: true }),
+  "full_name": z.string(),
+  "email": z.email(),
+  "country": z.string(),
+  "phone": z.string(),
+  "arrived_at": z.iso.date(),
+  "expected_departure": z.iso.date(),
+  "current_status": z.enum(["booked", "checked_in", "checked_out", "no_show", "cancelled"]).default("booked"),
+  "is_work_trader": z.boolean().default(false),
+  "notes": z.string().optional(),
 });
-export type MeetingMinute = z.infer<typeof MeetingMinuteSchema>;
+export type Guest = z.infer<typeof GuestSchema>;
+
+export const IncidentLogSchema = z.object({
+  "id": z.uuid(),
+  "summary": z.string(),
+  "body": z.string().optional(),
+  "category": z.enum(["noise", "damage", "theft", "lost_key", "lockout", "medical", "dispute", "other"]),
+  "severity": z.enum(["info", "low", "medium", "high", "critical"]).default("low"),
+  "occurred_at": z.iso.datetime({ offset: true }),
+  "reported_by": z.string(),
+  "resolved": z.boolean().default(false),
+  "resolution_notes": z.string().optional(),
+});
+export type IncidentLog = z.infer<typeof IncidentLogSchema>;
+
+export const MemberContextSchema = z.object({
+  "id": z.uuid(),
+  "member_id": z.string(),
+  "pinned_widgets": z.string().default("[]"),
+  "created_at": z.iso.datetime({ offset: true }),
+  "updated_at": z.iso.datetime({ offset: true }),
+});
+export type MemberContext = z.infer<typeof MemberContextSchema>;
 
 export const MemberSchema = z.object({
   "id": z.uuid(),
   "full_name": z.string(),
   "email": z.email(),
-  "joined_at": z.iso.date(),
-  "tier": z.enum(["basic", "sustaining", "lifetime"]).default("basic"),
-  "notes": z.string(),
-  "user_id": z.string().optional(),
-  "invite_code": z.string().optional(),
-  "invite_expires_at": z.iso.datetime({ offset: true }).optional(),
+  "phone": z.string(),
+  "tier_role": z.enum(["work_trader", "staff", "supervisor", "manager"]).default("staff"),
+  "started_at": z.iso.date(),
+  "notes": z.string().optional(),
 });
 export type Member = z.infer<typeof MemberSchema>;
 
@@ -49,79 +119,97 @@ export const NotificationSchema = z.object({
 });
 export type Notification = z.infer<typeof NotificationSchema>;
 
-// M4.3: manually added (codegen not runnable in worktree; mirrors YAML spec).
-// pinned_widgets is jsonb in DB — Zod uses z.unknown() for the jsonb contract.
-export const MemberContextSchema = z.object({
+export const RoomSchema = z.object({
   "id": z.uuid(),
-  "member_id": z.string(),
-  "pinned_widgets": z.unknown().default([]),
-  "created_at": z.iso.datetime({ offset: true }),
-  "updated_at": z.iso.datetime({ offset: true }),
+  "code": z.string(),
+  "kind": z.enum(["dorm_mixed", "dorm_female", "dorm_male", "private", "staff"]),
+  "capacity": z.number(),
+  "floor": z.number().optional(),
+  "notes": z.string().optional(),
 });
-export type MemberContext = z.infer<typeof MemberContextSchema>;
+export type Room = z.infer<typeof RoomSchema>;
 
-export const AgentBlockerSchema = z.object({
+export const ShiftSchema = z.object({
   "id": z.uuid(),
+  "label": z.string(),
+  "kind": z.enum(["reception", "cleaning", "kitchen", "laundry", "breakfast", "night_audit", "social"]),
+  "starts_at": z.iso.datetime({ offset: true }),
+  "duration_hours": z.number(),
+  "claimed_by": z.string().optional(),
+  "status": z.enum(["open", "claimed", "in_progress", "done", "missed"]).default("open"),
+  "notes": z.string().optional(),
+});
+export type Shift = z.infer<typeof ShiftSchema>;
+
+export const WorkTradeAgreementSchema = z.object({
+  "id": z.uuid(),
+  "label": z.string(),
+  "guest": z.string().optional(),
+  "bed_comp": z.string(),
+  "hours_per_week": z.number().default(20),
+  "start_date": z.iso.date(),
+  "end_date": z.iso.date(),
+  "status": z.enum(["pending", "active", "completed", "terminated"]).default("pending"),
+  "notes": z.string().optional(),
+});
+export type WorkTradeAgreement = z.infer<typeof WorkTradeAgreementSchema>;
+
+// === Link types (with properties) ===
+
+export const BookedIntoLinkSchema = z.object({
+  "booking": z.string(),
+});
+export type BookedIntoLink = z.infer<typeof BookedIntoLinkSchema>;
+
+// === Action parameter schemas ===
+
+export const CheckInParamsSchema = z.object({
+  "booking": z.string(),
+});
+export type CheckInParams = z.infer<typeof CheckInParamsSchema>;
+
+export const CheckOutParamsSchema = z.object({
+  "booking": z.string(),
+});
+export type CheckOutParams = z.infer<typeof CheckOutParamsSchema>;
+
+export const ClaimShiftParamsSchema = z.object({
+  "shift": z.string(),
+});
+export type ClaimShiftParams = z.infer<typeof ClaimShiftParamsSchema>;
+
+export const DismissBlockerParamsSchema = z.object({
+  "blocker_id": z.string(),
+  "reason": z.string().optional(),
+});
+export type DismissBlockerParams = z.infer<typeof DismissBlockerParamsSchema>;
+
+export const FlagBlockerParamsSchema = z.object({
   "blocked_actor_id": z.string(),
-  "reason_kind": z.enum([
-    "approval", "confirmation", "ambiguity", "missing_data",
-    "consent", "decision", "risky_action",
-  ]),
+  "reason_kind": z.enum(["approval", "confirmation", "ambiguity", "missing_data", "consent", "decision", "risky_action"]),
   "summary": z.string(),
   "detail": z.string(),
   "blocked_work_ref": z.string().optional(),
   "resolution_mode": z.enum(["pathways", "text_input", "confirm_binary"]).default("pathways"),
-  "pathways": z.unknown().optional(),
-  "input_schema": z.unknown().optional(),
-  "confirm_action": z.unknown().optional(),
-  "status": z.enum(["open", "resolved", "dismissed", "expired"]).default("open"),
-  "created_at": z.iso.datetime({ offset: true }),
-  "resolved_at": z.iso.datetime({ offset: true }).optional(),
-  "resolved_by_action_audit_id": z.string().optional(),
-  "resolved_via_pathway_id": z.string().optional(),
+  "pathways": z.string().optional(),
+  "input_schema": z.string().optional(),
+  "confirm_action": z.string().optional(),
 });
-export type AgentBlocker = z.infer<typeof AgentBlockerSchema>;
-
-// === Link types (with properties) ===
-
-export const AttendedLinkSchema = z.object({
-  "attended_at": z.iso.datetime({ offset: true }),
-  "role": z.enum(["attendee", "organizer", "speaker"]).default("attendee"),
-});
-export type AttendedLink = z.infer<typeof AttendedLinkSchema>;
-
-// === Action parameter schemas ===
-
-export const AddMeetingMinuteParamsSchema = z.object({
-  "title": z.string(),
-  "body": z.string(),
-  "event": z.string(),
-});
-export type AddMeetingMinuteParams = z.infer<typeof AddMeetingMinuteParamsSchema>;
-
-export const AddMemberParamsSchema = z.object({
-  "full_name": z.string(),
-  "email": z.email(),
-  "tier": z.enum(["basic", "sustaining", "lifetime"]).default("basic"),
-});
-export type AddMemberParams = z.infer<typeof AddMemberParamsSchema>;
-
-export const ChangeTierParamsSchema = z.object({
-  "member": z.string(),
-  "new_tier": z.enum(["basic", "sustaining", "lifetime"]),
-});
-export type ChangeTierParams = z.infer<typeof ChangeTierParamsSchema>;
-
-export const DeleteMemberParamsSchema = z.object({
-  "id": z.uuid(),
-});
-export type DeleteMemberParams = z.infer<typeof DeleteMemberParamsSchema>;
+export type FlagBlockerParams = z.infer<typeof FlagBlockerParamsSchema>;
 
 export const InviteMemberParamsSchema = z.object({
   "member_id": z.string(),
   "expires_in_days": z.number().int().default(7),
 });
 export type InviteMemberParams = z.infer<typeof InviteMemberParamsSchema>;
+
+export const LogIncidentParamsSchema = z.object({
+  "summary": z.string(),
+  "body": z.string().optional(),
+  "category": z.enum(["noise", "damage", "theft", "lost_key", "lockout", "medical", "dispute", "other"]),
+  "severity": z.enum(["info", "low", "medium", "high", "critical"]).default("low"),
+});
+export type LogIncidentParams = z.infer<typeof LogIncidentParamsSchema>;
 
 export const MarkNotificationReadParamsSchema = z.object({
   "notification_id": z.string(),
@@ -133,10 +221,30 @@ export const PromoteToStewardParamsSchema = z.object({
 });
 export type PromoteToStewardParams = z.infer<typeof PromoteToStewardParamsSchema>;
 
-export const RecordAttendanceParamsSchema = z.object({
-  "member": z.string(),
-  "event": z.string(),
-  "role": z.enum(["attendee", "organizer", "speaker"]).default("attendee"),
+export const ResolveBlockerWithCustomParamsSchema = z.object({
+  "blocker_id": z.string(),
+  "action_invocation": z.string(),
 });
-export type RecordAttendanceParams = z.infer<typeof RecordAttendanceParamsSchema>;
+export type ResolveBlockerWithCustomParams = z.infer<typeof ResolveBlockerWithCustomParamsSchema>;
+
+export const ResolveBlockerWithInputParamsSchema = z.object({
+  "blocker_id": z.string(),
+  "input_payload": z.string(),
+});
+export type ResolveBlockerWithInputParams = z.infer<typeof ResolveBlockerWithInputParamsSchema>;
+
+export const ResolveBlockerWithPathwayParamsSchema = z.object({
+  "blocker_id": z.string(),
+  "pathway_id": z.uuid(),
+});
+export type ResolveBlockerWithPathwayParams = z.infer<typeof ResolveBlockerWithPathwayParamsSchema>;
+
+export const StartWorkTradeParamsSchema = z.object({
+  "guest": z.string(),
+  "bed_comp": z.string(),
+  "hours_per_week": z.number().default(20),
+  "start_date": z.iso.date(),
+  "end_date": z.iso.date(),
+});
+export type StartWorkTradeParams = z.infer<typeof StartWorkTradeParamsSchema>;
 
