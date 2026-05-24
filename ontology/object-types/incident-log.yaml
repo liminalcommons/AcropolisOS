@@ -1,0 +1,34 @@
+IncidentLog:
+  description: A logged incident (noise, damage, lost key, medical, etc.)
+  title_property: summary
+  data_audit: true
+  permissions:
+    read: [steward, manager]
+    write: [steward, manager]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    summary:
+      type: string
+    body:
+      type: string
+      required: false
+    category:
+      type: enum
+      values: [noise, damage, theft, lost_key, lockout, medical, dispute, other]
+    severity:
+      type: enum
+      values: [info, low, medium, high, critical]
+      default: low
+    occurred_at:
+      type: timestamp
+    reported_by:
+      type: ref
+      target: Member
+    resolved:
+      type: boolean
+      default: false
+    resolution_notes:
+      type: string
+      required: false

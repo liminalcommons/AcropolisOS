@@ -10,7 +10,7 @@ import { defineAction } from "@acropolisos/sdk";
 
 const schema = z.object({
   member: z.string().min(1, "member id is required"),
-  new_tier: z.enum(["basic", "sustaining", "lifetime"]),
+  new_tier: z.enum(["work_trader", "staff", "supervisor", "manager"]),
 });
 
 export default defineAction({
@@ -25,13 +25,13 @@ export default defineAction({
       };
     }
     const updated = await ctx.objects.Member.update(params.member, {
-      tier: params.new_tier,
+      tier_role: params.new_tier,
     });
     return {
       ok: true as const,
       member: params.member,
-      previous_tier: before.tier,
-      new_tier: updated?.tier ?? params.new_tier,
+      previous_tier: before.tier_role,
+      new_tier: updated?.tier_role ?? params.new_tier,
     };
   },
 });

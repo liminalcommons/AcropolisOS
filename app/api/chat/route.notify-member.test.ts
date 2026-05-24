@@ -154,8 +154,9 @@ describe("POST /api/chat — notify_member side-effect (M2.4 step 1)", () => {
       id: TEST_MEMBER_ID,
       full_name: "Notified Member",
       email: "notified@test.local",
-      joined_at: "2025-01-01",
-      tier: "basic",
+      phone: "555-0000",
+      tier_role: "staff",
+      started_at: "2025-01-01",
       notes: "",
     });
   });
@@ -190,7 +191,7 @@ describe("POST /api/chat — notify_member side-effect (M2.4 step 1)", () => {
 
       // 1. Member mutation landed (sanity).
       const member = await sharedDb.objects.Member.findById(TEST_MEMBER_ID);
-      expect(member?.tier).toBe("sustaining");
+      expect(member?.tier_role).toBe("work_trader");
 
       // 2. action_audit rows recorded for change_tier — pending + ok.
       const auditRows = await sharedAudit.listActionAudit();

@@ -1,0 +1,21 @@
+log_incident:
+  description: Log an incident at the hostel
+  creates_object: IncidentLog
+  parameters:
+    summary:
+      type: string
+      required: true
+    body:
+      type: string
+      required: false
+    category:
+      type: enum
+      values: [noise, damage, theft, lost_key, lockout, medical, dispute, other]
+      required: true
+    severity:
+      type: enum
+      values: [info, low, medium, high, critical]
+      default: low
+  permissions: [steward, manager]
+  agent_policy: auto_apply
+  side_effects: [audit, notify_steward]

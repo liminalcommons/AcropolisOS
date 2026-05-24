@@ -42,8 +42,9 @@ function memberRow(id: string, overrides: Partial<Member> = {}): Member {
     id,
     full_name: `Member ${id}`,
     email: `${id}@example.com`,
-    joined_at: "2026-01-01",
-    tier: "basic",
+    phone: "555-0000",
+    tier_role: "staff",
+    started_at: "2026-01-01",
     notes: "",
     ...overrides,
   };
@@ -82,7 +83,7 @@ describe("promote_to_steward — real seed composition", () => {
 
   it("composes change_tier inside the handler and the audit chain links back via buildActionChain", async () => {
     const memberId = "00000000-0000-4000-8000-000000000001";
-    await db.objects.Member.create(memberRow(memberId, { tier: "basic" }));
+    await db.objects.Member.create(memberRow(memberId, { tier_role: "staff" }));
 
     const result = await invokeAction({
       actionName: "promote_to_steward",
@@ -95,7 +96,7 @@ describe("promote_to_steward — real seed composition", () => {
     expect(result).toMatchObject({ ok: true, promoted: true });
 
     const after = await db.objects.Member.findById(memberId);
-    expect(after?.tier).toBe("lifetime");
+    expect(after?.tier_role).toBe("manager");
 
     const rows = await audit.listActionAudit();
     const promotePre = rows.find(
@@ -105,16 +106,15 @@ describe("promote_to_steward — real seed composition", () => {
     );
     expect(promotePre).toBeDefined();
 
-    // The full chain rooted at promote_to_steward's pending row must include:
-    // - the root itself (depth 0)
-    // - the change_tier child invocations (pending + ok, depth 1)
-    // - the notify_member side-effect row (depth 1)
+    // 0g-codegen-drift: change_tier was removed (hostel-domain rename to
+    // promote-to-steward doing a direct Member.update). The audit chain now
+    // only contains the root promote_to_steward rows + the notify_member
+    // side-effect. No change_tier child row exists.
     const chain = buildActionChain(rows, promotePre!.id);
     const subjectsAtDepthOne = chain
       .filter((c) => c.depth === 1)
       .map((c) => c.row.subject_id)
       .sort();
-    expect(subjectsAtDepthOne).toContain("change_tier");
     // notify_member side-effect rows are recorded with subject_type
     // "side_effect" and subject_id like "notify_member" (M2.4).
     expect(subjectsAtDepthOne).toContain("notify_member");
@@ -140,7 +140,7 @@ describe("promote_to_steward — real seed composition", () => {
 
     // No tier change.
     const after = await db.objects.Member.findById(memberId);
-    expect(after?.tier).toBe("basic");
+    expect(after?.tier_role).toBe("staff");
     expect(adapters.sendMail).not.toHaveBeenCalled();
   });
 });

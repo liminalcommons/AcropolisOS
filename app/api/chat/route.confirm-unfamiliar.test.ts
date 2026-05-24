@@ -149,8 +149,9 @@ async function seedMember(id: string): Promise<void> {
     id,
     full_name: `Member ${id.slice(0, 4)}`,
     email: `${id.slice(0, 4)}@test.local`,
-    joined_at: "2025-01-01",
-    tier: "basic",
+    phone: "555-0000",
+    tier_role: "staff",
+    started_at: "2025-01-01",
     notes: "",
   });
 }

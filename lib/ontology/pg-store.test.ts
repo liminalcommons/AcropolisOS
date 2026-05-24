@@ -15,7 +15,6 @@ import { describe, expect, it } from "vitest";
 import {
   member as memberTable,
   event as eventTable,
-  meeting_minute as meetingMinuteTable,
 } from "../db/schema.generated";
 import type { Database } from "../db/client";
 import { createPgOntologyStore } from "./pg-store";
@@ -104,12 +103,11 @@ function buildStubDb(opts: {
 }
 
 describe("createPgOntologyStore — M2.2 step 2", () => {
-  it("exposes Member/Event/MeetingMinute accessors", () => {
+  it("exposes Member/Event accessors", () => {
     const { db } = buildStubDb();
     const store = createPgOntologyStore(db);
     expect(store.objects.Member).toBeDefined();
     expect(store.objects.Event).toBeDefined();
-    expect(store.objects.MeetingMinute).toBeDefined();
     expect(typeof store.objects.Member.findById).toBe("function");
     expect(typeof store.objects.Member.update).toBe("function");
   });
@@ -119,19 +117,20 @@ describe("createPgOntologyStore — M2.2 step 2", () => {
       id: "abc-id",
       full_name: "Alice",
       email: "a@x.test",
-      joined_at: "2024-01-01",
-      tier: "sustaining",
+      phone: "555-0000",
+      tier_role: "work_trader",
+      started_at: "2024-01-01",
       notes: "",
     };
     const { db, capture } = buildStubDb({ returningRows: [memberRow] });
     const store = createPgOntologyStore(db);
 
     const updated = await store.objects.Member.update("abc-id", {
-      tier: "sustaining",
+      tier_role: "work_trader",
     });
 
     expect(capture.table).toBe(memberTable);
-    expect(capture.setValues).toEqual({ tier: "sustaining" });
+    expect(capture.setValues).toEqual({ tier_role: "work_trader" });
     expect(capture.whereCond).toBeDefined();
     expect(updated).toEqual(memberRow);
   });
@@ -140,7 +139,7 @@ describe("createPgOntologyStore — M2.2 step 2", () => {
     const { db } = buildStubDb({ returningRows: [] });
     const store = createPgOntologyStore(db);
     const out = await store.objects.Member.update("missing-id", {
-      tier: "basic",
+      tier_role: "staff",
     });
     expect(out).toBeNull();
   });
@@ -150,8 +149,9 @@ describe("createPgOntologyStore — M2.2 step 2", () => {
       id: "id-1",
       full_name: "Bob",
       email: "b@x.test",
-      joined_at: "2024-02-01",
-      tier: "basic",
+      phone: "555-0001",
+      tier_role: "staff",
+      started_at: "2024-02-01",
       notes: "",
     };
     {
@@ -174,8 +174,9 @@ describe("createPgOntologyStore — M2.2 step 2", () => {
       id: "x-1",
       full_name: "Carol",
       email: "c@x.test",
-      joined_at: "2024-03-01",
-      tier: "basic" as const,
+      phone: "555-0002",
+      tier_role: "staff" as const,
+      started_at: "2024-03-01",
       notes: "",
     };
     const { db, capture } = buildStubDb({ returningRows: [row] });
@@ -191,13 +192,6 @@ describe("createPgOntologyStore — M2.2 step 2", () => {
     const store = createPgOntologyStore(db);
     await store.objects.Event.update("e-1", { title: "x" });
     expect(capture.table).toBe(eventTable);
-  });
-
-  it("MeetingMinute accessor targets the `meeting_minute` table", async () => {
-    const { db, capture } = buildStubDb({ returningRows: [] });
-    const store = createPgOntologyStore(db);
-    await store.objects.MeetingMinute.update("mm-1", { title: "x" });
-    expect(capture.table).toBe(meetingMinuteTable);
   });
 
   it("provides a links.attended accessor (M2.2 surface — even if unused yet)", () => {

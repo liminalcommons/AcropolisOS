@@ -19,6 +19,7 @@ function fakeStore(): UserStore {
         }
         return null;
       }),
+    deleteById: vi.fn().mockResolvedValue(true),
     countStewards: vi.fn().mockResolvedValue(1),
   };
 }

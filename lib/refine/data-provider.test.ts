@@ -29,8 +29,9 @@ function newMember(overrides: Partial<Member> = {}): Member {
     id: overrides.id ?? "11111111-1111-1111-1111-111111111111",
     full_name: overrides.full_name ?? "Ada Member",
     email: overrides.email ?? "ada@example.com",
-    joined_at: overrides.joined_at ?? "2026-01-01",
-    tier: overrides.tier ?? "basic",
+    phone: overrides.phone ?? "555-0000",
+    tier_role: overrides.tier_role ?? "staff",
+    started_at: overrides.started_at ?? "2026-01-01",
     notes: overrides.notes ?? "",
   };
 }

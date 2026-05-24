@@ -38,8 +38,9 @@ async function setup(actor: Actor) {
     id: MEMBER_ID,
     full_name: "Test",
     email: "t@x.test",
-    joined_at: "2025-01-01",
-    tier: "basic",
+    phone: "555-0000",
+    tier_role: "staff",
+    started_at: "2025-01-01",
     notes: "",
   });
   const ctx = createCtx({ db, actor, audit });
@@ -84,7 +85,7 @@ describe("buildApplyActionAiSdkTool — M2.2 step 4", () => {
     expect(out.ok).toBe(false);
     expect(out.confirmation_required).toBeDefined();
     const after = await db.objects.Member.findById(MEMBER_ID);
-    expect(after?.tier).toBe("basic");
+    expect(after?.tier_role).toBe("staff");
     const rows = await audit.listActionAudit();
     expect(rows.find((r) => r.metadata.result === "ok")).toBeUndefined();
   });
@@ -114,7 +115,7 @@ describe("buildApplyActionAiSdkTool — M2.2 step 4", () => {
     expect(out.confirmation_required).toBeDefined();
     // Member tier must NOT have changed.
     const after = await db.objects.Member.findById(MEMBER_ID);
-    expect(after?.tier).toBe("basic");
+    expect(after?.tier_role).toBe("staff");
     // No ok audit row should exist.
     const rows = await audit.listActionAudit();
     expect(rows.find((r) => r.metadata.result === "ok")).toBeUndefined();

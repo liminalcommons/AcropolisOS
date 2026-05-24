@@ -70,8 +70,9 @@ function memberRow(id: string, overrides: Partial<Member> = {}): Member {
     id,
     full_name: `Member ${id.slice(0, 4)}`,
     email: `${id.slice(0, 4)}@example.com`,
-    joined_at: "2026-01-01",
-    tier: "basic",
+    phone: "555-0000",
+    tier_role: "staff",
+    started_at: "2026-01-01",
     notes: "",
     ...overrides,
   };
@@ -148,7 +149,7 @@ describe("M3.1 / US-031 — object permissions wired via small-community seed", 
     const permissions = await loadPermissions();
     const ctx = createCtx({ db, actor: memberAActor, permissions });
     await expect(
-      ctx.objects.Member.update(MEMBER_B_ID, { tier: "lifetime" }),
+      ctx.objects.Member.update(MEMBER_B_ID, { tier_role: "manager" }),
     ).rejects.toBeInstanceOf(PermissionError);
   });
 
@@ -166,9 +167,9 @@ describe("M3.1 / US-031 — object permissions wired via small-community seed", 
     const permissions = await loadPermissions();
     const ctx = createCtx({ db, actor: stewardActor, permissions });
     const updated = await ctx.objects.Member.update(MEMBER_B_ID, {
-      tier: "sustaining",
+      tier_role: "work_trader",
     });
-    expect(updated?.tier).toBe("sustaining");
+    expect(updated?.tier_role).toBe("work_trader");
     expect(await ctx.objects.Member.delete(MEMBER_B_ID)).toBe(true);
   });
 
@@ -212,11 +213,11 @@ describe("M3.1 / US-031 — actor scope is not elevated by composition", () => {
     // Simulate a function-backed action body running under memberCtx that
     // tries to elevate by acting on another member's row.
     await expect(
-      memberCtx.objects.Member.update(MEMBER_B_ID, { tier: "lifetime" }),
+      memberCtx.objects.Member.update(MEMBER_B_ID, { tier_role: "manager" }),
     ).rejects.toBeInstanceOf(PermissionError);
     // And the row was NOT mutated.
     const verifyCtx = createCtx({ db, actor: stewardActor, permissions });
     const bob = await verifyCtx.objects.Member.findById(MEMBER_B_ID);
-    expect(bob?.tier).toBe("basic");
+    expect(bob?.tier_role).toBe("staff");
   });
 });

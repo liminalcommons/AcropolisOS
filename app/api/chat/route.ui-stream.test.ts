@@ -124,8 +124,9 @@ describe("POST /api/chat — UI message stream transport (M2.3 step 3)", () => {
       id: TEST_MEMBER_ID,
       full_name: "UI Test",
       email: "ui@test.local",
-      joined_at: "2025-01-01",
-      tier: "basic",
+      phone: "555-0000",
+      tier_role: "staff",
+      started_at: "2025-01-01",
       notes: "",
     });
   });

@@ -1,0 +1,30 @@
+Shift:
+  description: A scheduled work slot (reception, cleaning, kitchen, etc.)
+  title_property: label
+  permissions:
+    read: ["*"]
+    write: [steward, manager]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    label:
+      type: string
+    kind:
+      type: enum
+      values: [reception, cleaning, kitchen, laundry, breakfast, night_audit, social]
+    starts_at:
+      type: timestamp
+    duration_hours:
+      type: decimal
+    claimed_by:
+      type: ref
+      target: Member
+      required: false
+    status:
+      type: enum
+      values: [open, claimed, in_progress, done, missed]
+      default: open
+    notes:
+      type: string
+      required: false

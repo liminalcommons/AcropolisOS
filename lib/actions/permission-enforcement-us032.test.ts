@@ -68,8 +68,9 @@ function memberRow(id: string, overrides: Partial<Member> = {}): Member {
     id,
     full_name: `Member ${id}`,
     email: `${id}@example.com`,
-    joined_at: "2026-01-01",
-    tier: "basic",
+    phone: "555-0000",
+    tier_role: "staff",
+    started_at: "2026-01-01",
     notes: "",
     ...overrides,
   };
@@ -307,7 +308,7 @@ export default defineAction({
       `.trim(),
     );
 
-    await db.objects.Member.create(memberRow("m-1", { tier: "basic" }));
+    await db.objects.Member.create(memberRow("m-1", { tier_role: "staff" }));
 
     await expect(
       invokeAction({
@@ -321,7 +322,7 @@ export default defineAction({
 
     // Object-state proof: mutation did NOT happen.
     const after = await db.objects.Member.findById("m-1");
-    expect(after?.tier).toBe("basic");
+    expect(after?.tier_role).toBe("staff");
 
     // Audit-trail proof: a child rejection row exists for the inner action.
     const rows = await audit.listActionAudit();

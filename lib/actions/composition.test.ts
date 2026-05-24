@@ -48,8 +48,9 @@ function memberRow(id: string, overrides: Partial<Member> = {}): Member {
     id,
     full_name: `Member ${id}`,
     email: `${id}@example.com`,
-    joined_at: "2026-01-01",
-    tier: "basic",
+    phone: "555-0000",
+    tier_role: "staff",
+    started_at: "2026-01-01",
     notes: "",
     ...overrides,
   };
@@ -251,7 +252,7 @@ describe("composition — 2-level deep recursion", () => {
     writeChangeTier();
     writeOpenPromote();
     writeOrchestratePromote();
-    await db.objects.Member.create(memberRow("m-1", { tier: "basic" }));
+    await db.objects.Member.create(memberRow("m-1", { tier_role: "staff" }));
 
     await invokeAction({
       actionName: "orchestrate_promote",
@@ -291,7 +292,7 @@ describe("composition — permission re-check on child invocations", () => {
   it("denies a child action whose permissions the actor lacks, even when reached via an open composing action", async () => {
     writeChangeTier();
     writeOpenPromote();
-    await db.objects.Member.create(memberRow("m-1", { tier: "basic" }));
+    await db.objects.Member.create(memberRow("m-1", { tier_role: "staff" }));
 
     // open_promote is open ("*"); change_tier requires steward. A `member`
     // actor invoking open_promote MUST be denied at the change_tier child
@@ -308,7 +309,7 @@ describe("composition — permission re-check on child invocations", () => {
 
     // Crucially: the Member tier MUST NOT have changed.
     const after = await db.objects.Member.findById("m-1");
-    expect(after?.tier).toBe("basic");
+    expect(after?.tier_role).toBe("staff");
 
     // And the audit log shows the denial — a child rejection row exists.
     const rows = await audit.listActionAudit();

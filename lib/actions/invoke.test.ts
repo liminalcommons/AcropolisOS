@@ -40,8 +40,9 @@ function memberRow(id: string, overrides: Partial<Member> = {}): Member {
     id,
     full_name: `Member ${id}`,
     email: `${id}@example.com`,
-    joined_at: "2026-01-01",
-    tier: "basic",
+    phone: "555-0000",
+    tier_role: "staff",
+    started_at: "2026-01-01",
     notes: "",
     ...overrides,
   };
@@ -217,7 +218,7 @@ export default defineAction({
 describe("invokeAction — single action without composition", () => {
   it("runs a function-backed action and records pre + post audit rows", async () => {
     writeChangeTier();
-    await db.objects.Member.create(memberRow("m-1", { tier: "basic" }));
+    await db.objects.Member.create(memberRow("m-1", { tier_role: "staff" }));
 
     const result = await invokeAction({
       actionName: "change_tier",
@@ -260,9 +261,9 @@ describe("invokeAction — single action without composition", () => {
       }),
     ).rejects.toThrow(/cannot invoke action "change_tier"/);
 
-    // The Member's tier MUST NOT have changed.
+    // The Member's tier_role MUST NOT have changed.
     const after = await db.objects.Member.findById("m-1");
-    expect(after?.tier).toBe("basic");
+    expect(after?.tier_role).toBe("staff");
   });
 });
 
@@ -271,7 +272,7 @@ describe("invokeAction — promote_member composes change_tier + send_welcome_pa
     writeChangeTier();
     writeSendWelcomePacket();
     writePromoteMember();
-    await db.objects.Member.create(memberRow("m-1", { tier: "basic" }));
+    await db.objects.Member.create(memberRow("m-1", { tier_role: "staff" }));
 
     const result = await invokeAction({
       actionName: "promote_member",
@@ -290,7 +291,7 @@ describe("invokeAction — promote_member composes change_tier + send_welcome_pa
 
     // Both side effects must have happened on the same Member row.
     const after = await db.objects.Member.findById("m-1");
-    expect(after?.tier).toBe("lifetime");
+    expect(after?.tier_role).toBe("lifetime");
     expect(after?.notes).toBe("welcome packet sent");
   });
 
@@ -298,7 +299,7 @@ describe("invokeAction — promote_member composes change_tier + send_welcome_pa
     writeChangeTier();
     writeSendWelcomePacket();
     writePromoteMember();
-    await db.objects.Member.create(memberRow("m-1", { tier: "basic" }));
+    await db.objects.Member.create(memberRow("m-1", { tier_role: "staff" }));
 
     await invokeAction({
       actionName: "promote_member",
@@ -430,7 +431,7 @@ describe("createActionsDispatcher — bare dispatcher (without parent invokeActi
 describe("invokeAction — side-effects dispatch (US-028)", () => {
   it("fires declared side effects after audit_post(ok)", async () => {
     writeChangeTier();
-    await db.objects.Member.create(memberRow("m-1", { tier: "basic" }));
+    await db.objects.Member.create(memberRow("m-1", { tier_role: "staff" }));
 
     // change_tier declares [audit, notify_member] in our test ontology
     // below — extend it now and re-validate by using the existing ontology
@@ -508,7 +509,7 @@ export default defineAction({
 
   it("side-effect failures do not roll back the action (still returns result)", async () => {
     writeChangeTier();
-    await db.objects.Member.create(memberRow("m-1", { tier: "basic" }));
+    await db.objects.Member.create(memberRow("m-1", { tier_role: "staff" }));
     ontology.action_types.change_tier.side_effects = ["notify_member"];
 
     const sendMail = vi.fn(async () => {

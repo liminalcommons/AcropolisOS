@@ -44,7 +44,6 @@ describe("createOntologyCtxForActor — M2.2 step 3", () => {
     expect(ctx.actor).toEqual(stewardActor);
     expect(ctx.objects.Member).toBeDefined();
     expect(ctx.objects.Event).toBeDefined();
-    expect(ctx.objects.MeetingMinute).toBeDefined();
     expect(ctx.links.attended).toBeDefined();
     expect(ctx.audit).toBeDefined();
     expect(typeof ctx.audit?.insertActionAudit).toBe("function");

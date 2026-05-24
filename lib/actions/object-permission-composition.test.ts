@@ -58,8 +58,9 @@ function memberRow(id: string, overrides: Partial<Member> = {}): Member {
     id,
     full_name: `Member ${id.slice(0, 4)}`,
     email: `${id.slice(0, 4)}@example.com`,
-    joined_at: "2026-01-01",
-    tier: "basic",
+    phone: "555-0000",
+    tier_role: "staff",
+    started_at: "2026-01-01",
     notes: "",
     ...overrides,
   };
@@ -183,7 +184,7 @@ describe("M3.1 / US-031 — object-layer deny inside an action body (member acto
 
     // Crucially: the target row is unchanged.
     const after = await db.objects.Member.findById(MEMBER_B_ID);
-    expect(after?.tier).toBe("basic");
+    expect(after?.tier_role).toBe("staff");
   });
 
   it("permits the same action when the same member acts on their OWN row", async () => {
@@ -196,7 +197,7 @@ describe("M3.1 / US-031 — object-layer deny inside an action body (member acto
     });
     expect((result as { ok: boolean }).ok).toBe(true);
     const after = await db.objects.Member.findById(MEMBER_A_ID);
-    expect(after?.tier).toBe("sustaining");
+    expect((after as unknown as Record<string, unknown>)?.tier).toBe("sustaining");
   });
 
   it("permits a steward to update any member through the same action", async () => {
@@ -209,6 +210,6 @@ describe("M3.1 / US-031 — object-layer deny inside an action body (member acto
     });
     expect((result as { ok: boolean }).ok).toBe(true);
     const after = await db.objects.Member.findById(MEMBER_B_ID);
-    expect(after?.tier).toBe("lifetime");
+    expect((after as unknown as Record<string, unknown>)?.tier).toBe("lifetime");
   });
 });

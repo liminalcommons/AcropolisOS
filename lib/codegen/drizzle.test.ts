@@ -177,26 +177,19 @@ describe("generated module is importable and exposes correct Drizzle tables", ()
     );
     expect(member.name).toBe("member");
     const memberCols = member.columns.map((c) => c.name).sort();
+    // Hostel-domain Member: tier_role + started_at + invite/user_id fields
     expect(memberCols).toEqual(
-      ["email", "full_name", "id", "joined_at", "notes", "tier"].sort(),
+      ["email", "full_name", "id", "invite_code", "invite_expires_at", "notes", "phone", "started_at", "tier_role", "user_id"].sort(),
     );
 
     const evt = getTableConfig(
       generated.event as Parameters<typeof getTableConfig>[0],
     );
     expect(evt.name).toBe("event");
+    // Hostel-domain Event: title, starts_at, duration_hours, attendance_cap, organizer, description, status
     expect(evt.columns.map((c) => c.name).sort()).toEqual(
-      ["created_at", "description", "id", "location", "starts_at", "title"].sort(),
+      ["attendance_cap", "description", "duration_hours", "id", "organizer", "starts_at", "status", "title"].sort(),
     );
-
-    const mm = getTableConfig(
-      generated.meeting_minute as Parameters<typeof getTableConfig>[0],
-    );
-    expect(mm.name).toBe("meeting_minute");
-    // event_id from ref + member_id from 1:N "authored" link
-    const mmCols = mm.columns.map((c) => c.name);
-    expect(mmCols).toContain("event_id");
-    expect(mmCols).toContain("member_id");
   });
 
   it("primary-key columns are flagged via Drizzle introspection", async () => {
@@ -223,19 +216,19 @@ describe("generated module is importable and exposes correct Drizzle tables", ()
     expect(startsAt?.notNull).toBe(true);
   });
 
-  it("many-to-many join table has both endpoint FK columns and link property columns", async () => {
+  it("many-to-many join table has both endpoint FK columns (hostel domain: guest_attended_event)", async () => {
     const generated = await import("../db/schema.generated");
     const { getTableConfig } = await import("drizzle-orm/pg-core");
 
     const join = getTableConfig(
-      generated.member_attended_event as Parameters<typeof getTableConfig>[0],
+      generated.guest_attended_event_event as Parameters<typeof getTableConfig>[0],
     );
-    expect(join.name).toBe("member_attended_event");
+    expect(join.name).toBe("guest_attended_event_event");
     const cols = join.columns.map((c) => c.name).sort();
-    expect(cols).toEqual(["attended_at", "event_id", "member_id", "role"].sort());
+    expect(cols).toEqual(["event_id", "guest_id"].sort());
     // composite primary key
     expect(join.primaryKeys.length).toBe(1);
     const pkColNames = join.primaryKeys[0].columns.map((c) => c.name).sort();
-    expect(pkColNames).toEqual(["event_id", "member_id"].sort());
+    expect(pkColNames).toEqual(["event_id", "guest_id"].sort());
   });
 });

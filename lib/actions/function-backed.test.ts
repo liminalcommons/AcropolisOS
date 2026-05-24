@@ -22,8 +22,9 @@ function memberRow(id: string, overrides: Partial<Member> = {}): Member {
     id,
     full_name: `Member ${id}`,
     email: `${id}@example.com`,
-    joined_at: "2026-01-01",
-    tier: "basic",
+    phone: "555-0000",
+    tier_role: "staff",
+    started_at: "2026-01-01",
     notes: "",
     ...overrides,
   };
@@ -96,24 +97,24 @@ describe("runFunctionBackedAction — seed change_tier function (real file)", ()
 
   it("runs the real functions/change-tier.ts against an in-memory store", async () => {
     const db = createInMemoryStore();
-    await db.objects.Member.create(memberRow("m-seed", { tier: "basic" }));
+    await db.objects.Member.create(memberRow("m-seed", { tier_role: "staff" }));
     const ctx = createCtx({ db, actor: steward });
 
     const result = await runFunctionBackedAction({
       functionName: "change-tier",
       functionsDir: seedFunctionsDir,
-      params: { member: "m-seed", new_tier: "sustaining" },
+      params: { member: "m-seed", new_tier: "work_trader" },
       ctx,
     });
 
     expect(result).toEqual({
       ok: true,
       member: "m-seed",
-      previous_tier: "basic",
-      new_tier: "sustaining",
+      previous_tier: "staff",
+      new_tier: "work_trader",
     });
     const after = await ctx.objects.Member.findById("m-seed");
-    expect(after?.tier).toBe("sustaining");
+    expect(after?.tier_role).toBe("work_trader");
   });
 
   it("returns member_not_found when the target id is missing", async () => {
@@ -121,7 +122,7 @@ describe("runFunctionBackedAction — seed change_tier function (real file)", ()
     const result = await runFunctionBackedAction({
       functionName: "change-tier",
       functionsDir: seedFunctionsDir,
-      params: { member: "ghost", new_tier: "lifetime" },
+      params: { member: "ghost", new_tier: "manager" },
       ctx,
     });
     expect(result).toEqual({
@@ -133,7 +134,7 @@ describe("runFunctionBackedAction — seed change_tier function (real file)", ()
 });
 
 describe("runFunctionBackedAction — change_tier pipeline (synthetic fixture)", () => {
-  it("validates params via schema then mutates Member.tier through ctx.objects", async () => {
+  it("validates params via schema then mutates Member.tier_role through ctx.objects", async () => {
     writeFunction(
       "change-tier",
       `
@@ -142,31 +143,31 @@ import { defineAction } from "@acropolisos/sdk";
 export default defineAction({
   schema: z.object({
     member: z.string(),
-    new_tier: z.enum(["basic", "sustaining", "lifetime"]),
+    new_tier: z.enum(["work_trader", "staff", "supervisor", "manager"]),
   }),
   handler: async ({ params, ctx }) => {
-    const updated = await ctx.objects.Member.update(params.member, { tier: params.new_tier });
+    const updated = await ctx.objects.Member.update(params.member, { tier_role: params.new_tier });
     if (!updated) return { ok: false, reason: "member_not_found" };
-    return { ok: true, member: updated.id, tier: updated.tier };
+    return { ok: true, member: updated.id, tier_role: updated.tier_role };
   },
 });
       `.trim(),
     );
 
     const db = createInMemoryStore();
-    await db.objects.Member.create(memberRow("m-1", { tier: "basic" }));
+    await db.objects.Member.create(memberRow("m-1", { tier_role: "staff" }));
     const ctx = createCtx({ db, actor: steward });
 
     const result = await runFunctionBackedAction({
       functionName: "change-tier",
       functionsDir,
-      params: { member: "m-1", new_tier: "lifetime" },
+      params: { member: "m-1", new_tier: "manager" },
       ctx,
     });
 
-    expect(result).toEqual({ ok: true, member: "m-1", tier: "lifetime" });
+    expect(result).toEqual({ ok: true, member: "m-1", tier_role: "manager" });
     const after = await ctx.objects.Member.findById("m-1");
-    expect(after?.tier).toBe("lifetime");
+    expect(after?.tier_role).toBe("manager");
   });
 
   it("surfaces a schema validation error before calling the handler", async () => {
@@ -178,7 +179,7 @@ import { defineAction } from "@acropolisos/sdk";
 export default defineAction({
   schema: z.object({
     member: z.string(),
-    new_tier: z.enum(["basic", "sustaining", "lifetime"]),
+    new_tier: z.enum(["work_trader", "staff", "supervisor", "manager"]),
   }),
   handler: async () => { throw new Error("handler should not run"); },
 });

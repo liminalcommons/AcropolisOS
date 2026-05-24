@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import type { OntologyCtx } from "@/lib/ontology/ctx";
 import type { MemberContext } from "@/lib/ontology/types.generated";
 
-const DEFAULT_PINNED_WIDGETS: unknown[] = [];
+const DEFAULT_PINNED_WIDGETS = "[]";
 
 export async function getOrCreateMemberContext(
   ctx: OntologyCtx,

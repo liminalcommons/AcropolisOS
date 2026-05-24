@@ -1,9 +1,9 @@
 Event:
-  description: A community event open to members
+  description: Hostel social event (movie night, walking tour, dinner)
   title_property: title
   permissions:
     read: ["*"]
-    write: ["steward"]
+    write: [steward, manager]
   properties:
     id:
       type: uuid
@@ -12,9 +12,19 @@ Event:
       type: string
     starts_at:
       type: timestamp
-    location:
-      type: string
+    duration_hours:
+      type: decimal
+      default: 2
+    attendance_cap:
+      type: decimal
+      required: false
+    organizer:
+      type: ref
+      target: Member
     description:
       type: string
-    created_at:
-      ref: created_at
+      required: false
+    status:
+      type: enum
+      values: [scheduled, in_progress, completed, cancelled]
+      default: scheduled

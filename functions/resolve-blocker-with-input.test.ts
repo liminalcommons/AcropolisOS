@@ -52,8 +52,9 @@ function memberRow(actor: Actor): Member {
     id: actor.userId,
     full_name: "Test",
     email: actor.email,
-    joined_at: "2026-01-01",
-    tier: "basic",
+    phone: "555-0000",
+    tier_role: "staff",
+    started_at: "2026-01-01",
     notes: "",
   };
 }

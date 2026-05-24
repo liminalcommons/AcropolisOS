@@ -57,9 +57,9 @@ export default defineAction({
       detail: params.detail,
       blocked_work_ref: params.blocked_work_ref,
       resolution_mode: params.resolution_mode,
-      pathways: params.pathways,
-      input_schema: params.input_schema,
-      confirm_action: params.confirm_action,
+      pathways: params.pathways !== undefined ? JSON.stringify(params.pathways) : undefined,
+      input_schema: params.input_schema !== undefined ? JSON.stringify(params.input_schema) : undefined,
+      confirm_action: params.confirm_action !== undefined ? JSON.stringify(params.confirm_action) : undefined,
       status: "open",
       created_at: now,
     });

@@ -149,8 +149,9 @@ describe("POST /api/chat — apply_action wiring (M2.2 step 1)", () => {
       id: TEST_MEMBER_ID,
       full_name: "Test Member",
       email: "tm@test.local",
-      joined_at: "2025-01-01",
-      tier: "basic",
+      phone: "555-0000",
+      tier_role: "staff",
+      started_at: "2025-01-01",
       notes: "",
     });
   });
@@ -182,7 +183,7 @@ describe("POST /api/chat — apply_action wiring (M2.2 step 1)", () => {
 
     // No member mutation
     const after = await sharedDb.objects.Member.findById(TEST_MEMBER_ID);
-    expect(after?.tier).toBe("basic");
+    expect(after?.tier_role).toBe("staff");
 
     // No completed action audit row (only the pending pre-row, if any)
     const auditRows = await sharedAudit.listActionAudit();
@@ -219,7 +220,7 @@ describe("POST /api/chat — apply_action wiring (M2.2 step 1)", () => {
 
     // Member tier updated
     const after = await sharedDb.objects.Member.findById(TEST_MEMBER_ID);
-    expect(after?.tier).toBe("sustaining");
+    expect(after?.tier_role).toBe("work_trader");
 
     // action_audit has an ok row for change_tier
     const auditRows = await sharedAudit.listActionAudit();

@@ -139,16 +139,18 @@ describe("POST /api/chat — read tools wiring", () => {
       id: TEST_MEMBER_ID_1,
       full_name: "Alpha Member",
       email: "alpha@test.local",
-      joined_at: "2025-01-01",
-      tier: "basic",
+      phone: "555-0001",
+      tier_role: "staff",
+      started_at: "2025-01-01",
       notes: "",
     });
     await sharedDb.objects.Member.create({
       id: TEST_MEMBER_ID_2,
       full_name: "Beta Member",
       email: "beta@test.local",
-      joined_at: "2025-02-01",
-      tier: "sustaining",
+      phone: "555-0002",
+      tier_role: "work_trader",
+      started_at: "2025-02-01",
       notes: "",
     });
   });

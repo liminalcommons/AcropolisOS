@@ -1,5 +1,8 @@
 member:
-  description: Anyone with a verified account in the community
+  description: Any verified account (staff or work-trader with login access)
 
 steward:
-  description: Trusted operator able to record actions on others' behalf
+  description: Front-desk + supervisor; can check guests in/out and log incidents
+
+manager:
+  description: Full write access; sets rates, signs work-trade agreements

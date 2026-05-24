@@ -1,0 +1,11 @@
+check_out:
+  description: Check a guest out at end of stay
+  function: check-out
+  parameters:
+    booking:
+      type: ref
+      target: Booking
+      required: true
+  permissions: [steward, manager]
+  agent_policy: always_confirm
+  side_effects: [audit]

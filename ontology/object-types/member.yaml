@@ -1,13 +1,10 @@
 Member:
-  description: A community member
+  description: Staff or work-trader with a verified login account
   title_property: full_name
   data_audit: true
   permissions:
-    read:
-      - "*"
-    write:
-      - steward
-      - member_self
+    read: ["*"]
+    write: [manager, member_self]
   properties:
     id:
       type: uuid
@@ -16,21 +13,35 @@ Member:
       type: string
     email:
       ref: email
-    joined_at:
-      ref: joined_at
-    tier:
+    phone:
+      ref: phone
+    tier_role:
       type: enum
-      values:
-        - basic
-        - sustaining
-        - lifetime
-      default: basic
+      values: [work_trader, staff, supervisor, manager]
+      default: staff
+    started_at:
+      type: date
     notes:
       type: string
+      required: false
       permissions:
-        read:
-          - steward
-        write:
-          - steward
-    pronouns:
+        read: [manager]
+        write: [manager]
+    user_id:
       type: string
+      required: false
+      permissions:
+        read: [manager]
+        write: [manager]
+    invite_code:
+      type: string
+      required: false
+      permissions:
+        read: [manager]
+        write: [manager]
+    invite_expires_at:
+      type: string
+      required: false
+      permissions:
+        read: [manager]
+        write: [manager]

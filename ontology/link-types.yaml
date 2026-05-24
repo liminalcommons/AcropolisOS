@@ -1,18 +1,33 @@
-attended:
+booked_into:
+  from: Guest
+  to: Bed
+  cardinality: many-to-many
+  description: A guest is/was booked into a bed (carries booking ref + dates)
+  properties:
+    booking:
+      type: ref
+      target: Booking
+
+staffed:
   from: Member
+  to: Shift
+  cardinality: one-to-one
+  description: A member or work-trader is responsible for a shift
+
+attended_event:
+  from: Guest
   to: Event
   cardinality: many-to-many
-  description: A member attended an event
-  properties:
-    attended_at:
-      type: timestamp
-    role:
-      type: enum
-      values: [attendee, organizer, speaker]
-      default: attendee
+  description: A guest attended an event
 
-authored:
-  from: Member
-  to: MeetingMinute
-  cardinality: one-to-many
-  description: A member authored a meeting minute
+involves:
+  from: IncidentLog
+  to: Guest
+  cardinality: many-to-many
+  description: Parties involved in an incident
+
+trading_for:
+  from: WorkTradeAgreement
+  to: Bed
+  cardinality: one-to-one
+  description: Which bed the work-trader holds during the agreement

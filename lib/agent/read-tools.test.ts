@@ -11,9 +11,7 @@ import {
   type OntologyCtx,
 } from "../ontology/ctx";
 import type {
-  AttendedLink,
   Event,
-  MeetingMinute,
   Member,
 } from "../ontology/types.generated";
 import {
@@ -53,8 +51,9 @@ function memberRow(id: string, overrides: Partial<Member> = {}): Member {
     id,
     full_name: `Member ${id}`,
     email: `${id}@example.com`,
-    joined_at: "2026-01-01",
-    tier: "basic",
+    phone: "555-0000",
+    tier_role: "staff",
+    started_at: "2026-01-01",
     notes: `private notes for ${id}`,
     ...overrides,
   };
@@ -65,24 +64,10 @@ function eventRow(id: string, overrides: Partial<Event> = {}): Event {
     id,
     title: `Event ${id}`,
     starts_at: "2026-05-01T19:00:00+00:00",
-    location: "Town Hall",
+    duration_hours: 2,
+    organizer: "u-steward",
     description: `desc-${id}`,
-    created_at: "2026-04-01T00:00:00+00:00",
-    ...overrides,
-  };
-}
-
-function minuteRow(
-  id: string,
-  eventId: string,
-  overrides: Partial<MeetingMinute> = {},
-): MeetingMinute {
-  return {
-    id,
-    title: `Minutes ${id}`,
-    body: `body-${id}`,
-    event_id: eventId,
-    created_at: "2026-05-02T00:00:00+00:00",
+    status: "scheduled",
     ...overrides,
   };
 }
@@ -93,7 +78,6 @@ async function makeSeededCtx(actor: Actor): Promise<{
   ontology: Awaited<ReturnType<typeof loadOntology>>;
   memberId: string;
   eventId: string;
-  minuteId: string;
 }> {
   const ontology = await loadOntology(SMALL_COMMUNITY);
   const db = createInMemoryStore();
@@ -105,22 +89,13 @@ async function makeSeededCtx(actor: Actor): Promise<{
   const otherMemberId = "11111111-1111-1111-1111-111111111112";
   const eventId = "22222222-2222-2222-2222-222222222222";
   const otherEventId = "22222222-2222-2222-2222-222222222223";
-  const minuteId = "33333333-3333-3333-3333-333333333333";
 
   await db.objects.Member.create(memberRow(memberId, { full_name: "Ada" }));
   await db.objects.Member.create(memberRow(otherMemberId, { full_name: "Bea" }));
   await db.objects.Event.create(eventRow(eventId, { title: "Spring Gathering" }));
   await db.objects.Event.create(eventRow(otherEventId, { title: "Autumn Council" }));
-  await db.objects.MeetingMinute.create(minuteRow(minuteId, eventId));
-  const link: AttendedLink = {
-    attended_at: "2026-05-01T19:30:00+00:00",
-    role: "attendee",
-  };
-  await db.links.attended.create({
-    from: memberId,
-    to: eventId,
-    properties: link,
-  });
+  // Links are not seeded — createInMemoryStore has links:{} (hostel ontology).
+  // Traverse tests will see empty link sets.
 
   // Pre-seed an audit row that read_tools should be able to surface.
   await audit.insertOntologyAudit({
@@ -143,7 +118,7 @@ async function makeSeededCtx(actor: Actor): Promise<{
   });
 
   const ctx = createCtx({ db, actor, permissions, audit });
-  return { ctx, audit, ontology, memberId, eventId, minuteId };
+  return { ctx, audit, ontology, memberId, eventId };
 }
 
 describe("buildReadToolsForActor — every READ op returns a working Mastra Tool", () => {
@@ -176,7 +151,7 @@ describe("describe_<object> tool", () => {
     expect(out.properties).toMatchObject({
       id: expect.anything(),
       full_name: expect.anything(),
-      tier: expect.anything(),
+      tier_role: expect.anything(),
     });
   });
 });

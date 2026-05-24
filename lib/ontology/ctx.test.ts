@@ -8,15 +8,16 @@ import {
 } from "./ctx";
 import type { Actor } from "../ctx";
 import type { Ontology } from "./schema";
-import type { MeetingMinute, Member } from "./types.generated";
+import type { Member } from "./types.generated";
 
 function memberRow(id: string, overrides: Partial<Member> = {}): Member {
   return {
     id,
     full_name: `Member ${id}`,
     email: `${id}@example.com`,
-    joined_at: "2026-01-01",
-    tier: "basic",
+    phone: "555-0000",
+    tier_role: "staff",
+    started_at: "2026-01-01",
     notes: "",
     ...overrides,
   };
@@ -79,11 +80,11 @@ describe("ontology createCtx — objects.Member CRUD", () => {
 
   it("findMany filters by basic equality on any column", async () => {
     const ctx = createCtx({ db: createInMemoryStore(), actor: steward });
-    await ctx.objects.Member.create(memberRow("m-1", { tier: "basic" }));
-    await ctx.objects.Member.create(memberRow("m-2", { tier: "sustaining" }));
-    await ctx.objects.Member.create(memberRow("m-3", { tier: "sustaining" }));
-    const sustaining = await ctx.objects.Member.findMany({ tier: "sustaining" });
-    expect(sustaining.map((m) => m.id).sort()).toEqual(["m-2", "m-3"]);
+    await ctx.objects.Member.create(memberRow("m-1", { tier_role: "staff" }));
+    await ctx.objects.Member.create(memberRow("m-2", { tier_role: "work_trader" }));
+    await ctx.objects.Member.create(memberRow("m-3", { tier_role: "work_trader" }));
+    const workTraders = await ctx.objects.Member.findMany({ tier_role: "work_trader" });
+    expect(workTraders.map((m) => m.id).sort()).toEqual(["m-2", "m-3"]);
   });
 
   it("create rejects duplicate ids", async () => {
@@ -160,41 +161,13 @@ describe("ontology createCtx — links.attended", () => {
   });
 });
 
-describe("ontology createCtx — actions are stubs (real impl in US-027)", () => {
-  it("record_attendance returns not_implemented", async () => {
+describe("ontology createCtx — actions interface (hostel domain)", () => {
+  it("OntologyActions is an empty interface (hostel actions wired via function-backed dispatcher)", () => {
     const ctx = createCtx({ db: createInMemoryStore(), actor: steward });
-    const result = await ctx.actions.record_attendance({
-      member: "m-1",
-      event: "e-1",
-      role: "attendee",
-    });
-    expect(result).toEqual({
-      ok: false,
-      reason: "not_implemented",
-      action: "record_attendance",
-    });
-  });
-
-  it("add_member, add_meeting_minute, change_tier are stubbed too", async () => {
-    const ctx = createCtx({ db: createInMemoryStore(), actor: steward });
-    expect(
-      (await ctx.actions.add_member({
-        full_name: "Bob",
-        email: "bob@example.com",
-        tier: "basic",
-      })).reason,
-    ).toBe("not_implemented");
-    expect(
-      (await ctx.actions.change_tier({ member: "m-1", new_tier: "lifetime" }))
-        .reason,
-    ).toBe("not_implemented");
-    expect(
-      (await ctx.actions.add_meeting_minute({
-        title: "t",
-        body: "b",
-        event: "e-1",
-      })).reason,
-    ).toBe("not_implemented");
+    // actions is present on the ctx but empty — hostel-domain actions are
+    // dispatched via invokeAction(ctx, ...) in the function-backed runner,
+    // not as ctx.actions.X stubs. This test documents the current contract.
+    expect(ctx.actions).toBeDefined();
   });
 });
 
@@ -262,9 +235,9 @@ describe("ontology createCtx — US-031 object-level read filtering", () => {
       id: "e-1",
       title: "Town hall",
       starts_at: "2026-05-01T12:00:00+00:00",
-      location: "Square",
-      description: "",
-      created_at: "2026-04-01T00:00:00+00:00",
+      duration_hours: 2,
+      organizer: "m-1",
+      status: "scheduled",
     });
     const restrictive: ObjectPermissionsMap = {
       Event: { read: ["steward"], write: ["steward"] },
@@ -389,9 +362,9 @@ describe("ontology createCtx — US-031 write enforcement", () => {
         id: "e-1",
         title: "Coup",
         starts_at: "2026-05-01T12:00:00+00:00",
-        location: "",
-        description: "",
-        created_at: "2026-04-01T00:00:00+00:00",
+        duration_hours: 2,
+        organizer: "m-1",
+        status: "scheduled",
       }),
     ).rejects.toBeInstanceOf(PermissionError);
   });
@@ -427,29 +400,22 @@ describe("ontology createCtx — US-031 write enforcement", () => {
   });
 });
 
-describe("ontology createCtx — US-031 member_self via row.user_id / row.owner", () => {
-  it("matches member_self when row.user_id equals actor.userId", async () => {
+describe("ontology createCtx — US-031 member_self via row.id (Member type)", () => {
+  it("matches member_self when row.id equals actor.userId (Member is self-referencing)", async () => {
     const db = createInMemoryStore();
-    // MeetingMinute does not naturally have user_id, but the resolver must
-    // honor user_id wherever it appears on a row. Inject one via cast.
-    await db.objects.MeetingMinute.create({
-      id: "mm-1",
-      title: "Notes",
-      body: "...",
-      event_id: "e-1",
-      created_at: "2026-04-01T00:00:00+00:00",
-      user_id: "user-a",
-    } as unknown as MeetingMinute);
+    // Member rows are self-referencing: row.id === actor.userId triggers member_self.
+    await db.objects.Member.create(memberRow("user-a"));
+    await db.objects.Member.create(memberRow("user-b"));
     const perms: ObjectPermissionsMap = {
-      MeetingMinute: { read: ["*"], write: ["steward", "member_self"] },
+      Member: { read: ["*"], write: ["steward", "member_self"] },
     };
     const ctxOwn = createCtx({ db, actor: memberA, permissions: perms });
     const ctxOther = createCtx({ db, actor: memberB, permissions: perms });
     await expect(
-      ctxOwn.objects.MeetingMinute.update("mm-1", { title: "Updated" }),
-    ).resolves.toMatchObject({ title: "Updated" });
+      ctxOwn.objects.Member.update("user-a", { notes: "self-edit" }),
+    ).resolves.toMatchObject({ notes: "self-edit" });
     await expect(
-      ctxOther.objects.MeetingMinute.update("mm-1", { title: "Nope" }),
+      ctxOther.objects.Member.update("user-a", { notes: "nope" }),
     ).rejects.toBeInstanceOf(PermissionError);
   });
 });

@@ -29,25 +29,24 @@ export default defineAction({
       };
     }
 
-    const tierResult = (await ctx.actions.change_tier({
-      member: params.member,
-      new_tier: "lifetime",
-    })) as { ok: boolean; previous_tier?: string; new_tier?: string };
+    const previousTierRole = target.tier_role;
+    const updated = await ctx.objects.Member.update(params.member, {
+      tier_role: "manager",
+    });
 
-    if (!tierResult.ok) {
+    if (!updated) {
       return {
         ok: false as const,
-        reason: "change_tier_failed" as const,
+        reason: "update_failed" as const,
         member: params.member,
-        cause: tierResult,
       };
     }
 
     return {
       ok: true as const,
       member: params.member,
-      previous_tier: tierResult.previous_tier,
-      new_tier: tierResult.new_tier,
+      previous_tier: previousTierRole,
+      new_tier: updated.tier_role,
       promoted: true as const,
     };
   },
