@@ -10,7 +10,7 @@
 // NO real action execution this cycle — no Stripe charge, no automated
 // message. n8n workflow materialization is footnote-stubbed, lands in F2.
 
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
@@ -193,6 +193,12 @@ export default async function NoShowScenarioPage({
   }
 
   const { bookingId } = await params;
+
+  // ── UUID guard — reject malformed IDs before hitting PG (22P02) ───────────
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingId)) {
+    notFound();
+  }
+
   const db = getDb();
 
   // ── Fetch booking ──────────────────────────────────────────────────────────
@@ -309,3 +315,4 @@ export default async function NoShowScenarioPage({
     </main>
   );
 }
+
