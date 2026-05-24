@@ -580,6 +580,26 @@ export default async function Home(): Promise<React.ReactElement> {
           </Link>
         </section>
 
+        {/* ── F2: Connect a data pipe ── */}
+        <section>
+          <Link
+            href="/connect"
+            className="block rounded-lg border border-dashed border-zinc-700/60 p-4 hover:border-zinc-500 transition-colors"
+          >
+            <div className="flex items-start gap-3">
+              <span className="text-zinc-600 text-sm mt-0.5">⇄</span>
+              <div>
+                <p className="text-sm font-medium text-zinc-500">
+                  Connect a data pipe →
+                </p>
+                <p className="text-[11px] text-zinc-600 mt-0.5 italic">
+                  Drop a file or ask the agent to pull from an external source
+                </p>
+              </div>
+            </div>
+          </Link>
+        </section>
+
       </div>
     </main>
   );
