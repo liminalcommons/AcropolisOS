@@ -332,8 +332,8 @@ export default async function Home(): Promise<React.ReactElement> {
 
           {/* Card A — Daniyar no-show */}
           {daniyarBooking && (
-            <a
-              href={`#scenario-bk-daniyar`}
+            <Link
+              href={`/scenario/no-show/${daniyarBooking.id}`}
               className="block rounded-lg border border-amber-700/40 bg-amber-950/20 p-4 hover:border-amber-600/60 transition-colors"
             >
               <div className="flex items-start justify-between gap-4">
@@ -361,7 +361,7 @@ export default async function Home(): Promise<React.ReactElement> {
                   <span className="text-xs text-amber-600">Open →</span>
                 </div>
               </div>
-            </a>
+            </Link>
           )}
 
           {/* Card B — Open shift needing cover */}
