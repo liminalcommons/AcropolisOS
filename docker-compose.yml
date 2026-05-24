@@ -38,7 +38,11 @@ services:
     environment:
       DATABASE_URL: postgres://acropolisos:acropolisos@postgres:5432/acropolisos
       INNGEST_BASE_URL: http://inngest:8288
-      NODE_ENV: production
+      # 0c-pre: dev mode so Next.js watches bind-mounted source files.
+      # Switch back to production + `npm run start` for prod deploys (rebuild
+      # image first so .next/ is current). In dev mode next dev compiles on
+      # demand; no pre-built .next/ needed.
+      NODE_ENV: development
       PORT: "3030"
       # Inside Docker the app sees host `app:3030`. AuthJS refuses to issue
       # session callbacks against an "untrusted" host and logs a stack trace
@@ -51,6 +55,11 @@ services:
       # missing signing key on every request. We ship a self-hosted Inngest
       # dev server in this compose, so dev mode is correct here.
       INNGEST_DEV: "1"
+    # 0c-pre: override Dockerfile CMD (next start) with next dev so file
+    # watcher picks up bind-mounted source changes without image rebuild.
+    # Revert to `npm run start` (or remove this key) for prod installs after
+    # rebuilding the image.
+    command: npm run dev
     env_file:
       - .env
     volumes:
@@ -65,6 +74,18 @@ services:
       # LLM_* keys back to it (docker-compose re-reads it on `compose up`).
       - ./.env:/app/.env
       - appdata:/app/data
+      # 0c-pre (cycle-5): source directories bind-mounted so host edits are
+      # visible in the container without image rebuild. node_modules/ and
+      # .next/ are NOT bind-mounted — those are build artifacts that must
+      # live in the image layer (node_modules) or be rebuilt by next dev
+      # (.next). The anonymous volume below protects .next/ from being
+      # shadowed by an empty host path if one were accidentally created.
+      - ./app:/app/app
+      - ./components:/app/components
+      - ./lib:/app/lib
+      - ./scripts:/app/scripts
+      # Protect the compiled .next/ dir from host-side shadowing.
+      - nexttmp:/app/.next
     ports:
       - "3030:3030"
     healthcheck:
@@ -98,3 +119,6 @@ services:
 volumes:
   pgdata:
   appdata:
+  # Named volume for .next/ so the Next.js dev compiler writes into it
+  # without risk of a host bind-mount shadowing the build output directory.
+  nexttmp:
