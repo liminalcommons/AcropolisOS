@@ -560,6 +560,26 @@ export default async function Home(): Promise<React.ReactElement> {
           </Link>
         </section>
 
+        {/* ── F4: Raw inbox / organize link ── */}
+        <section>
+          <Link
+            href="/organize"
+            className="block rounded-lg border border-dashed border-zinc-700/60 p-4 hover:border-zinc-500 transition-colors"
+          >
+            <div className="flex items-start gap-3">
+              <span className="text-zinc-600 text-sm mt-0.5">⊞</span>
+              <div>
+                <p className="text-sm font-medium text-zinc-500">
+                  Organize raw inbox
+                </p>
+                <p className="text-[11px] text-zinc-600 mt-0.5 italic">
+                  Let the agent classify inbound messy data into typed objects
+                </p>
+              </div>
+            </div>
+          </Link>
+        </section>
+
       </div>
     </main>
   );

@@ -74,3 +74,18 @@ export const proposals = pgTable("proposals", {
 
 export type ProposalRow = typeof proposals.$inferSelect;
 export type ProposalInsert = typeof proposals.$inferInsert;
+
+// F4: raw_inbox — staging table for messy inbound data before classification.
+// Not an ontology object type — infra table, managed here (not in schema.generated.ts).
+export const raw_inbox = pgTable("raw_inbox", {
+  id: uuid("id").primaryKey().defaultRandom().notNull(),
+  source: text("source").notNull(),
+  received_at: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  payload: jsonb("payload").notNull(),
+  classified_as: text("classified_as"),
+  classified_at: timestamp("classified_at", { withTimezone: true }),
+  classified_by: text("classified_by"),
+});
+
+export type RawInboxRow = typeof raw_inbox.$inferSelect;
+export type RawInboxInsert = typeof raw_inbox.$inferInsert;
