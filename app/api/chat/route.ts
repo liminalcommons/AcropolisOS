@@ -28,6 +28,7 @@ import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { createInProcessDispatcher } from "@/lib/actions/dispatcher";
 import { buildApplyActionAiSdkTool } from "@/lib/agent/apply-action-ai-sdk";
 import { buildMeReadTools } from "@/lib/agent/read-tools-me";
+import { buildN8nReadTools } from "@/lib/agent/n8n-tools";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -48,10 +49,11 @@ function isChatRequestBody(value: unknown): value is ChatRequestBody {
 // "what do we have" rather than "let's change something".
 const APPLY_ACTION_INSTRUCTIONS = [
   "",
-  "You have THREE surfaces:",
+  "You have FOUR surfaces:",
   "  - READ (query_<type>, read_<type>, describe_<type>): inspect existing data. When the user asks about existing data ('what X do we have', 'show me', 'list', 'how many', 'who is …'), use query_<type> or read_<type> FIRST, before proposing anything new. Use describe_<type> when you need to know what fields an object type has.",
   "  - propose_* + finalize_proposal: stage ONTOLOGY changes (new object/link/property/action types, new ingest mappings). These DO NOT mutate live state until a steward reviews and applies the proposal.",
   "  - apply_action: invoke a typed action to mutate LIVE state immediately (e.g., change_tier on an existing Member, record_attendance). These commit when called.",
+  "  - n8n (list_workflows): inspect automation workflows defined in n8n. Use when the user asks what automations exist or what's connected. If it returns 'n8n not connected', inform the user the API key needs to be configured.",
   "Rules: never propose a new object type the ontology already has — call describe_<type> or query_<type> first to verify. Use apply_action only when the user asks to do something on the live data and the action_type already exists. If they ask for new behavior, propose first.",
   "Some actions have a confirmation policy. If apply_action returns confirmation_required, present the requested change in your text reply and let the user click the Confirm button — do NOT attempt to re-call apply_action yourself.",
 ].join(" ");
@@ -120,11 +122,16 @@ export async function POST(req: Request): Promise<Response> {
     ontology: runtime.ontology,
   });
 
+  // F2-step2b: n8n read tools (list_workflows). Wired unconditionally — the
+  // tool itself fails soft to an error message if N8N_API_KEY is absent.
+  const n8nTools = buildN8nReadTools();
+
   const tools = {
     ...readTools,
     ...proposalTools,
     apply_action: applyActionTool,
     ...meReadTools,
+    ...n8nTools,
   };
 
   const result = streamText({
