@@ -27,21 +27,3 @@ Member:
       permissions:
         read: [manager]
         write: [manager]
-    user_id:
-      type: string
-      required: false
-      permissions:
-        read: [manager]
-        write: [manager]
-    invite_code:
-      type: string
-      required: false
-      permissions:
-        read: [manager]
-        write: [manager]
-    invite_expires_at:
-      type: string
-      required: false
-      permissions:
-        read: [manager]
-        write: [manager]

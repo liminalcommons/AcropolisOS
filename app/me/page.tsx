@@ -56,7 +56,7 @@ export default async function MePage(): Promise<React.ReactElement> {
 
   // Resolve Member row for the session user
   const members = await ctx.objects.Member.findMany();
-  const me = members.find((m) => m.id === actor.userId || m.user_id === actor.userId);
+  const me = members.find((m) => m.id === actor.userId);
   if (!me) {
     return (
       <main className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">

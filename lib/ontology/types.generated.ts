@@ -104,9 +104,6 @@ export const MemberSchema = z.object({
   "tier_role": z.enum(["work_trader", "staff", "supervisor", "manager"]).default("staff"),
   "started_at": z.iso.date(),
   "notes": z.string().optional(),
-  "user_id": z.string().optional(),
-  "invite_code": z.string().optional(),
-  "invite_expires_at": z.string().optional(),
 });
 export type Member = z.infer<typeof MemberSchema>;
 

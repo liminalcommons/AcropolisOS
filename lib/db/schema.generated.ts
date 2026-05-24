@@ -109,9 +109,6 @@ export const member = pgTable("member", {
   tier_role: text("tier_role").notNull().default("staff"),
   started_at: date("started_at").notNull(),
   notes: text("notes"),
-  user_id: text("user_id"),
-  invite_code: text("invite_code"),
-  invite_expires_at: text("invite_expires_at"),
 });
 
 export const notification = pgTable("notification", {

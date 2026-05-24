@@ -14,6 +14,18 @@ staffed:
   cardinality: one-to-one
   description: A member or work-trader is responsible for a shift
 
+attended:
+  from: Member
+  to: Event
+  cardinality: many-to-many
+  description: A member attended an event
+  properties:
+    attended_at:
+      type: timestamp
+    role:
+      type: enum
+      values: [attendee, organizer, speaker]
+
 attended_event:
   from: Guest
   to: Event

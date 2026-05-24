@@ -177,9 +177,9 @@ describe("generated module is importable and exposes correct Drizzle tables", ()
     );
     expect(member.name).toBe("member");
     const memberCols = member.columns.map((c) => c.name).sort();
-    // Hostel-domain Member: tier_role + started_at + invite/user_id fields
+    // Hostel-domain Member: tier_role + started_at; invite/user_id removed (live DB shape)
     expect(memberCols).toEqual(
-      ["email", "full_name", "id", "invite_code", "invite_expires_at", "notes", "phone", "started_at", "tier_role", "user_id"].sort(),
+      ["email", "full_name", "id", "notes", "phone", "started_at", "tier_role"].sort(),
     );
 
     const evt = getTableConfig(

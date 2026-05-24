@@ -88,7 +88,7 @@ function buildToolCallingModel(bypass: boolean): MockLanguageModelV3 {
               action: "change_tier",
               params: {
                 member: TEST_MEMBER_ID,
-                new_tier: "sustaining",
+                new_tier: "work_trader",
               },
               ...(bypass ? { bypass_confirmation: true } : {}),
             }),

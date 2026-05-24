@@ -147,12 +147,12 @@ export default defineAction({
   handler: async ({ params, ctx }) => {
     const before = await ctx.objects.Member.findById(params.member);
     if (!before) return { ok: false, reason: "member_not_found", member: params.member };
-    const updated = await ctx.objects.Member.update(params.member, { tier: params.new_tier });
+    const updated = await ctx.objects.Member.update(params.member, { tier_role: params.new_tier });
     return {
       ok: true,
       member: params.member,
-      previous_tier: before.tier,
-      new_tier: updated?.tier ?? params.new_tier,
+      previous_tier: before.tier_role,
+      new_tier: updated?.tier_role ?? params.new_tier,
     };
   },
 });
@@ -231,7 +231,7 @@ describe("invokeAction — single action without composition", () => {
     expect(result).toMatchObject({
       ok: true,
       member: "m-1",
-      previous_tier: "basic",
+      previous_tier: "staff",
       new_tier: "sustaining",
     });
 

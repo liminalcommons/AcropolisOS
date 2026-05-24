@@ -30,7 +30,7 @@ done
 # applied columns to make the DB match the stale schema.
 if [ -d ontology ] && [ -f scripts/regenerate-from-live.ts ]; then
   echo "[entrypoint] regenerating codegen from live ontology/..."
-  npx --no-install tsx scripts/regenerate-from-live.ts
+  npx --no-install tsx scripts/regenerate-from-live.ts || echo "[entrypoint] WARN: regenerate-from-live failed (non-fatal — using existing generated files)"
 fi
 
 echo "[entrypoint] syncing database schema..."
