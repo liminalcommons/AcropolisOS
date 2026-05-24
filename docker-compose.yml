@@ -120,8 +120,12 @@ services:
     image: n8nio/n8n:latest
     container_name: acropolisos-n8n
     restart: unless-stopped
+    # n8n v2 uses built-in user-management (owner account set up on first run
+    # at the editor). Host port bound to 127.0.0.1 so only the operator's
+    # browser on this machine can reach the setup screen — LAN peers cannot.
+    # Step 2b (MCP shim) reaches n8n via internal DNS http://n8n:5678.
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678"
     environment:
       - N8N_HOST=localhost
       - N8N_PORT=5678
@@ -129,10 +133,6 @@ services:
       - NODE_ENV=production
       - WEBHOOK_URL=http://localhost:5678/
       - GENERIC_TIMEZONE=UTC
-      # Basic auth on the n8n editor so it's not wide open even locally:
-      - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=acropolis
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-acropolis2026}
       # Pin encryption key so stored credentials survive container recreate:
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-acropolis-n8n-dev-key-change-in-prod}
     volumes:
