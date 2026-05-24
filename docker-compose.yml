@@ -116,9 +116,34 @@ services:
     ports:
       - "8288:8288"
 
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: acropolisos-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=UTC
+      # Basic auth on the n8n editor so it's not wide open even locally:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=acropolis
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-acropolis2026}
+      # Pin encryption key so stored credentials survive container recreate:
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-acropolis-n8n-dev-key-change-in-prod}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    # n8n uses its own SQLite by default — no dependency on postgres this cycle.
+    # Pointing n8n at the shared Postgres is a later optimization (step 2b+).
+
 volumes:
   pgdata:
   appdata:
   # Named volume for .next/ so the Next.js dev compiler writes into it
   # without risk of a host bind-mount shadowing the build output directory.
   nexttmp:
+  n8n_data:
