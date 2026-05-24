@@ -10,6 +10,9 @@ export const WIDGET_KINDS = [
   "recent_context",
   "inbox_unread",
   "note",
+  "turnover_cleaning",
+  "table",
+  "agent_html",
 ] as const;
 export type WidgetKind = (typeof WIDGET_KINDS)[number];
 
@@ -125,7 +128,36 @@ export type WidgetBundle =
         }>;
       };
     }
-  | { id: string; kind: "note"; data: { markdown: string } };
+  | { id: string; kind: "note"; data: { markdown: string } }
+  | {
+      id: string;
+      kind: "turnover_cleaning";
+      data: {
+        as_of: string;
+        rows: Array<{
+          bed_code: string;
+          checkout_guest: string | null;
+          checkin_guest: string | null;
+          gap_label: string;
+        }>;
+      };
+    }
+  | {
+      id: string;
+      kind: "table";
+      title?: string;
+      data: {
+        rows: Array<{ label: string; value: string }>;
+      };
+    }
+  | {
+      id: string;
+      kind: "agent_html";
+      title?: string;
+      data: {
+        html: string;
+      };
+    };
 
 export interface MeBundle {
   member_id: string;

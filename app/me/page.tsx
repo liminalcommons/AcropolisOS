@@ -10,6 +10,7 @@ import Link from "next/link";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { getAgentBlockers } from "@/lib/me/fetchers/agent-blockers";
 import { getOrCreateMemberContext } from "@/lib/me/fetchers/member-context";
+import { PinnedWidget, type PinnedWidgetShape } from "@/components/dashboard/PinnedWidget";
 import {
   resolveBlockerAction,
   dismissBlockerAction,
@@ -75,15 +76,15 @@ export default async function MePage(): Promise<React.ReactElement> {
   const blockersBundle = await getAgentBlockers(ctx, me.id);
   const blockers = blockersBundle.data.blockers;
 
-  // Parse pinned widgets — DB returns jsonb as array; legacy text path fallback.
-  let pinnedWidgets: Array<{ id: string; kind: string; config: unknown }> = [];
+  // Parse pinned widgets — DB returns text (JSON string) or legacy array.
+  let pinnedWidgets: PinnedWidgetShape[] = [];
   const rawPinned = mc.pinned_widgets;
   if (Array.isArray(rawPinned)) {
-    pinnedWidgets = rawPinned as typeof pinnedWidgets;
+    pinnedWidgets = rawPinned as PinnedWidgetShape[];
   } else if (typeof rawPinned === "string") {
     try {
       const parsed = JSON.parse(rawPinned);
-      if (Array.isArray(parsed)) pinnedWidgets = parsed;
+      if (Array.isArray(parsed)) pinnedWidgets = parsed as PinnedWidgetShape[];
     } catch {
       // treat as empty
     }
@@ -219,13 +220,13 @@ export default async function MePage(): Promise<React.ReactElement> {
             </h2>
             <ul className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {pinnedWidgets.map((w) => (
-                <li
-                  key={w.id}
-                  className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono text-zinc-400">{w.kind}</span>
-                    <form action={unpinWidgetAction.bind(null, w.id)}>
+                <li key={w.id}>
+                  <div className="relative">
+                    <PinnedWidget widget={w} />
+                    <form
+                      action={unpinWidgetAction.bind(null, w.id)}
+                      className="absolute top-3 right-3"
+                    >
                       <button
                         type="submit"
                         data-testid={`unpin-${w.id}`}

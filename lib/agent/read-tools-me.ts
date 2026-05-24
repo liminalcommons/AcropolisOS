@@ -58,8 +58,12 @@ async function buildMeBundleForMember(
       try { const p = JSON.parse(raw); if (Array.isArray(p)) parsed = p; } catch { /* ignore */ }
     }
     if (parsed) {
-      pinnedWidgets = (parsed as Array<{ id: string; kind: string }>).map(
-        (w) => ({ id: w.id, kind: w.kind as WidgetBundle["kind"], data: {} as never }),
+      // Stored widgets may have any shape (agent_html has data.html, table has
+      // data.rows, legacy kinds have structured data fields). Cast through
+      // unknown — we only need id + kind to populate the bundle summary; the
+      // full data is rendered by PinnedWidget on the client, not by this tool.
+      pinnedWidgets = (parsed as unknown[]).map(
+        (w) => w as WidgetBundle,
       );
     }
   }

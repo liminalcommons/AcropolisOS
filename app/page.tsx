@@ -12,8 +12,9 @@
 // exposed via ctx.objects (that surface covers only community ontology types).
 // They are queried here via getDb() + drizzle tables from schema.generated.
 
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { and, eq, gte, lte, lt, inArray, isNull } from "drizzle-orm";
+import { and, eq, gte, lte, lt, inArray } from "drizzle-orm";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { getDb } from "@/lib/db/client";
 import {
@@ -25,6 +26,8 @@ import {
   guest as guestTable,
 } from "@/lib/db/schema.generated";
 import { TODAY, TODAY_LABEL, serverNow } from "@/lib/me/today";
+import { getOrCreateMemberContext } from "@/lib/me/fetchers/member-context";
+import { PinnedWidget, type PinnedWidgetShape } from "@/components/dashboard/PinnedWidget";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -116,6 +119,32 @@ export default async function Home(): Promise<React.ReactElement> {
   const chatRuntime = await buildChatRuntime();
   if (isAnonymous(chatRuntime.actor)) {
     redirect("/signin");
+  }
+
+  // Fetch pinned widgets for this actor. Resolve Member row first (MemberContext
+  // links to Member.id, not to auth userId directly in all cases).
+  let pinnedWidgets: PinnedWidgetShape[] = [];
+  try {
+    const members = await chatRuntime.ctx.objects.Member.findMany();
+    const me = members.find((m) => m.id === chatRuntime.actor!.userId);
+    if (me) {
+      const mc = await getOrCreateMemberContext(chatRuntime.ctx, me.id);
+      const raw = mc.pinned_widgets;
+      let parsed: unknown[] | null = null;
+      if (Array.isArray(raw)) {
+        parsed = raw;
+      } else if (typeof raw === "string") {
+        try {
+          const p = JSON.parse(raw);
+          if (Array.isArray(p)) parsed = p;
+        } catch { /* ignore */ }
+      }
+      if (parsed) {
+        pinnedWidgets = parsed as PinnedWidgetShape[];
+      }
+    }
+  } catch {
+    // Non-fatal — dashboard renders without pinned widgets if context unavailable.
   }
 
   const db = getDb();
@@ -499,10 +528,22 @@ export default async function Home(): Promise<React.ReactElement> {
           </div>
         </section>
 
-        {/* ── Ask agent affordance ── */}
+        {/* ── Pinned widgets (F6) ── */}
+        {pinnedWidgets.length > 0 && (
+          <section className="space-y-4">
+            <p className="text-[10px] uppercase tracking-widest text-zinc-500">
+              Your widgets
+            </p>
+            {pinnedWidgets.map((w) => (
+              <PinnedWidget key={w.id} widget={w} />
+            ))}
+          </section>
+        )}
+
+        {/* ── Ask agent affordance (F6: real link) ── */}
         <section>
-          <a
-            href="#ask-agent"
+          <Link
+            href="/dashboard/ask"
             className="block rounded-lg border border-dashed border-zinc-700 p-4 hover:border-zinc-500 transition-colors"
           >
             <div className="flex items-start gap-3">
@@ -516,7 +557,7 @@ export default async function Home(): Promise<React.ReactElement> {
                 </p>
               </div>
             </div>
-          </a>
+          </Link>
         </section>
 
       </div>
