@@ -72,12 +72,29 @@ export type CommitProposalResult =
   | { status: "forbidden" }
   | { status: "validation_error"; issues: z.ZodIssue[] }
   | { status: "field_map_error"; invalid_fields: string[] }
-  | { status: "inbox_not_found" };
+  | { status: "inbox_not_found" }
+  | { status: "incomplete_required_refs"; missing: string[] }
+  | { status: "commit_error"; detail: string };
 
-// ── Required-field defaults per type ─────────────────────────────────────────
-// When a source payload doesn't map to a NOT NULL column, apply a sentinel
-// default so the row can be written. These are clearly labelled as "unset"
-// so a subsequent resolve/edit pass can clean them up.
+// ── Required FK columns per type ─────────────────────────────────────────────
+// These are the NOT NULL foreign-key columns derived from schema.generated.ts.
+// If any of these are absent from the mapped fields before insert, we return
+// { status: "incomplete_required_refs" } — FK resolution is A4 territory.
+
+const REQUIRED_REFS: Record<TargetType, string[]> = {
+  guest: [],
+  member: [],
+  booking: ["guest", "bed"],
+  event: ["organizer"],
+  bed: ["room"],
+  room: [],
+  shift: ["member_id"],
+  work_trade_agreement: ["bed_comp"],
+};
+
+// ── Non-FK defaults per type ──────────────────────────────────────────────────
+// Only non-FK NOT NULL columns with sensible defaults. Sentinel-UUID FK values
+// are NOT included here — those must be resolved via A4 entity resolution.
 
 const TYPE_DEFAULTS: Record<TargetType, Record<string, unknown>> = {
   guest: {
@@ -95,8 +112,6 @@ const TYPE_DEFAULTS: Record<TargetType, Record<string, unknown>> = {
   },
   booking: {
     label: "Imported",
-    guest: "00000000-0000-0000-0000-000000000000",
-    bed: "00000000-0000-0000-0000-000000000000",
     from_date: new Date().toISOString().slice(0, 10),
     to_date: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10),
     rate_per_night: 0,
@@ -108,12 +123,10 @@ const TYPE_DEFAULTS: Record<TargetType, Record<string, unknown>> = {
     title: "Imported event",
     starts_at: new Date().toISOString(),
     duration_hours: 2,
-    organizer: "00000000-0000-0000-0000-000000000000",
     status: "scheduled",
   },
   bed: {
     code: "imported",
-    room: "00000000-0000-0000-0000-000000000000",
     is_bottom_bunk: true,
     out_of_service: false,
   },
@@ -128,12 +141,9 @@ const TYPE_DEFAULTS: Record<TargetType, Record<string, unknown>> = {
     starts_at: new Date().toISOString(),
     duration_hours: 8,
     status: "open",
-    // member_id is required; sentinel value — must be resolved.
-    member_id: "00000000-0000-0000-0000-000000000000",
   },
   work_trade_agreement: {
     label: "Imported agreement",
-    bed_comp: "00000000-0000-0000-0000-000000000000",
     hours_per_week: 20,
     start_date: new Date().toISOString().slice(0, 10),
     end_date: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
@@ -275,17 +285,35 @@ export async function commitProposalCore(
 
       const mappedFields = applyFieldMap(payload, field_map);
 
+      // Step d: check required FK columns before attempting the insert.
+      // If any required-ref col is absent from both defaults AND mapped fields,
+      // return structured result — FK resolution is A4 / Resolve territory.
+      const combinedFields = { ...defaults, ...mappedFields };
+      const requiredRefs = REQUIRED_REFS[target_type] ?? [];
+      const missingRefs = requiredRefs.filter(
+        (col) => combinedFields[col] === undefined || combinedFields[col] === null,
+      );
+      if (missingRefs.length > 0) {
+        // Signal the outer function — no insert, provenance rolls back
+        throw new Error("__INCOMPLETE_REFS__:" + missingRefs.join(","));
+      }
+
       // Merge: defaults < mapped (mapped wins over defaults)
       const newId = randomUUID();
       const rowToInsert: Record<string, unknown> = {
         id: newId,
-        ...defaults,
-        ...mappedFields,
+        ...combinedFields,
       };
 
-      // Step d: insert the typed row
+      // Step e: insert the typed row — wrapped so any DB error maps to
+      // { status:"commit_error" } rather than re-throwing raw SQL strings.
       const table = tableForType(target_type);
-      await tx.insert(table as never).values(rowToInsert as never);
+      try {
+        await tx.insert(table as never).values(rowToInsert as never);
+      } catch (insertErr) {
+        const detail = insertErr instanceof Error ? insertErr.message : String(insertErr);
+        throw new Error("__COMMIT_ERROR__:" + detail);
+      }
 
       typedRowId = newId;
     });
@@ -298,8 +326,16 @@ export async function commitProposalCore(
         const classifiedAs = err.message.slice("__ALREADY_CLASSIFIED__:".length) || null;
         return { status: "already_classified", classified_as: classifiedAs };
       }
+      if (err.message.startsWith("__INCOMPLETE_REFS__:")) {
+        const missing = err.message.slice("__INCOMPLETE_REFS__:".length).split(",").filter(Boolean);
+        return { status: "incomplete_required_refs", missing };
+      }
+      if (err.message.startsWith("__COMMIT_ERROR__:")) {
+        const detail = err.message.slice("__COMMIT_ERROR__:".length);
+        return { status: "commit_error", detail };
+      }
     }
-    throw err; // re-throw unexpected errors
+    throw err; // re-throw truly unexpected errors
   }
 
   return {

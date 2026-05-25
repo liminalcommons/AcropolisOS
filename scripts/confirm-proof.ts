@@ -1,7 +1,7 @@
 /**
  * A3 proof script — verify commitProposalCore end-to-end without HTTP.
  *
- * Sequence:
+ * Test 1 (regression guard): guest still commits
  *   1. INSERT a disposable raw_inbox row (source='test-a3').
  *   2. Call commitProposalCore as a steward actor.
  *   3. ASSERT: guest row with full_name='ZZTest Person' exists.
@@ -10,14 +10,23 @@
  *   6. ASSERT: returns { status:"already_classified" } AND guest count is still 1.
  *   7. CLEANUP: delete the test guest row + test raw_inbox row.
  *
+ * Test 2 (HIGH fix): booking with missing FK returns incomplete_required_refs, no throw
+ *   1. INSERT a disposable raw_inbox row (source='test-a3-booking').
+ *   2. Call commitProposalCore with target_type:'booking', field_map:{label:'label'} (no guest/bed).
+ *   3. ASSERT: returns { status:"incomplete_required_refs", missing:[...] } (does NOT throw).
+ *   4. ASSERT: missing array includes 'guest' and 'bed'.
+ *   5. ASSERT: raw_inbox.classified_as is still NULL (provenance not stamped).
+ *   6. ASSERT: no booking row was created.
+ *   7. CLEANUP: delete the disposable raw_inbox row.
+ *
  * Usage: docker exec acropolisos-app npx tsx scripts/confirm-proof.ts
  */
 
 import { randomUUID } from "node:crypto";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { createDb } from "../lib/db/client";
 import { raw_inbox } from "../lib/db/schema";
-import { guest as guestTable } from "../lib/db/schema.generated";
+import { guest as guestTable, booking as bookingTable } from "../lib/db/schema.generated";
 import { commitProposalCore } from "../lib/organize/commit";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -123,8 +132,8 @@ async function main() {
     .where(eq(guestTable.full_name, "ZZTest Person"));
   assert(allZZGuests.length === 1, `guest count for 'ZZTest Person' === 1 (no double-write), got: ${allZZGuests.length}`);
 
-  // ── 7. CLEANUP ───────────────────────────────────────────────────────────────
-  console.log("\n=== STEP 7: Cleanup ===");
+  // ── 7. CLEANUP (guest test) ──────────────────────────────────────────────────
+  console.log("\n=== STEP 7: Cleanup (guest test) ===");
   if (typedRowId) {
     await db.delete(guestTable).where(eq(guestTable.id, typedRowId));
     console.log("  Deleted guest row:", typedRowId);
@@ -132,8 +141,88 @@ async function main() {
   await db.delete(raw_inbox).where(eq(raw_inbox.id, inboxId));
   console.log("  Deleted raw_inbox row:", inboxId);
 
+  console.log("\nTEST 1 (guest commits) — PASS\n");
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // TEST 2: booking with missing FK → incomplete_required_refs, no throw
+  // ════════════════════════════════════════════════════════════════════════════
+
+  console.log("\n=== TEST 2: booking with missing FK columns ===");
+
+  // T2-1. INSERT disposable raw_inbox row for booking test
+  const bookingInboxId = randomUUID();
+  await db.insert(raw_inbox).values({
+    id: bookingInboxId,
+    source: "test-a3-booking",
+    payload: { label: "Test booking", notes: "some notes" },
+  });
+  console.log("  Inserted raw_inbox id:", bookingInboxId);
+
+  // T2-2. Call commitProposalCore: booking type, only label mapped (no guest/bed)
+  const bookingProposal = {
+    inbox_id: bookingInboxId,
+    target_type: "booking" as const,
+    field_map: { label: "label" },
+    confidence: 0.7,
+    unmapped: ["notes"],
+    reasoning: "test booking missing fk",
+  };
+
+  let bookingResult: Awaited<ReturnType<typeof commitProposalCore>> | null = null;
+  let bookingThrew = false;
+  try {
+    bookingResult = await commitProposalCore(db, "steward", stewardId, bookingProposal);
+  } catch {
+    bookingThrew = true;
+  }
+
+  // T2-3. ASSERT: did NOT throw
+  assert(!bookingThrew, "booking call does NOT throw (no raw FK violation escapes)");
+
+  // T2-4. ASSERT: returns incomplete_required_refs
+  assert(
+    bookingResult?.status === "incomplete_required_refs",
+    `booking result.status === 'incomplete_required_refs' (got: ${bookingResult?.status})`,
+  );
+
+  // T2-5. ASSERT: missing array includes 'guest' and 'bed'
+  const missingCols = bookingResult?.status === "incomplete_required_refs" ? bookingResult.missing : [];
+  assert(
+    missingCols.includes("guest"),
+    `missing includes 'guest' (got: [${missingCols.join(", ")}])`,
+  );
+  assert(
+    missingCols.includes("bed"),
+    `missing includes 'bed' (got: [${missingCols.join(", ")}])`,
+  );
+  console.log("  missing cols:", missingCols);
+
+  // T2-6. ASSERT: raw_inbox.classified_as is still NULL (provenance not stamped)
+  const bookingInboxRows = await db
+    .select()
+    .from(raw_inbox)
+    .where(eq(raw_inbox.id, bookingInboxId));
+  assert(bookingInboxRows.length === 1, "booking inbox row still exists");
+  assert(
+    bookingInboxRows[0].classified_as === null,
+    `raw_inbox.classified_as is NULL (provenance not stamped) — got: ${bookingInboxRows[0].classified_as}`,
+  );
+
+  // T2-7. ASSERT: no booking row created
+  const bookingRows = await db
+    .select()
+    .from(bookingTable)
+    .where(eq(bookingTable.label, "Test booking"));
+  assert(bookingRows.length === 0, `no booking row was created (count: ${bookingRows.length})`);
+
+  // T2-8. CLEANUP
+  await db.delete(raw_inbox).where(eq(raw_inbox.id, bookingInboxId));
+  console.log("  Deleted raw_inbox row:", bookingInboxId);
+
+  console.log("\nTEST 2 (booking → incomplete_required_refs, no throw) — PASS\n");
+
   console.log("\ncleanup done");
-  console.log("\n=== A3 PROOF COMPLETE ===");
+  console.log("\n=== A3 PROOF COMPLETE (ALL TESTS PASS) ===");
 
   await (db.$client as { end: () => Promise<void> }).end();
   process.exit(0);

@@ -76,6 +76,8 @@ type ConfirmState =
   | { tag: "committed"; typed_row_id: string; target_type: string }
   | { tag: "already_classified" }
   | { tag: "forbidden" }
+  | { tag: "incomplete_refs"; missing: string[] }
+  | { tag: "commit_error"; detail: string }
   | { tag: "error"; message: string };
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -107,6 +109,10 @@ function ProposalCard({
         setConfirmState({ tag: "already_classified" });
       } else if (result.status === "forbidden") {
         setConfirmState({ tag: "forbidden" });
+      } else if (result.status === "incomplete_required_refs") {
+        setConfirmState({ tag: "incomplete_refs", missing: result.missing });
+      } else if (result.status === "commit_error") {
+        setConfirmState({ tag: "commit_error", detail: result.detail });
       } else {
         setConfirmState({
           tag: "error",
@@ -207,6 +213,19 @@ function ProposalCard({
           <p className="text-xs text-amber-400/80">Already committed — no double-write.</p>
         ) : confirmState.tag === "forbidden" ? (
           <p className="text-xs text-red-400">Forbidden — steward role required.</p>
+        ) : confirmState.tag === "incomplete_refs" ? (
+          <div className="text-xs text-zinc-400 space-y-0.5">
+            <p className="text-zinc-400">
+              Needs resolution — links to other records (handled in A4).
+            </p>
+            <p className="text-zinc-500 font-mono">
+              Missing: {confirmState.missing.join(", ")}
+            </p>
+          </div>
+        ) : confirmState.tag === "commit_error" ? (
+          <p className="text-xs text-red-400">
+            Write error — {confirmState.detail.slice(0, 120)}
+          </p>
         ) : confirmState.tag === "error" ? (
           <p className="text-xs text-red-400 font-mono">{confirmState.message}</p>
         ) : (
