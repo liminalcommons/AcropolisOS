@@ -28,6 +28,7 @@ import { generateText } from "ai";
 import { z } from "zod";
 import { buildLanguageModel } from "@/lib/agent/mastra";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
+import { extractJson } from "@/lib/agent/extract-json";
 import { getDb } from "@/lib/db/client";
 import { raw_inbox } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -123,18 +124,6 @@ function isClassifyBody(v: unknown): v is ClassifyBody {
   if (!v || typeof v !== "object") return false;
   const { inbox_id } = v as Record<string, unknown>;
   return typeof inbox_id === "string" && inbox_id.length > 0;
-}
-
-// Extract JSON from LLM text response — model may wrap JSON in markdown fences.
-function extractJson(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
-  const braceStart = text.indexOf("{");
-  const braceEnd = text.lastIndexOf("}");
-  if (braceStart !== -1 && braceEnd > braceStart) {
-    return text.slice(braceStart, braceEnd + 1);
-  }
-  return text.trim();
 }
 
 export async function POST(req: Request): Promise<Response> {
