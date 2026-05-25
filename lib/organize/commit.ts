@@ -36,7 +36,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { getDb, type Database } from "../db/client";
-import { raw_inbox } from "../db/schema";
+import { raw_inbox, action_audit } from "../db/schema";
 import {
   guest as guestTable,
   member as memberTable,
@@ -88,7 +88,8 @@ export type CommitProposalResult =
   | { status: "commit_error"; detail: string }
   // A4 statuses
   | { status: "duplicate_candidate"; candidates: DuplicateCandidate[]; proposal: CommitProposalInput }
-  | { status: "merged"; merged_into: string };
+  | { status: "merged"; merged_into: string }
+  | { status: "merge_target_not_found"; merge_into: string };
 
 // ── A4 Resolution argument ────────────────────────────────────────────────────
 // Passed by the UI after the human has made a choice from the duplicate_candidate list.
@@ -174,6 +175,19 @@ const TYPE_DEFAULTS: Record<TargetType, Record<string, unknown>> = {
 
 // ── Table lookup ──────────────────────────────────────────────────────────────
 
+// Safe hardcoded table name map — used in parameterized existence checks.
+// The id is ALWAYS a bound parameter; only the table name comes from this map.
+const TABLE_NAMES: Record<TargetType, string> = {
+  guest: "guest",
+  member: "member",
+  booking: "booking",
+  event: "event",
+  bed: "bed",
+  room: "room",
+  shift: "shift",
+  work_trade_agreement: "work_trade_agreement",
+};
+
 type AnyTable = typeof guestTable | typeof memberTable | typeof bookingTable |
   typeof eventTable | typeof bedTable | typeof roomTable |
   typeof shiftTable | typeof workTradeTable;
@@ -252,20 +266,109 @@ export async function commitProposalCore(
   //   No new row is created. Stamp provenance on raw_inbox so the row is marked
   //   processed and disappears from /organize. The existing row already holds
   //   the canonical data — the incoming duplicate is simply discarded.
+  //
+  //   INTEGRITY CONTRACT (A4 HIGH fix):
+  //   1. Validate merge target EXISTS and is of the correct target_type via
+  //      a parameterized query (table name from safe hardcoded map, id is bound).
+  //      Bogus/cross-type id → merge_target_not_found, data preserved, no write.
+  //   2. Assert UPDATE hit exactly 1 row (checking raw row existence + classified_as
+  //      IS NULL). 0 rows → structured error, never false 'merged'.
+  //   3. Persist merge decision to action_audit for recoverability.
   if (resolution !== undefined && resolution !== "create_new" && typeof resolution === "object" && "merge_into" in resolution) {
     const mergeTarget = (resolution as { merge_into: string }).merge_into;
+    const tableName = TABLE_NAMES[target_type];
+
+    // ── Step 1: Validate the merge target exists and is of the correct type ──
+    let targetExists = false;
     try {
-      await db.execute(
-        sql`UPDATE raw_inbox
-            SET classified_as = ${target_type},
-                classified_at = NOW(),
-                classified_by = ${actorId}
-            WHERE id = ${inbox_id} AND classified_as IS NULL`,
+      // Safe: tableName comes from the hardcoded TABLE_NAMES map (not user input).
+      // mergeTarget is a bound parameter — never concatenated into the query string.
+      const existResult = await db.execute(
+        sql`SELECT 1 FROM ${sql.identifier(tableName)} WHERE id = ${mergeTarget} LIMIT 1`,
       );
+      const existRows = Array.isArray(existResult)
+        ? existResult
+        : ((existResult as { rows?: unknown[] }).rows ?? []);
+      targetExists = existRows.length > 0;
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       return { status: "commit_error", detail };
     }
+
+    if (!targetExists) {
+      // Bogus id or cross-type id (e.g. member id when target_type='guest').
+      // Write NOTHING. classified_as stays NULL so the data is preserved and
+      // re-resolvable. Never silently discard inbound payload.
+      return { status: "merge_target_not_found", merge_into: mergeTarget };
+    }
+
+    // ── Step 2: Stamp provenance + assert exactly 1 row was touched ──────────
+    try {
+      // First check if the inbox row exists and its classified_as state.
+      const inboxCheck = await db.execute(
+        sql`SELECT classified_as FROM raw_inbox WHERE id = ${inbox_id}`,
+      );
+      const checkRows = Array.isArray(inboxCheck)
+        ? (inboxCheck as Array<Record<string, unknown>>)
+        : ((inboxCheck as { rows?: Array<Record<string, unknown>> }).rows ?? []);
+
+      if (checkRows.length === 0) {
+        return { status: "inbox_not_found" };
+      }
+
+      const existingClassifiedAs = checkRows[0].classified_as;
+      if (existingClassifiedAs !== null && existingClassifiedAs !== undefined) {
+        return { status: "already_classified", classified_as: String(existingClassifiedAs) };
+      }
+
+      // Update only rows where classified_as IS NULL (idempotency guard).
+      const updateResult = await db.execute(
+        sql`UPDATE raw_inbox
+            SET classified_as = ${target_type},
+                classified_at = NOW(),
+                classified_by = ${actorId}
+            WHERE id = ${inbox_id} AND classified_as IS NULL
+            RETURNING id`,
+      );
+      const updatedRows = Array.isArray(updateResult)
+        ? updateResult
+        : ((updateResult as { rows?: unknown[] }).rows ?? []);
+
+      // Assert exactly 1 row was touched — never return false 'merged'.
+      if (updatedRows.length !== 1) {
+        // Race: another request classified this row between our check and update.
+        return { status: "already_classified", classified_as: null };
+      }
+
+      // ── Step 3: Persist merge decision to action_audit ────────────────────
+      // Uses the existing action_audit table (schema.ts) — no schema change.
+      // subject_type = target_type, subject_id = mergeTarget (the canonical row),
+      // metadata carries inbox_id for full traceability of the resolution.
+      try {
+        await db.insert(action_audit).values({
+          actor: actorId,
+          actor_role: "steward",
+          via: "commitProposalCore/merge_into",
+          subject_type: target_type,
+          subject_id: mergeTarget,
+          before: null,
+          after: null,
+          metadata: {
+            inbox_id,
+            merged_into: mergeTarget,
+            target_type,
+          },
+        });
+      } catch {
+        // Audit write failure is non-fatal — the merge is already committed.
+        // Log the omission but do not surface it as an error to the caller.
+        console.error("[commit] WARNING: action_audit write failed for merge", inbox_id, "→", mergeTarget);
+      }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      return { status: "commit_error", detail };
+    }
+
     return { status: "merged", merged_into: mergeTarget };
   }
 

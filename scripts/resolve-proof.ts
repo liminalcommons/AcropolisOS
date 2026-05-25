@@ -27,8 +27,8 @@
 import { randomUUID } from "node:crypto";
 import { eq, like, sql } from "drizzle-orm";
 import { createDb } from "../lib/db/client";
-import { raw_inbox } from "../lib/db/schema";
-import { guest as guestTable } from "../lib/db/schema.generated";
+import { raw_inbox, action_audit } from "../lib/db/schema";
+import { guest as guestTable, member as memberTable } from "../lib/db/schema.generated";
 import { commitProposalCore } from "../lib/organize/commit";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -259,6 +259,194 @@ async function main() {
   console.log("CASE 4 — PASS\n");
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // CASE 5 — Bogus merge target (random UUID, no matching row)
+  // ─────────────────────────────────────────────────────────────────────────────
+  console.log("=== CASE 5: Bogus merge target (random UUID) ===");
+
+  const inbox5Id = randomUUID();
+  await db.insert(raw_inbox).values({
+    id: inbox5Id,
+    source: "test-a4-case5",
+    payload: { full_name: "Bogus Test Person", email: "bogus@test.local" },
+  });
+  console.log("  Inserted raw_inbox id:", inbox5Id);
+
+  const bogusId = randomUUID(); // random UUID — no matching row in any table
+  const result5 = await commitProposalCore(
+    db,
+    "steward",
+    STEWARD_ID,
+    {
+      inbox_id: inbox5Id,
+      target_type: "guest",
+      field_map: { full_name: "full_name", email: "email" },
+      confidence: 0.8,
+      unmapped: [],
+      reasoning: "test bogus merge",
+    },
+    { merge_into: bogusId },
+  );
+  console.log("  Result:", JSON.stringify(result5));
+
+  assert(
+    result5.status === "merge_target_not_found",
+    `status === 'merge_target_not_found' (got: ${result5.status})`,
+  );
+  assert(
+    result5.status === "merge_target_not_found" && result5.merge_into === bogusId,
+    `merge_into reflects the bogus id`,
+  );
+
+  // classified_as must remain NULL — data preserved, re-resolvable
+  const inbox5Rows = await db.select().from(raw_inbox).where(eq(raw_inbox.id, inbox5Id));
+  assert(
+    inbox5Rows[0]?.classified_as === null || inbox5Rows[0]?.classified_as === undefined,
+    `raw_inbox.classified_as is NULL after bogus merge (data preserved) — got: ${inbox5Rows[0]?.classified_as}`,
+  );
+
+  console.log("CASE 5 — PASS\n");
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // CASE 6 — Cross-type merge target (member id used when target_type='guest')
+  // ─────────────────────────────────────────────────────────────────────────────
+  console.log("=== CASE 6: Cross-type merge target (member id, guest target_type) ===");
+
+  // Insert a disposable member row
+  const disposableMemberId = randomUUID();
+  await db.insert(memberTable).values({
+    id: disposableMemberId,
+    full_name: "Test Member for Case6",
+    email: "member-case6@test.local",
+    phone: "000",
+    tier_role: "staff",
+    started_at: "2026-01-01",
+  });
+  console.log("  Inserted disposable member id:", disposableMemberId);
+
+  const inbox6Id = randomUUID();
+  await db.insert(raw_inbox).values({
+    id: inbox6Id,
+    source: "test-a4-case6",
+    payload: { full_name: "Cross Type Person", email: "crosstype@test.local" },
+  });
+  console.log("  Inserted raw_inbox id:", inbox6Id);
+
+  // merge_into = member id, but target_type = 'guest' → cross-type, must reject
+  const result6 = await commitProposalCore(
+    db,
+    "steward",
+    STEWARD_ID,
+    {
+      inbox_id: inbox6Id,
+      target_type: "guest",
+      field_map: { full_name: "full_name", email: "email" },
+      confidence: 0.8,
+      unmapped: [],
+      reasoning: "test cross-type merge",
+    },
+    { merge_into: disposableMemberId },
+  );
+  console.log("  Result:", JSON.stringify(result6));
+
+  assert(
+    result6.status === "merge_target_not_found",
+    `status === 'merge_target_not_found' for cross-type id (got: ${result6.status})`,
+  );
+
+  // classified_as must remain NULL — member id is not a valid guest
+  const inbox6Rows = await db.select().from(raw_inbox).where(eq(raw_inbox.id, inbox6Id));
+  assert(
+    inbox6Rows[0]?.classified_as === null || inbox6Rows[0]?.classified_as === undefined,
+    `raw_inbox.classified_as is NULL after cross-type merge (data preserved) — got: ${inbox6Rows[0]?.classified_as}`,
+  );
+
+  console.log("CASE 6 — PASS\n");
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // CASE 7 — Valid merge still works (regression guard + audit persistence check)
+  // ─────────────────────────────────────────────────────────────────────────────
+  console.log("=== CASE 7: Valid merge regression (existing guest + audit persistence) ===");
+
+  // Insert another disposable guest as the canonical target
+  const canonicalGuestId = randomUUID();
+  await db.insert(guestTable).values({
+    id: canonicalGuestId,
+    full_name: "Canonical Guest Case7",
+    email: "canonical-case7@test.local",
+    country: "DE",
+    phone: "000",
+    arrived_at: "2026-01-01",
+    expected_departure: "2026-01-08",
+    current_status: "booked",
+    is_work_trader: false,
+  });
+  console.log("  Inserted canonical guest id:", canonicalGuestId);
+
+  const inbox7Id = randomUUID();
+  await db.insert(raw_inbox).values({
+    id: inbox7Id,
+    source: "test-a4-case7",
+    payload: { full_name: "Canonical Guest Case7 dup", email: "canonical-case7-dup@test.local" },
+  });
+  console.log("  Inserted raw_inbox id:", inbox7Id);
+
+  const result7 = await commitProposalCore(
+    db,
+    "steward",
+    STEWARD_ID,
+    {
+      inbox_id: inbox7Id,
+      target_type: "guest",
+      field_map: { full_name: "full_name", email: "email" },
+      confidence: 0.85,
+      unmapped: [],
+      reasoning: "test valid merge regression",
+    },
+    { merge_into: canonicalGuestId },
+  );
+  console.log("  Result:", JSON.stringify(result7));
+
+  assert(result7.status === "merged", `status === 'merged' for valid guest id (got: ${result7.status})`);
+  assert(
+    result7.status === "merged" && result7.merged_into === canonicalGuestId,
+    `merged_into === canonicalGuestId`,
+  );
+
+  // No 2nd guest row created
+  const guestCountCase7 = await db
+    .select()
+    .from(guestTable)
+    .where(like(guestTable.full_name, "Canonical Guest Case7%"));
+  assert(
+    guestCountCase7.length === 1,
+    `no 2nd guest row created — count for 'Canonical Guest Case7%' === 1 (got: ${guestCountCase7.length})`,
+  );
+
+  // raw_inbox.classified_as === 'guest'
+  const inbox7Rows = await db.select().from(raw_inbox).where(eq(raw_inbox.id, inbox7Id));
+  assert(
+    inbox7Rows[0]?.classified_as === "guest",
+    `raw_inbox.classified_as === 'guest' after valid merge (got: ${inbox7Rows[0]?.classified_as})`,
+  );
+
+  // Audit row persisted in action_audit
+  const auditRows = await db
+    .select()
+    .from(action_audit)
+    .where(eq(action_audit.via, "commitProposalCore/merge_into"));
+  const matchingAudit = auditRows.find(
+    (r) =>
+      (r.metadata as Record<string, unknown>)?.inbox_id === inbox7Id &&
+      (r.metadata as Record<string, unknown>)?.merged_into === canonicalGuestId,
+  );
+  assert(
+    matchingAudit !== undefined,
+    `action_audit row persisted for merge (inbox_id=${inbox7Id} → merged_into=${canonicalGuestId})`,
+  );
+
+  console.log("CASE 7 — PASS\n");
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // CLEANUP — ALL disposable rows
   // ─────────────────────────────────────────────────────────────────────────────
   console.log("=== CLEANUP ===");
@@ -279,14 +467,34 @@ async function main() {
   await db.delete(guestTable).where(eq(guestTable.id, martaId));
   console.log("  Deleted setup Marta López guest row:", martaId);
 
-  // Delete all raw_inbox test rows
+  // Delete case-5 raw_inbox (classified_as=NULL, no typed row created)
+  await db.delete(raw_inbox).where(eq(raw_inbox.id, inbox5Id));
+  console.log("  Deleted case-5 raw_inbox row:", inbox5Id);
+
+  // Delete case-6 disposable member + raw_inbox
+  await db.delete(memberTable).where(eq(memberTable.id, disposableMemberId));
+  console.log("  Deleted case-6 member row:", disposableMemberId);
+  await db.delete(raw_inbox).where(eq(raw_inbox.id, inbox6Id));
+  console.log("  Deleted case-6 raw_inbox row:", inbox6Id);
+
+  // Delete case-7 canonical guest + raw_inbox + audit row
+  await db.delete(guestTable).where(eq(guestTable.id, canonicalGuestId));
+  console.log("  Deleted case-7 canonical guest row:", canonicalGuestId);
+  await db.delete(raw_inbox).where(eq(raw_inbox.id, inbox7Id));
+  console.log("  Deleted case-7 raw_inbox row:", inbox7Id);
+  if (matchingAudit) {
+    await db.delete(action_audit).where(eq(action_audit.id, matchingAudit.id));
+    console.log("  Deleted case-7 action_audit row:", matchingAudit.id);
+  }
+
+  // Delete all original raw_inbox test rows (cases 1-4)
   await db.delete(raw_inbox).where(eq(raw_inbox.id, inbox1Id));
   await db.delete(raw_inbox).where(eq(raw_inbox.id, inbox2Id));
   await db.delete(raw_inbox).where(eq(raw_inbox.id, inbox3Id));
   await db.delete(raw_inbox).where(eq(raw_inbox.id, inbox4Id));
-  console.log("  Deleted 4 raw_inbox test rows");
+  console.log("  Deleted 4 original raw_inbox test rows (cases 1-4)");
 
-  console.log("\n=== A4 PROOF COMPLETE — ALL 4 CASES PASS ===");
+  console.log("\n=== A4 PROOF COMPLETE — ALL 7 CASES PASS ===");
 
   await (db.$client as { end: () => Promise<void> }).end();
   process.exit(0);
