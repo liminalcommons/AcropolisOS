@@ -38,4 +38,10 @@ describe("designTheme", () => {
     expect(r.status).toBe("error");
     if (r.status === "error") expect(r.reason).toContain("contrast");
   });
+
+  it("rejects a value carrying trailing CSS-injection content (schema is the guardrail)", async () => {
+    const bad = JSON.stringify({ ...BASE_TOKENS, background: "oklch(0.5 0.1 200);} body{display:none}" });
+    const r = await designTheme({ prompt: "x" }, { generate: async () => bad });
+    expect(r.status).toBe("error");
+  });
 });

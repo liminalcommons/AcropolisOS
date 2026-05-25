@@ -20,6 +20,16 @@ export const TOKEN_KEYS = [
 export type TokenKey = (typeof TOKEN_KEYS)[number];
 export type TokenSet = Record<TokenKey, string>;
 
+// A fully-anchored oklch grammar: `oklch(L C H)` with an optional `/ alpha`.
+// Anchoring both ends is the structural guardrail — a token VALUE can only be a
+// complete color, never a color followed by injected CSS (`oklch(..);}…`). The
+// agent has color freedom within this grammar; it cannot escape it.
+export const OKLCH_RE = /^oklch\(\s*[0-9.]+%?\s+[0-9.]+\s+[0-9.]+(?:\s*\/\s*[0-9.]+%?)?\s*\)$/i;
+
+export function isOklchString(value: unknown): value is string {
+  return typeof value === "string" && OKLCH_RE.test(value.trim());
+}
+
 // The one base palette = the .dark token values already in globals.css :root/.dark.
 // acropolisOS ships dark-first; these oklch values match the existing .dark block.
 export const BASE_TOKENS: TokenSet = {
@@ -48,7 +58,7 @@ export function isValidTokenSet(value: unknown): value is TokenSet {
   const rec = value as Record<string, unknown>;
   if (Object.keys(rec).length !== TOKEN_KEYS.length) return false;
   for (const k of TOKEN_KEYS) {
-    if (typeof rec[k] !== "string" || (rec[k] as string).length === 0) return false;
+    if (!isOklchString(rec[k])) return false;
   }
   return true;
 }

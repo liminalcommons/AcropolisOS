@@ -15,7 +15,7 @@ import { generateText } from "ai";
 import { buildLanguageModel } from "@/lib/agent/mastra";
 import { extractJson } from "@/lib/agent/extract-json";
 import { validateContrast } from "./contrast";
-import { TOKEN_KEYS, type TokenSet } from "./tokens";
+import { TOKEN_KEYS, OKLCH_RE, type TokenSet } from "./tokens";
 
 export interface DesignThemeInput {
   prompt?: string;
@@ -31,7 +31,7 @@ export interface DesignDeps {
 
 const oklchString = z
   .string()
-  .regex(/^oklch\(/i, "must be an oklch(...) color string");
+  .regex(OKLCH_RE, "must be a complete oklch(L C H[/A]) color string");
 
 // Exact 18-key TokenSet schema. Listed literally (mirrors TOKEN_KEYS) so tsc is
 // happy and no extra/missing key can slip through (.strict()).
