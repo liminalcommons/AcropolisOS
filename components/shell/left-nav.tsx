@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_KEY, readCollapsed, writeCollapsed } from "./shell-state";
+import { ThemeSwitcher } from "./theme-switcher";
 
 const ITEMS = [
   { href: "/", label: "Home", icon: Home },
@@ -79,6 +80,7 @@ export function LeftNav({ memberName, role }: { memberName: string; role: string
           <Bell className="h-4 w-4 shrink-0" aria-hidden />
           {!collapsed && <span>Notifications</span>}
         </Link>
+        {!collapsed && <ThemeSwitcher />}
         {!collapsed && (
           <div className="mt-3 text-xs text-muted-foreground">
             <div className="truncate text-foreground">{memberName}</div>

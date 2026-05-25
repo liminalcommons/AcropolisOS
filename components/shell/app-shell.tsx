@@ -58,6 +58,7 @@ export async function AppShell({ children, actor, modelName }: Props): Promise<R
 
   return (
     <div
+      id="app-shell-root"
       style={tokenSetToCssVars(tokens)}
       className="flex h-screen overflow-hidden bg-background text-foreground"
     >
