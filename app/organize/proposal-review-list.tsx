@@ -1,6 +1,6 @@
 "use client";
 
-// A2: ProposalReviewList — interactive classify + proposal review surface.
+// A3: ProposalReviewList — interactive classify + proposal review surface.
 //
 // Per raw_inbox row:
 //   1. Shows source badge + payload preview.
@@ -12,25 +12,24 @@
 //      - reasoning excerpt
 //      - Confirm / Reject / Edit-mapping controls
 //
-// SCOPE INVARIANT: Confirm/Reject/Edit are REVIEW-ONLY.
-//   Confirm → returns { status: "not_implemented", note: "commit lands in A3" }
+// A3 wires the Confirm button to the real confirmProposal server action:
+//   - Steward-gated, zod-validated, field_map re-validated server-side
+//   - Writes typed row to world-model + stamps raw_inbox provenance
+//   - Idempotent: already_classified rows cannot double-commit
 //   Reject  → local state only (row returns to idle)
-//   Edit    → not yet implemented (placeholder tooltip)
-// ZERO writes to the world-model or raw_inbox in this component.
+//   Edit    → not yet implemented (A4)
 
 import { useState } from "react";
 import type { RawInboxRow } from "@/lib/db/schema";
+import { confirmProposal } from "./actions";
+import type { CommitProposalInput } from "@/lib/organize/commit";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface Proposal {
-  inbox_id: string;
-  target_type: string;
-  field_map: Record<string, string>;
-  confidence: number;
-  unmapped: string[];
-  reasoning: string;
-}
+// Proposal uses CommitProposalInput directly so the type flows cleanly into
+// confirmProposal without a cast. The A1 classify route validates target_type
+// against the same TARGET_TYPE_ENUM, so the runtime types align.
+type Proposal = CommitProposalInput;
 
 type RowPhase =
   | { tag: "idle" }
@@ -70,18 +69,14 @@ function payloadPreview(payload: unknown): string {
   return entries.map(([k, v]) => `${k}: ${String(v)}`).join(" · ");
 }
 
-// ── Confirm placeholder action ────────────────────────────────────────────────
-// A3 will wire real commit here. For A2 this is intentionally a no-op
-// returning a clear "not_implemented" signal so the negativa auditor can
-// confirm zero writes.
+// ── Confirm result state ──────────────────────────────────────────────────────
 
-async function confirmPlaceholder(_proposal: Proposal): Promise<void> {
-  // A3 stub — no world-model write, no raw_inbox update.
-  // Intentionally verbose so grep for "not_implemented" finds this immediately.
-  const result = { status: "not_implemented", note: "commit lands in A3" };
-  console.info("[A2 confirm placeholder]", result);
-  // Surface to the user — the component renders "Not implemented (A3)" inline.
-}
+type ConfirmState =
+  | { tag: "idle" }
+  | { tag: "committed"; typed_row_id: string; target_type: string }
+  | { tag: "already_classified" }
+  | { tag: "forbidden" }
+  | { tag: "error"; message: string };
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -95,13 +90,37 @@ function ProposalCard({
   onConfirm: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
+  const [confirmState, setConfirmState] = useState<ConfirmState>({ tag: "idle" });
 
   async function handleConfirm() {
     setConfirming(true);
-    await confirmPlaceholder(proposal);
-    setConfirming(false);
-    setConfirmed(true);
+    try {
+      const result = await confirmProposal(proposal);
+      if (result.status === "committed") {
+        setConfirmState({
+          tag: "committed",
+          typed_row_id: result.typed_row_id,
+          target_type: result.target_type,
+        });
+        onConfirm();
+      } else if (result.status === "already_classified") {
+        setConfirmState({ tag: "already_classified" });
+      } else if (result.status === "forbidden") {
+        setConfirmState({ tag: "forbidden" });
+      } else {
+        setConfirmState({
+          tag: "error",
+          message: result.status,
+        });
+      }
+    } catch (err) {
+      setConfirmState({
+        tag: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setConfirming(false);
+    }
   }
 
   const allMapped = Object.entries(proposal.field_map);
@@ -178,11 +197,18 @@ function ProposalCard({
       )}
 
       {/* Controls */}
-      <div className="flex items-center gap-3 pt-1">
-        {confirmed ? (
-          <p className="text-xs text-amber-400/80">
-            Not implemented (A3) — commit wired in next slice.
+      <div className="flex items-center gap-3 pt-1 flex-wrap">
+        {confirmState.tag === "committed" ? (
+          <p className="text-xs text-emerald-400">
+            Committed — {confirmState.target_type} row{" "}
+            <span className="font-mono opacity-70">{confirmState.typed_row_id}</span>
           </p>
+        ) : confirmState.tag === "already_classified" ? (
+          <p className="text-xs text-amber-400/80">Already committed — no double-write.</p>
+        ) : confirmState.tag === "forbidden" ? (
+          <p className="text-xs text-red-400">Forbidden — steward role required.</p>
+        ) : confirmState.tag === "error" ? (
+          <p className="text-xs text-red-400 font-mono">{confirmState.message}</p>
         ) : (
           <>
             <button
@@ -202,14 +228,14 @@ function ProposalCard({
             </button>
             <button
               type="button"
-              title="Edit-mapping wired in A3"
+              title="Edit-mapping wired in A4"
               disabled
               className="rounded-md border border-zinc-800 bg-transparent px-4 py-1.5 text-xs font-medium text-zinc-600 cursor-not-allowed"
             >
               Edit mapping
             </button>
             <span className="text-[10px] text-zinc-600 ml-1">
-              (Edit-mapping wired in A3)
+              (Edit-mapping wired in A4)
             </span>
           </>
         )}
@@ -332,7 +358,9 @@ export function ProposalReviewList({ rows, isSteward }: ProposalReviewListProps)
                 proposal={phase.proposal}
                 onReject={() => setPhase(row.id, { tag: "rejected" })}
                 onConfirm={() => {
-                  // handled inside ProposalCard — placeholder only, no world-model write
+                  // ProposalCard calls onConfirm after a successful commit.
+                  // Move the row to "committed" phase so the list collapses it.
+                  setPhase(row.id, { tag: "idle" });
                 }}
               />
             )}
