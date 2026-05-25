@@ -6,10 +6,13 @@ export const POLICY_LABEL: Record<AgentPolicy, string> = {
   always_confirm: "AI always confirms with a human",
 };
 
+// Fixed domain legend — these three policy colors are not user-themeable, so
+// they are literal oklch values. The app applies its theme as inline CSS vars on
+// #app-shell-root and does not carry policy colors, so a CSS var would not resolve.
 export const POLICY_VAR: Record<AgentPolicy, string> = {
-  auto_apply: "var(--color-policy-auto)",
-  confirm_if_unfamiliar: "var(--color-policy-familiar)",
-  always_confirm: "var(--color-policy-confirm)",
+  auto_apply: "oklch(0.7 0.15 150)",
+  confirm_if_unfamiliar: "oklch(0.78 0.14 80)",
+  always_confirm: "oklch(0.62 0.2 28)",
 };
 
 export function Legend(): React.ReactElement {

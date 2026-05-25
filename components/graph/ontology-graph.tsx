@@ -10,6 +10,8 @@ import {
   Background,
   Controls,
   Panel,
+  Handle,
+  Position,
   type Node,
   type Edge,
   type NodeProps,
@@ -33,6 +35,7 @@ type ObjectNodeType = Node<ObjectNodeData, "object">;
 function ObjectNode({ data }: NodeProps<ObjectNodeType>): React.ReactElement {
   return (
     <div className="min-w-[160px] rounded-md border border-border bg-card px-3 py-2 shadow-sm">
+      <Handle type="target" position={Position.Top} className="!opacity-0" />
       <div className="text-sm font-medium text-foreground">{data.label}</div>
       <div className="text-[10px] text-muted-foreground">{data.propertyCount} properties</div>
       {data.actions.length > 0 && (
@@ -49,6 +52,7 @@ function ObjectNode({ data }: NodeProps<ObjectNodeType>): React.ReactElement {
           ))}
         </div>
       )}
+      <Handle type="source" position={Position.Bottom} className="!opacity-0" />
     </div>
   );
 }
@@ -78,8 +82,9 @@ export function OntologyGraph({ model }: { model: GraphModel }): React.ReactElem
       source: r.source,
       target: r.target,
       label: `${r.label} (${r.cardinality})`,
-      labelStyle: { fill: "var(--color-muted-foreground)", fontSize: 10 },
-      style: { stroke: "var(--color-border)" },
+      labelStyle: { fill: "var(--muted-foreground)", fontSize: 10 },
+      labelBgStyle: { fill: "var(--card)" },
+      style: { stroke: "var(--muted-foreground)", strokeWidth: 1.5 },
     }));
     return { nodes, edges };
   }, [model]);
