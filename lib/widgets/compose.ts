@@ -1,0 +1,203 @@
+// V1: compose_dashboard + resolveDashboard
+//
+// compose_dashboard — steward/self-gated action: validates each selection's
+//   config against WIDGET_CATALOG[kind].configSchema, then writes validated
+//   descriptors to member_context.pinned_widgets for that member.
+//   Invalid configs are rejected with a structured error — garbage is never
+//   persisted.
+//
+// resolveDashboard — read-only: reads pinned_widgets, runs each descriptor's
+//   queryBinding, returns [{id, kind, config, data}] ready to render.
+//
+// THE FENCE: resolveDashboard calls only read-only queryBindings (see catalog.ts).
+// compose_dashboard writes only to member_context.pinned_widgets, which is the
+// dashboard config column, not world-model data. The world-model remains
+// unmodified by the view layer.
+
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { member_context } from "@/lib/db/schema.generated";
+import type { Database } from "@/lib/db/client";
+import {
+  CATALOG_KINDS,
+  WIDGET_CATALOG,
+  validateWidgetConfig,
+  type CatalogKind,
+  type MetricData,
+  type DataTableData,
+  type RosterData,
+  type CalendarData,
+} from "./catalog";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface WidgetSelection {
+  kind: CatalogKind;
+  config: unknown;
+}
+
+export type ComposeDashboardResult =
+  | { status: "ok"; persisted: number }
+  | { status: "validation_error"; errors: Array<{ index: number; kind: string; error: string; detail?: unknown }> };
+
+export interface ResolvedWidget {
+  id: string;
+  kind: CatalogKind;
+  config: unknown;
+  data: MetricData | DataTableData | RosterData | CalendarData;
+}
+
+// The shape stored in member_context.pinned_widgets (JSON array).
+interface StoredDescriptor {
+  id: string;
+  kind: CatalogKind;
+  config: unknown;
+}
+
+// ── compose_dashboard ────────────────────────────────────────────────────────
+//
+// Validates all selections first. On any validation failure, rejects the
+// entire batch (structured error, nothing persisted).
+// On full success, writes the validated descriptors to the member_context row
+// (creates the row if it doesn't exist yet).
+//
+// Role gate: callers are responsible for checking actor.role === "steward" or
+// that the actor is operating on their own member_id. The function itself does
+// not inspect the session — it is a pure DB operation gated by the caller.
+
+export async function compose_dashboard(
+  db: Database,
+  memberId: string,
+  selections: WidgetSelection[],
+): Promise<ComposeDashboardResult> {
+  // Step 1: Validate all configs — fail fast on first invalid, collect all errors
+  const errors: Array<{ index: number; kind: string; error: string; detail?: unknown }> = [];
+
+  for (let i = 0; i < selections.length; i++) {
+    const sel = selections[i];
+
+    // Reject unknown kinds
+    if (!CATALOG_KINDS.includes(sel.kind as CatalogKind)) {
+      errors.push({
+        index: i,
+        kind: sel.kind,
+        error: "unknown_kind",
+        detail: { allowed: CATALOG_KINDS },
+      });
+      continue;
+    }
+
+    const result = validateWidgetConfig(sel.kind as CatalogKind, sel.config);
+    if (!result.ok) {
+      errors.push({
+        index: i,
+        kind: sel.kind,
+        error: result.error,
+        detail: result.detail,
+      });
+    }
+  }
+
+  if (errors.length > 0) {
+    return { status: "validation_error", errors };
+  }
+
+  // Step 2: Build validated descriptors (assign stable IDs)
+  const descriptors: StoredDescriptor[] = selections.map((sel) => ({
+    id: randomUUID(),
+    kind: sel.kind as CatalogKind,
+    config: sel.config,
+  }));
+
+  const now = new Date();
+
+  // Step 3: Upsert member_context.pinned_widgets
+  // Look up existing row first
+  const existing = await db
+    .select({ id: member_context.id })
+    .from(member_context)
+    .where(eq(member_context.member_id, memberId))
+    .limit(1);
+
+  if (existing.length > 0) {
+    // Update existing row
+    await db
+      .update(member_context)
+      .set({
+        pinned_widgets: JSON.stringify(descriptors),
+        updated_at: now,
+      })
+      .where(eq(member_context.member_id, memberId));
+  } else {
+    // Create new member_context row
+    await db.insert(member_context).values({
+      member_id: memberId,
+      pinned_widgets: JSON.stringify(descriptors),
+      created_at: now,
+      updated_at: now,
+    });
+  }
+
+  return { status: "ok", persisted: descriptors.length };
+}
+
+// ── resolveDashboard ─────────────────────────────────────────────────────────
+//
+// Reads pinned_widgets for the given member, then for each descriptor runs
+// WIDGET_CATALOG[kind].queryBinding(config, db) to fetch live data.
+//
+// READ-ONLY: queryBindings are all SELECT-only (see catalog.ts THE FENCE).
+// This function never writes to the world-model.
+
+export async function resolveDashboard(
+  db: Database,
+  memberId: string,
+): Promise<ResolvedWidget[]> {
+  // Fetch the member_context row
+  const rows = await db
+    .select({ pinned_widgets: member_context.pinned_widgets })
+    .from(member_context)
+    .where(eq(member_context.member_id, memberId))
+    .limit(1);
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  let descriptors: StoredDescriptor[];
+  try {
+    descriptors = JSON.parse(rows[0].pinned_widgets) as StoredDescriptor[];
+    if (!Array.isArray(descriptors)) return [];
+  } catch {
+    return [];
+  }
+
+  // Resolve each descriptor — run READ-ONLY queryBinding
+  const resolved: ResolvedWidget[] = [];
+
+  for (const descriptor of descriptors) {
+    const kind = descriptor.kind as CatalogKind;
+    if (!CATALOG_KINDS.includes(kind)) continue;
+
+    const entry = WIDGET_CATALOG[kind];
+
+    // Re-validate config from storage (defensive — garbage in storage is skipped)
+    const validation = validateWidgetConfig(kind, descriptor.config);
+    if (!validation.ok) continue;
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = await entry.queryBinding(validation.config as any, db);
+      resolved.push({
+        id: descriptor.id,
+        kind,
+        config: descriptor.config,
+        data,
+      });
+    } catch {
+      // Skip widgets whose queryBinding throws — don't crash the whole dashboard
+    }
+  }
+
+  return resolved;
+}

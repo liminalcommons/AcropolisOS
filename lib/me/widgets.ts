@@ -1,7 +1,26 @@
 // M4.3: Widget type contracts — shared between /me server component
 // and query_member_context agent tool. No framework imports; pure types + zod.
+//
+// V1 additions (widget catalog substrate): the four catalog kinds are additive —
+// they do not change any existing kind or WidgetBundle shape. The hardcoded
+// dashboard gets replaced by catalog-driven rendering in V3; until then both
+// coexist. Catalog kinds are validated via WIDGET_CATALOG[kind].configSchema
+// in compose_dashboard (lib/widgets/compose.ts) — the WidgetDescriptorSchema
+// here remains permissive (kind + config) so stored descriptors from both
+// old and new paths pass basic parsing.
 
 import { z } from "zod";
+
+// V1: catalog kinds added alongside the original action-context kinds.
+// The agent composes dashboards from these; the PinnedWidget renderer
+// delegates to CatalogWidget for the new kinds (V3 wiring).
+export const CATALOG_WIDGET_KINDS = [
+  "metric",
+  "data_table",
+  "roster",
+  "calendar",
+] as const;
+export type CatalogWidgetKind = (typeof CATALOG_WIDGET_KINDS)[number];
 
 export const WIDGET_KINDS = [
   "agent_blockers",
@@ -13,6 +32,8 @@ export const WIDGET_KINDS = [
   "turnover_cleaning",
   "table",
   "agent_html",
+  // V1 catalog kinds — composition-over-generation; data driven by queryBinding
+  ...CATALOG_WIDGET_KINDS,
 ] as const;
 export type WidgetKind = (typeof WIDGET_KINDS)[number];
 
@@ -157,6 +178,32 @@ export type WidgetBundle =
       data: {
         html: string;
       };
+    }
+  // ── V1 catalog kinds ──────────────────────────────────────────────────────
+  // These replace the hardcoded fetchers in V3. Config drives the queryBinding.
+  | {
+      id: string;
+      kind: "metric";
+      config: { type: string; agg: string; filter?: { field: string; value: string } };
+      data: { value: number; label: string };
+    }
+  | {
+      id: string;
+      kind: "data_table";
+      config: { type: string; columns: string[]; limit?: number };
+      data: { columns: string[]; rows: Record<string, unknown>[] };
+    }
+  | {
+      id: string;
+      kind: "roster";
+      config: { type: string; fields: string[]; limit?: number };
+      data: { fields: string[]; entries: Record<string, unknown>[] };
+    }
+  | {
+      id: string;
+      kind: "calendar";
+      config: { type: string; date_field: string; limit?: number };
+      data: { date_field: string; buckets: Record<string, Record<string, unknown>[]> };
     };
 
 export interface MeBundle {
