@@ -105,6 +105,7 @@ export const member_context = pgTable("member_context", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
   member_id: uuid("member_id").notNull().references((): AnyPgColumn => member.id),
   pinned_widgets: text("pinned_widgets").notNull().default("[]"),
+  theme_pref: text("theme_pref"),
   created_at: timestamp("created_at", { withTimezone: true }).notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull(),
 });

@@ -20,6 +20,12 @@ MemberContext:
       description: |
         JSON array of { id, kind, config } widget descriptors appended
         after the default widget set in /me render order. DB column is jsonb.
+    theme_pref:
+      type: string
+      required: false
+      description: |
+        JSON-encoded TokenSet (theme palette) for this member. Null = base
+        palette. UI preference only; never affects the world-model.
     created_at:
       ref: created_at
     updated_at:

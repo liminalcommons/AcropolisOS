@@ -100,6 +100,7 @@ export const MemberContextSchema = z.object({
   "id": z.uuid(),
   "member_id": z.string(),
   "pinned_widgets": z.string().default("[]"),
+  "theme_pref": z.string().optional(),
   "created_at": z.iso.datetime({ offset: true }),
   "updated_at": z.iso.datetime({ offset: true }),
 });
