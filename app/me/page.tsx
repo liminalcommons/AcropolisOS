@@ -59,8 +59,8 @@ export default async function MePage(): Promise<React.ReactElement> {
   const me = members.find((m) => m.id === actor.userId);
   if (!me) {
     return (
-      <main className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
-        <p className="text-sm text-zinc-500">
+      <main className="flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">
           No Member row found for your account. Contact a steward.
         </p>
       </main>
@@ -89,17 +89,17 @@ export default async function MePage(): Promise<React.ReactElement> {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main>
       <div className="mx-auto max-w-6xl px-8 py-10 space-y-6">
         <div className="flex items-baseline gap-3">
-          <Link href="/ontology-editor" className="text-xs text-zinc-500 hover:text-zinc-300">
+          <Link href="/ontology-editor" className="text-xs text-muted-foreground hover:text-foreground">
             ← ontology editor
           </Link>
-          <span className="text-xs text-zinc-600">/</span>
+          <span className="text-xs text-muted-foreground">/</span>
           <h1 className="font-mono text-2xl font-semibold tracking-tight">
             /me
           </h1>
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-muted-foreground">
             agent escalation queue for {me.full_name}
           </span>
         </div>
@@ -110,26 +110,26 @@ export default async function MePage(): Promise<React.ReactElement> {
           className={
             blockers.length > 0
               ? "rounded-lg border border-amber-800/60 bg-amber-950/20 p-5"
-              : "rounded-lg border border-zinc-800 bg-zinc-900/30 p-5"
+              : "rounded-lg border border-border bg-card/30 p-5"
           }
         >
           <div className="flex items-center gap-2 mb-4">
             <span
               className={`text-xs font-bold uppercase tracking-widest ${
-                blockers.length > 0 ? "text-amber-400" : "text-zinc-500"
+                blockers.length > 0 ? "text-amber-400" : "text-muted-foreground"
               }`}
             >
               Agent blockers
             </span>
             {blockers.length > 0 && (
-              <span className="rounded-full bg-amber-600 px-2 py-0.5 text-[10px] font-bold text-zinc-950">
+              <span className="rounded-full bg-amber-600 px-2 py-0.5 text-[10px] font-bold text-amber-950">
                 {blockers.length}
               </span>
             )}
           </div>
 
           {blockers.length === 0 ? (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               No open blockers. The agent is running autonomously.
             </p>
           ) : (
@@ -138,31 +138,31 @@ export default async function MePage(): Promise<React.ReactElement> {
                 <li
                   key={b.id}
                   id={`blocker-${b.id}`}
-                  className="rounded-md border border-zinc-700 bg-zinc-900/60 p-4"
+                  className="rounded-md border border-border bg-card/60 p-4"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span
-                          className={`pill text-[10px] px-2 py-0.5 rounded font-mono ${
-                            REASON_COLORS[b.reason_kind] ?? "bg-zinc-800 text-zinc-400"
+                          className={`pill text-xs px-2 py-0.5 rounded font-mono ${
+                            REASON_COLORS[b.reason_kind] ?? "bg-secondary text-secondary-foreground"
                           }`}
                         >
                           {REASON_LABELS[b.reason_kind] ?? b.reason_kind}
                         </span>
-                        <span className="font-medium text-sm text-zinc-100">
+                        <span className="font-medium text-sm text-foreground">
                           {b.summary}
                         </span>
                       </div>
-                      <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
+                      <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
                         {b.detail}
                       </p>
                       {b.blocked_work_ref && (
-                        <p className="mt-1 text-[10px] font-mono text-zinc-600">
+                        <p className="mt-1 text-[10px] font-mono text-muted-foreground">
                           ref: {b.blocked_work_ref}
                         </p>
                       )}
-                      <time className="mt-1 block text-[10px] text-zinc-600">
+                      <time className="mt-1 block text-[10px] text-muted-foreground">
                         {fmtTime(b.created_at)}
                       </time>
                     </div>
@@ -171,7 +171,7 @@ export default async function MePage(): Promise<React.ReactElement> {
                         <button
                           type="submit"
                           data-testid={`resolve-blocker-${b.id}`}
-                          className="rounded-md bg-emerald-700 px-3 py-1.5 text-[11px] font-medium text-zinc-50 hover:bg-emerald-600 w-full"
+                          className="rounded-md bg-emerald-700 px-3 py-1.5 text-[11px] font-medium text-emerald-50 hover:bg-emerald-600 w-full"
                         >
                           Resolve
                         </button>
@@ -180,7 +180,7 @@ export default async function MePage(): Promise<React.ReactElement> {
                         <button
                           type="submit"
                           data-testid={`dismiss-blocker-${b.id}`}
-                          className="rounded-md bg-zinc-800 px-3 py-1.5 text-[11px] font-medium text-zinc-400 hover:bg-zinc-700 w-full"
+                          className="rounded-md bg-secondary px-3 py-1.5 text-[11px] font-medium text-secondary-foreground hover:bg-secondary/80 w-full"
                         >
                           Dismiss
                         </button>
@@ -188,15 +188,15 @@ export default async function MePage(): Promise<React.ReactElement> {
                     </div>
                   </div>
                   {b.pathways && Array.isArray(b.pathways) && b.pathways.length > 0 && (
-                    <div className="mt-3 rounded bg-zinc-800/60 px-3 py-2">
-                      <p className="text-[10px] font-mono text-zinc-500 mb-2">Suggested paths:</p>
+                    <div className="mt-3 rounded bg-card/60 px-3 py-2">
+                      <p className="text-[10px] font-mono text-muted-foreground mb-2">Suggested paths:</p>
                       <ul className="space-y-1">
                         {(b.pathways as Array<{ id: string; label: string; rationale: string; reversibility: string }>).map((p) => (
                           <li key={p.id} className="flex items-center gap-2">
                             <span className={`w-2 h-2 rounded-full shrink-0 ${p.reversibility === "permanent" ? "bg-red-500" : p.reversibility === "moderate" ? "bg-amber-500" : "bg-emerald-500"}`} title={p.reversibility} />
                             <form action={resolveBlockerAction.bind(null, b.id, p.id)} className="inline">
-                              <button type="submit" className="text-[10px] text-zinc-300 hover:text-zinc-100 text-left">
-                                {p.label} — <span className="text-zinc-500">{p.rationale}</span>
+                              <button type="submit" className="text-[10px] text-foreground hover:text-foreground text-left">
+                                {p.label} — <span className="text-muted-foreground">{p.rationale}</span>
                               </button>
                             </form>
                           </li>
@@ -213,7 +213,7 @@ export default async function MePage(): Promise<React.ReactElement> {
         {/* Pinned widgets */}
         {pinnedWidgets.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-xs uppercase tracking-widest text-zinc-500">
+            <h2 className="text-xs uppercase tracking-widest text-muted-foreground">
               Pinned widgets
             </h2>
             <ul className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -227,15 +227,15 @@ export default async function MePage(): Promise<React.ReactElement> {
         )}
 
         {/* Footer note */}
-        <p className="text-xs text-zinc-600 pt-4 border-t border-zinc-800">
+        <p className="text-xs text-muted-foreground pt-4 border-t border-border">
           /me is your agent&apos;s escalation queue. The agent flags blockers here when
           it needs your input to continue work. Resolve or dismiss each one.
         </p>
 
         {/* Pin widgets via /dashboard/ask — agent-driven pinning (F6) */}
-        <p className="text-xs text-zinc-600 border border-zinc-800 rounded-lg p-4">
+        <p className="text-xs text-muted-foreground border border-border rounded-lg p-4">
           To pin a widget, use{" "}
-          <Link href="/dashboard/ask" className="text-zinc-400 hover:text-zinc-200 underline">
+          <Link href="/dashboard/ask" className="text-foreground hover:text-foreground underline">
             Ask the agent
           </Link>
           .

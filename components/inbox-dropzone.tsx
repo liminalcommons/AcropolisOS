@@ -37,9 +37,9 @@ export function InboxDropzone() {
   }
 
   return (
-    <section className="rounded border border-zinc-700 bg-zinc-900/40 p-4">
-      <h2 className="text-sm font-medium text-zinc-200">Drop data into the inbox</h2>
-      <p className="mt-1 text-xs text-zinc-500">
+    <section className="rounded border border-border bg-card/40 p-4">
+      <h2 className="text-sm font-medium text-foreground">Drop data into the inbox</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
         CSV, JSON, or Markdown — the agent will propose where rows belong.
       </p>
 
@@ -59,7 +59,7 @@ export function InboxDropzone() {
           }
         }}
         onClick={() => inputRef.current?.click()}
-        className="mt-3 cursor-pointer rounded border border-dashed border-zinc-700 px-4 py-8 text-center text-sm text-zinc-400 data-[over=true]:border-zinc-300 data-[over=true]:text-zinc-100"
+        className="mt-3 cursor-pointer rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground data-[over=true]:border-ring data-[over=true]:text-foreground"
       >
         {busy ? "Uploading…" : "Drag files here or click to choose"}
       </div>
@@ -79,7 +79,7 @@ export function InboxDropzone() {
       />
 
       {error ? (
-        <p role="alert" className="mt-3 rounded border border-red-700 bg-red-900/30 p-2 text-xs">
+        <p role="alert" className="mt-3 rounded border border-destructive/60 bg-destructive/15 p-2 text-xs text-destructive">
           {error}
         </p>
       ) : null}

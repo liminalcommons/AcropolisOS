@@ -29,7 +29,7 @@ export function ConnectAskCard() {
         <p className="text-sm font-medium text-violet-200">
           Ask the agent what to connect
         </p>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-xs text-muted-foreground">
           e.g. &quot;pull my Hostelworld bookings every morning&quot;
         </p>
       </div>
@@ -41,13 +41,13 @@ export function ConnectAskCard() {
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Tell the agent what to connect…"
-          className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 outline-none focus:border-violet-600 focus:ring-1 focus:ring-violet-600/40 transition-colors"
+          className="flex-1 rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground placeholder-muted-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring/40 transition-colors"
         />
         <button
           onClick={handleSend}
           disabled={!message.trim()}
           aria-label="Send"
-          className="rounded-md bg-violet-600 px-3 py-2 text-sm text-white hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           →
         </button>

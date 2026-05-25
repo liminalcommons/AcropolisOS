@@ -408,25 +408,25 @@ export function ChatPanel({
       )}
     >
       <div className="absolute inset-x-0 top-0 bottom-11 flex flex-col">
-        <header className="flex items-center gap-2 border-b border-zinc-800 px-4 py-2 text-sm font-medium">
+        <header className="flex items-center gap-2 border-b border-border px-4 py-2 text-sm font-medium">
           {streaming ? (
             <>
               <span
-                className="inline-block h-2 w-2 rounded-full bg-violet-400"
+                className="inline-block h-2 w-2 rounded-full bg-primary"
                 style={{ animation: "acro-pulse 1.4s ease-in-out infinite" }}
                 aria-hidden
               />
-              <span className="text-xs uppercase tracking-widest text-violet-300">
+              <span className="text-xs uppercase tracking-widest text-primary">
                 agent {status === "submitted" ? "thinking" : "working"}
               </span>
-              <span className="ml-auto font-mono text-[10px] text-zinc-500">
+              <span className="ml-auto font-mono text-[10px] text-muted-foreground">
                 {modelName ? `${modelName} · ` : ""}
                 {(elapsedMs / 1000).toFixed(1)}s
               </span>
             </>
           ) : (
             <>
-              <MessageSquare className="h-4 w-4 text-zinc-400" aria-hidden />
+              <MessageSquare className="h-4 w-4 text-muted-foreground" aria-hidden />
               <span>chat</span>
               <span className="ml-auto flex items-center gap-3">
                 <Link
@@ -437,19 +437,19 @@ export function ChatPanel({
                       ? `Inbox (${unreadCount} unread)`
                       : "Inbox"
                   }
-                  className="relative inline-flex items-center text-zinc-400 hover:text-zinc-200"
+                  className="relative inline-flex items-center text-muted-foreground hover:text-foreground"
                 >
                   <Inbox className="h-4 w-4" aria-hidden />
                   {unreadCount > 0 ? (
                     <span
                       data-testid="chat-panel-inbox-badge"
-                      className="absolute -right-2 -top-2 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-violet-500 px-1 font-mono text-[9px] font-semibold leading-none text-zinc-50"
+                      className="absolute -right-2 -top-2 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-primary px-1 font-mono text-[9px] font-semibold leading-none text-primary-foreground"
                     >
                       {unreadCount > 99 ? "99+" : unreadCount}
                     </span>
                   ) : null}
                 </Link>
-                <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
                   always on
                 </span>
               </span>
@@ -479,7 +479,7 @@ export function ChatPanel({
           data-testid="chat-panel-scroll"
         >
         {messages.length === 0 ? (
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-muted-foreground">
             Ask anything about your ontology. Drag files into the drop zone to
             attach context.
           </p>
@@ -496,11 +496,11 @@ export function ChatPanel({
                   className={cn(
                     "rounded-md px-3 py-2 text-sm",
                     isUser
-                      ? "bg-zinc-800 text-zinc-50"
-                      : "bg-zinc-900 text-zinc-100 ring-1 ring-zinc-800",
+                      ? "bg-secondary text-secondary-foreground"
+                      : "bg-card text-foreground ring-1 ring-border",
                   )}
                 >
-                  <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-500">
+                  <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                     {isUser ? "you" : "agent"}
                   </div>
                   <div className="prose prose-invert prose-sm max-w-none break-words">
@@ -570,7 +570,7 @@ export function ChatPanel({
           );
         })()}
         {error ? (
-          <p className="mt-3 rounded-md bg-red-950/40 px-3 py-2 text-xs text-red-300 ring-1 ring-red-900">
+          <p className="mt-3 rounded-md bg-destructive/15 px-3 py-2 text-xs text-destructive ring-1 ring-destructive/40">
             {error.message}
           </p>
         ) : null}
@@ -586,10 +586,10 @@ export function ChatPanel({
         className={cn(
           "mx-4 mb-2 flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs transition",
           uploadError
-            ? "border-red-700 bg-red-950/30 text-red-300"
+            ? "border-destructive bg-destructive/15 text-destructive"
             : isDragOver
-              ? "border-zinc-400 bg-zinc-900 text-zinc-200"
-              : "border-zinc-800 text-zinc-500",
+              ? "border-border bg-card text-foreground"
+              : "border-border text-muted-foreground",
         )}
         data-testid="chat-panel-drop"
       >
@@ -605,7 +605,7 @@ export function ChatPanel({
             {droppedFiles.map((f, i) => (
               <li
                 key={`${f.name}-${i}`}
-                className="flex items-center gap-1 rounded bg-zinc-800 px-2 py-0.5 text-zinc-200"
+                className="flex items-center gap-1 rounded bg-secondary px-2 py-0.5 text-secondary-foreground"
               >
                 <span className="max-w-[140px] truncate">{f.name}</span>
                 <button
@@ -614,7 +614,7 @@ export function ChatPanel({
                     setDroppedFiles((prev) => prev.filter((_, idx) => idx !== i))
                   }
                   aria-label={`Remove ${f.name}`}
-                  className="text-zinc-500 hover:text-zinc-200"
+                  className="text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-3 w-3" aria-hidden />
                 </button>
@@ -627,16 +627,16 @@ export function ChatPanel({
       </div>
 
       {expanded ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-11 z-10 border-t border-zinc-800/50 bg-zinc-950/85 px-4 py-1 text-[10px] text-zinc-500 backdrop-blur">
-          <span className="font-mono text-zinc-400">↵</span> to send ·{" "}
-          <span className="font-mono text-zinc-400">shift+↵</span> for newline ·{" "}
-          <span className="font-mono text-zinc-400">esc</span> to clear
+        <div className="pointer-events-none absolute inset-x-0 bottom-11 z-10 border-t border-border/50 bg-background/85 px-4 py-1 text-[10px] text-muted-foreground backdrop-blur">
+          <span className="font-mono text-foreground">↵</span> to send ·{" "}
+          <span className="font-mono text-foreground">shift+↵</span> for newline ·{" "}
+          <span className="font-mono text-foreground">esc</span> to clear
         </div>
       ) : null}
 
       <form
         onSubmit={submit}
-        className="absolute inset-x-0 bottom-0 flex h-11 items-center gap-2 border-t border-zinc-800 bg-zinc-950/90 px-4"
+        className="absolute inset-x-0 bottom-0 flex h-11 items-center gap-2 border-t border-border bg-background/90 px-4"
       >
         <textarea
           ref={textareaRef}
@@ -660,7 +660,7 @@ export function ChatPanel({
           }
           rows={1}
           disabled={status !== "ready" || !chatSessionId}
-          className="flex-1 resize-none rounded-md bg-zinc-900 px-3 py-1.5 text-sm leading-tight text-zinc-100 placeholder-zinc-500 ring-1 ring-zinc-800 focus:outline-none focus:ring-zinc-600 disabled:opacity-50"
+          className="flex-1 resize-none rounded-md bg-input px-3 py-1.5 text-sm leading-tight text-foreground placeholder-muted-foreground ring-1 ring-ring focus:outline-none focus:ring-ring disabled:opacity-50"
         />
         <button
           type="submit"
@@ -670,7 +670,7 @@ export function ChatPanel({
             !chatSessionId
           }
           aria-label="Send message"
-          className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-900 transition hover:bg-white disabled:bg-zinc-800 disabled:text-zinc-500"
+          className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground transition hover:bg-primary/90 disabled:bg-secondary disabled:text-secondary-foreground"
         >
           <Send className="h-4 w-4" aria-hidden />
         </button>

@@ -89,11 +89,11 @@ export default async function ObjectTypeListPage(
   ];
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main>
       <div className="mx-auto max-w-6xl px-8 py-10">
         <Link
           href="/ontology-editor"
-          className="text-xs text-zinc-500 hover:text-zinc-300"
+          className="text-xs text-muted-foreground hover:text-foreground"
         >
           ← ontology editor
         </Link>
@@ -103,11 +103,11 @@ export default async function ObjectTypeListPage(
               {prettify(type)}
             </h1>
             {objectType.description ? (
-              <p className="mt-1 text-sm text-zinc-400">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {objectType.description}
               </p>
             ) : null}
-            <p className="mt-1 font-mono text-[11px] text-zinc-500">
+            <p className="mt-1 font-mono text-[11px] text-muted-foreground">
               table {tableName} · {rows.length} row(s) · {orderedColumns.length} column(s)
             </p>
           </div>
@@ -116,36 +116,36 @@ export default async function ObjectTypeListPage(
         {queryError ? (
           <div
             data-testid="query-error"
-            className="mt-6 rounded-md border border-rose-800 bg-rose-950/30 px-3 py-2 text-sm text-rose-200"
+            className="mt-6 rounded-md border border-destructive/40 bg-destructive/15 px-3 py-2 text-sm text-destructive"
           >
             <p className="font-medium">query failed</p>
             <p className="mt-1 font-mono text-xs">{queryError}</p>
-            <p className="mt-2 text-xs text-rose-300/80">
+            <p className="mt-2 text-xs text-destructive/80">
               The table may not exist yet. Apply a pending proposal to create
               it.
             </p>
           </div>
         ) : null}
 
-        <div className="mt-8 overflow-x-auto rounded-md border border-zinc-800">
-          <table className="w-full divide-y divide-zinc-800 text-sm">
-            <thead className="bg-zinc-900/40 text-left text-[10px] uppercase tracking-widest text-zinc-500">
+        <div className="mt-8 overflow-x-auto rounded-md border border-border">
+          <table className="w-full divide-y divide-border text-sm">
+            <thead className="bg-card/40 text-left text-xs uppercase tracking-widest text-muted-foreground">
               <tr>
                 {orderedColumns.map((c) => (
                   <th key={c.name} className="px-3 py-2 font-medium">
                     {c.name}
-                    <span className="ml-1 text-zinc-600">· {String(c.type)}</span>
+                    <span className="ml-1 text-muted-foreground">· {String(c.type)}</span>
                   </th>
                 ))}
                 <th className="px-3 py-2 font-medium">·</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-900">
+            <tbody className="divide-y divide-border">
               {rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={orderedColumns.length + 1}
-                    className="px-3 py-6 text-center text-xs text-zinc-500"
+                    className="px-3 py-6 text-center text-xs text-muted-foreground"
                   >
                     no rows yet
                   </td>
@@ -157,7 +157,7 @@ export default async function ObjectTypeListPage(
                     <tr
                       key={id}
                       data-testid={`row-${id}`}
-                      className="text-zinc-200 hover:bg-zinc-900/60"
+                      className="text-foreground hover:bg-card/60"
                     >
                       {orderedColumns.map((c) => (
                         <td
@@ -170,7 +170,7 @@ export default async function ObjectTypeListPage(
                       <td className="px-3 py-2">
                         <Link
                           href={`/${type}/${id}`}
-                          className="text-xs text-violet-300 hover:text-violet-200"
+                          className="text-xs text-primary hover:text-primary/80"
                         >
                           open →
                         </Link>

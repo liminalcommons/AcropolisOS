@@ -108,7 +108,7 @@ async function TurnoverCleaningWidget() {
 
   if (rows.length === 0) {
     return (
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-muted-foreground">
         No beds need cleaning for tomorrow&apos;s arrivals.
       </p>
     );
@@ -117,15 +117,15 @@ async function TurnoverCleaningWidget() {
   return (
     <table className="w-full text-xs">
       <thead>
-        <tr className="text-zinc-500 text-left">
+        <tr className="text-muted-foreground text-left">
           <th className="font-normal pb-1 pr-3">Bed</th>
           <th className="font-normal pb-1 pr-3">Checkout (today)</th>
           <th className="font-normal pb-1">Next check-in (tomorrow)</th>
         </tr>
       </thead>
-      <tbody className="text-zinc-300">
+      <tbody className="text-foreground">
         {rows.map((r) => (
-          <tr key={r.code} className="border-t border-zinc-800">
+          <tr key={r.code} className="border-t border-border">
             <td className="py-1 pr-3 font-mono">{r.code}</td>
             <td className="py-1 pr-3">{r.out}</td>
             <td className="py-1">{r.in}</td>
@@ -140,14 +140,14 @@ async function TurnoverCleaningWidget() {
 
 function TableWidget({ rows }: { rows: Array<{ label: string; value: string }> }) {
   if (!rows || rows.length === 0) {
-    return <p className="text-xs text-zinc-500">No rows.</p>;
+    return <p className="text-xs text-muted-foreground">No rows.</p>;
   }
   return (
     <table className="w-full text-xs">
-      <tbody className="text-zinc-300">
+      <tbody className="text-foreground">
         {rows.map((r, i) => (
-          <tr key={i} className={i > 0 ? "border-t border-zinc-800" : ""}>
-            <td className="py-1 pr-4 text-zinc-500 w-1/2">{r.label}</td>
+          <tr key={i} className={i > 0 ? "border-t border-border" : ""}>
+            <td className="py-1 pr-4 text-muted-foreground w-1/2">{r.label}</td>
             <td className="py-1">{r.value}</td>
           </tr>
         ))}
@@ -180,8 +180,8 @@ export async function PinnedWidget({ widget }: { widget: PinnedWidgetShape }) {
   const title = widget.title ?? widget.kind;
 
   return (
-    <div className="border border-zinc-800 rounded-lg p-4 bg-zinc-900/30">
-      <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-3">
+    <div className="border border-border rounded-lg p-4 bg-card/30">
+      <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">
         {title}
       </p>
       {widget.kind === "turnover_cleaning" ? (
@@ -192,8 +192,8 @@ export async function PinnedWidget({ widget }: { widget: PinnedWidgetShape }) {
         <AgentHtmlWidget html={(props.html as string) ?? ""} />
       ) : (
         // Unknown / legacy kinds — neutral fallback, never throw.
-        <p className="text-xs text-zinc-500">
-          widget: <span className="font-mono text-zinc-400">{widget.kind}</span>
+        <p className="text-xs text-muted-foreground">
+          widget: <span className="font-mono text-muted-foreground">{widget.kind}</span>
         </p>
       )}
     </div>

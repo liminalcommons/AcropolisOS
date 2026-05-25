@@ -106,14 +106,14 @@ export function AskAgentChat() {
       {/* Conversation */}
       <div className="flex-1 space-y-4">
         {messages.length === 0 && (
-          <div className="rounded-lg border border-dashed border-zinc-800 p-6 text-center">
-            <p className="text-sm text-zinc-500">
+          <div className="rounded-lg border border-dashed border-border p-6 text-center">
+            <p className="text-sm text-muted-foreground">
               Ask for a widget, e.g.{" "}
-              <span className="text-zinc-400 italic">
+              <span className="text-muted-foreground italic">
                 &ldquo;show me which beds need cleaning tomorrow morning&rdquo;
               </span>{" "}
               or{" "}
-              <span className="text-zinc-400 italic">
+              <span className="text-muted-foreground italic">
                 &ldquo;give me a list of guests checking out today&rdquo;
               </span>
             </p>
@@ -130,24 +130,24 @@ export function AskAgentChat() {
               <div
                 className={`max-w-[85%] rounded-lg px-4 py-3 text-sm ${
                   isUser
-                    ? "bg-zinc-800 text-zinc-100"
-                    : "bg-zinc-900 border border-zinc-800 text-zinc-200"
+                    ? "bg-secondary text-secondary-foreground"
+                    : "bg-card border border-border text-foreground"
                 }`}
               >
                 <div className="whitespace-pre-wrap">{textContent}</div>
 
                 {/* Widget proposal preview + pin button */}
                 {proposal && (
-                  <div className="mt-4 border border-zinc-700 rounded-lg p-3 bg-zinc-950/50">
-                    <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">
+                  <div className="mt-4 border border-border rounded-lg p-3 bg-background/50">
+                    <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
                       Widget proposal
                     </p>
-                    <p className="text-xs font-medium text-zinc-200 mb-1">
+                    <p className="text-xs font-medium text-foreground mb-1">
                       {proposal.title}
                     </p>
-                    <p className="text-[11px] text-zinc-500 mb-3">
+                    <p className="text-[11px] text-muted-foreground mb-3">
                       kind:{" "}
-                      <span className="font-mono text-zinc-400">
+                      <span className="font-mono text-muted-foreground">
                         {proposal.kind}
                       </span>
                     </p>
@@ -155,7 +155,7 @@ export function AskAgentChat() {
                       type="button"
                       disabled={isPinning}
                       onClick={() => handlePin(proposal)}
-                      className="rounded-md bg-emerald-700 px-4 py-1.5 text-xs font-medium text-zinc-50 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="rounded-md bg-emerald-700 px-4 py-1.5 text-xs font-medium text-emerald-50 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {isPinning ? "Pinning…" : "Pin to dashboard"}
                     </button>
@@ -168,8 +168,8 @@ export function AskAgentChat() {
 
         {isLoading && (
           <div className="flex justify-start">
-            <div className="rounded-lg px-4 py-3 bg-zinc-900 border border-zinc-800">
-              <span className="text-xs text-zinc-500 animate-pulse">
+            <div className="rounded-lg px-4 py-3 bg-card border border-border">
+              <span className="text-xs text-muted-foreground animate-pulse">
                 Agent is thinking…
               </span>
             </div>
@@ -180,7 +180,7 @@ export function AskAgentChat() {
       {/* Input */}
       <form
         onSubmit={handleSubmit}
-        className="flex gap-2 pt-4 border-t border-zinc-800 sticky bottom-0 bg-zinc-950 pb-4"
+        className="flex gap-2 pt-4 border-t border-border sticky bottom-0 bg-background pb-4"
       >
         <input
           name="prompt"
@@ -188,12 +188,12 @@ export function AskAgentChat() {
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="Describe the widget you want…"
           disabled={isLoading}
-          className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
+          className="flex-1 rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring disabled:opacity-50"
         />
         <button
           type="submit"
           disabled={isLoading || !inputValue.trim()}
-          className="rounded-md bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           Send
         </button>

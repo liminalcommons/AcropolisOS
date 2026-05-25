@@ -28,44 +28,44 @@ export default async function ProposalsPage(): Promise<React.ReactElement> {
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main>
       <div className="mx-auto max-w-4xl px-8 py-12">
         <h1 className="text-3xl font-semibold tracking-tight">Proposals</h1>
-        <p className="mt-2 text-sm text-zinc-400">
+        <p className="mt-2 text-sm text-muted-foreground">
           Pending steward review queue. Newest first.
         </p>
 
         {pending.length === 0 ? (
-          <p className="mt-12 text-sm text-zinc-500">
+          <p className="mt-12 text-sm text-muted-foreground">
             No proposals are awaiting review.
           </p>
         ) : (
-          <ul className="mt-8 divide-y divide-zinc-800 rounded-md border border-zinc-800">
+          <ul className="mt-8 divide-y divide-border rounded-md border border-border">
             {pending.map((p) => (
               <li key={p.id}>
                 <Link
                   href={`/proposals/${p.id}`}
                   data-testid={`proposal-row-${p.id}`}
-                  className="flex items-center justify-between gap-6 px-4 py-3 hover:bg-zinc-900"
+                  className="flex items-center justify-between gap-6 px-4 py-3 hover:bg-card"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-mono text-xs text-zinc-300">
+                    <div className="truncate font-mono text-xs text-foreground">
                       {p.id.slice(0, 8)}
-                      <span className="text-zinc-600"> · session </span>
-                      <span className="text-zinc-400">{p.session_id}</span>
+                      <span className="text-muted-foreground"> · session </span>
+                      <span className="text-muted-foreground">{p.session_id}</span>
                     </div>
-                    <div className="mt-1 text-sm text-zinc-200">
+                    <div className="mt-1 text-sm text-foreground">
                       {summarize(p.diff)}
                     </div>
                     {p.diff.impacted_tables.length > 0 ? (
-                      <div className="mt-1 text-xs text-zinc-500">
+                      <div className="mt-1 text-xs text-muted-foreground">
                         impacts: {p.diff.impacted_tables.join(", ")}
                       </div>
                     ) : null}
                   </div>
                   <time
                     dateTime={p.created_at}
-                    className="shrink-0 text-xs text-zinc-500"
+                    className="shrink-0 text-xs text-muted-foreground"
                   >
                     {p.created_at}
                   </time>

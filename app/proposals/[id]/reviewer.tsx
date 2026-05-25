@@ -98,22 +98,22 @@ export function ProposalReviewer({
   };
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main>
       <div className="mx-auto max-w-6xl px-8 py-12">
         <div className="flex items-baseline justify-between">
           <div>
             <Link
               href="/proposals"
-              className="text-xs text-zinc-500 hover:text-zinc-300"
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
               ← back to queue
             </Link>
             <h1 className="mt-1 font-mono text-2xl font-semibold tracking-tight">
               proposal {proposalId.slice(0, 8)}
             </h1>
-            <p className="mt-1 text-xs text-zinc-500">
-              session <span className="text-zinc-300">{sessionId}</span> · status{" "}
-              <span className="text-zinc-300">{status}</span> · created{" "}
+            <p className="mt-1 text-xs text-muted-foreground">
+              session <span className="text-foreground">{sessionId}</span> · status{" "}
+              <span className="text-foreground">{status}</span> · created{" "}
               <time dateTime={createdAt}>{createdAt}</time>
             </p>
           </div>
@@ -134,7 +134,7 @@ export function ProposalReviewer({
                   onClick={handleCancel}
                   disabled={pending}
                   data-testid="proposal-cancel"
-                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm font-medium hover:bg-zinc-900 disabled:opacity-50"
+                  className="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-card disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -155,7 +155,7 @@ export function ProposalReviewer({
                   onClick={() => setEditing(true)}
                   disabled={pending || status !== "pending"}
                   data-testid="proposal-edit"
-                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm font-medium hover:bg-zinc-900 disabled:opacity-50"
+                  className="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-card disabled:opacity-50"
                 >
                   Edit
                 </button>
@@ -164,7 +164,7 @@ export function ProposalReviewer({
                   onClick={handleReject}
                   disabled={pending || status !== "pending"}
                   data-testid="proposal-reject"
-                  className="rounded-md border border-rose-800 px-3 py-1.5 text-sm font-medium text-rose-200 hover:bg-rose-950 disabled:opacity-50"
+                  className="rounded-md border border-destructive/60 px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
                 >
                   {activeAction === "reject" ? "Rejecting…" : "Reject"}
                 </button>
@@ -174,17 +174,17 @@ export function ProposalReviewer({
         </div>
 
         {error ? (
-          <div className="mt-4 rounded-md border border-rose-800 bg-rose-950/50 px-3 py-2 text-sm text-rose-200">
+          <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/15 px-3 py-2 text-sm text-destructive">
             {error}
           </div>
         ) : null}
 
         <section className="mt-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Preview impact
           </h2>
           {impactedTables.length === 0 ? (
-            <p className="mt-2 text-sm text-zinc-500">
+            <p className="mt-2 text-sm text-muted-foreground">
               No object tables are impacted by this proposal.
             </p>
           ) : (
@@ -195,7 +195,7 @@ export function ProposalReviewer({
               {impactedTables.map((t) => (
                 <li
                   key={t}
-                  className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-200"
+                  className="rounded-md border border-border bg-card px-2 py-1 font-mono text-xs text-foreground"
                 >
                   {t}
                 </li>
@@ -206,18 +206,18 @@ export function ProposalReviewer({
 
         <section className="mt-8 grid gap-4 lg:grid-cols-2">
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Current
             </h3>
             <pre
               data-testid="diff-current"
-              className="mt-2 max-h-[60vh] overflow-auto rounded-md border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs leading-relaxed text-zinc-300"
+              className="mt-2 max-h-[60vh] overflow-auto rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed text-foreground"
             >
               {currentYaml}
             </pre>
           </div>
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Proposed
             </h3>
             {editing ? (
@@ -226,12 +226,12 @@ export function ProposalReviewer({
                 value={draftYaml}
                 onChange={(e) => setDraftYaml(e.target.value)}
                 spellCheck={false}
-                className="mt-2 h-[60vh] w-full rounded-md border border-emerald-800 bg-zinc-950 p-3 font-mono text-xs leading-relaxed text-zinc-100 outline-none focus:ring-2 focus:ring-emerald-700"
+                className="mt-2 h-[60vh] w-full rounded-md border border-emerald-800 bg-background p-3 font-mono text-xs leading-relaxed text-foreground outline-none focus:ring-2 focus:ring-emerald-700"
               />
             ) : (
               <pre
                 data-testid="diff-proposed"
-                className="mt-2 max-h-[60vh] overflow-auto rounded-md border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs leading-relaxed text-emerald-200"
+                className="mt-2 max-h-[60vh] overflow-auto rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed text-emerald-200"
               >
                 {proposedYaml}
               </pre>

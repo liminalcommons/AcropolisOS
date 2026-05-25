@@ -2,13 +2,13 @@
 
 // SetupStep — collapsible card used in the /setup first-run wizard.
 //
-// Visual language: calm zinc palette (bg-zinc-900/30, border-zinc-800)
+// Visual language: semantic token palette (bg-card/30, border-border)
 // matching the storyboard frame 1 vertical-stack layout.
 //
 // Status indicators:
 //   ok      → emerald-400 checkmark circle
-//   fail    → rose-400 ✕ circle
-//   pending → zinc-500 number badge
+//   fail    → destructive circle
+//   pending → muted-foreground number badge
 
 import { useState, type ReactNode } from "react";
 
@@ -54,8 +54,8 @@ function StatusBadge({ step, status }: { step: number; status: StepStatus }) {
   }
   // pending
   return (
-    <span className="flex-shrink-0 w-6 h-6 rounded-full border-2 border-zinc-600 flex items-center justify-center mt-0.5">
-      <span className="text-[10px] font-bold text-zinc-500 leading-none">
+    <span className="flex-shrink-0 w-6 h-6 rounded-full border-2 border-border flex items-center justify-center mt-0.5">
+      <span className="text-[10px] font-bold text-muted-foreground leading-none">
         {step}
       </span>
     </span>
@@ -70,7 +70,7 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
       viewBox="0 0 14 14"
       fill="none"
       aria-hidden
-      className={`text-zinc-600 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+      className={`text-muted-foreground transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
     >
       <path
         d="M3 5l4 4 4-4"
@@ -94,24 +94,24 @@ export function SetupStep({
 
   const headerTextColor =
     status === "ok"
-      ? "text-zinc-400"
+      ? "text-muted-foreground"
       : status === "fail"
-        ? "text-rose-300"
-        : "text-zinc-100";
+        ? "text-destructive"
+        : "text-foreground";
 
   const borderColor =
     status === "fail"
-      ? "border-rose-800/60"
+      ? "border-destructive/40"
       : expanded && status !== "ok"
         ? "border-emerald-800/50"
-        : "border-zinc-800";
+        : "border-border";
 
   const bgColor =
     status === "fail"
-      ? "bg-rose-950/10"
+      ? "bg-destructive/10"
       : expanded && status !== "ok"
         ? "bg-emerald-950/5"
-        : "bg-zinc-900/30";
+        : "bg-card/30";
 
   return (
     <div className={`rounded-lg border ${borderColor} ${bgColor} p-5`}>
@@ -124,7 +124,7 @@ export function SetupStep({
       >
         <StatusBadge step={step} status={status} />
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] uppercase tracking-widest text-zinc-600 leading-none mb-1">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground leading-none mb-1">
             Step {step}
           </p>
           <p className={`text-sm font-semibold ${headerTextColor} leading-snug`}>

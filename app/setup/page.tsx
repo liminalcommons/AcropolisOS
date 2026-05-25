@@ -65,11 +65,11 @@ export default async function SetupPage(): Promise<React.ReactElement> {
   ]);
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
+    <main className="min-h-screen bg-background text-foreground font-sans">
       <div className="mx-auto max-w-2xl px-6 py-12">
 
         {/* Eyebrow */}
-        <p className="text-[10px] uppercase tracking-widest text-zinc-600 text-center mb-8">
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground text-center mb-8">
           Setup · 3 steps to a usable system
         </p>
 
@@ -98,11 +98,11 @@ export default async function SetupPage(): Promise<React.ReactElement> {
                     Database unreachable
                   </p>
                 </div>
-                <p className="mt-2 text-xs text-zinc-500 font-mono">
+                <p className="mt-2 text-xs text-muted-foreground font-mono">
                   {dbStatus.detail}
                 </p>
-                <p className="mt-3 text-xs text-zinc-600">
-                  Set <code className="text-zinc-400">DATABASE_URL</code> in
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Set <code className="text-foreground">DATABASE_URL</code> in
                   your environment and restart the container.
                 </p>
               </div>
@@ -135,7 +135,7 @@ export default async function SetupPage(): Promise<React.ReactElement> {
         <div className="mt-10 flex justify-end">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-md bg-emerald-700 hover:bg-emerald-600 text-white font-semibold text-sm px-6 py-2.5 transition-colors"
+            className="inline-flex items-center gap-2 rounded-md bg-emerald-700 hover:bg-emerald-600 text-foreground font-semibold text-sm px-6 py-2.5 transition-colors"
           >
             You&apos;re in
             <span aria-hidden>→</span>
@@ -143,9 +143,9 @@ export default async function SetupPage(): Promise<React.ReactElement> {
         </div>
 
         {/* Footnote */}
-        <p className="mt-6 text-center text-[11px] text-zinc-700">
+        <p className="mt-6 text-center text-[11px] text-muted-foreground">
           You can revisit this page any time at{" "}
-          <span className="font-mono text-zinc-600">/setup</span>.
+          <span className="font-mono text-muted-foreground">/setup</span>.
         </p>
 
       </div>

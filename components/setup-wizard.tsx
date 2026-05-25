@@ -139,14 +139,14 @@ export function SetupWizard({ initialStep = 1 }: Props) {
   }
 
   return (
-    <div className="max-w-xl mx-auto px-8 py-12 text-zinc-100">
+    <div className="max-w-xl mx-auto px-8 py-12 text-foreground">
       <h1 className="text-3xl font-semibold tracking-tight">acropolisOS setup</h1>
-      <ol className="mt-4 flex gap-2 text-xs text-zinc-500" aria-label="Progress">
+      <ol className="mt-4 flex gap-2 text-xs text-muted-foreground" aria-label="Progress">
         {[1, 2, 3].map((n) => (
           <li
             key={n}
             data-active={step === n}
-            className="data-[active=true]:text-zinc-200"
+            className="data-[active=true]:text-foreground"
           >
             {`Step ${n}`}
           </li>
@@ -154,7 +154,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
       </ol>
 
       {error ? (
-        <p role="alert" className="mt-4 rounded border border-red-700 bg-red-900/30 p-3 text-sm">
+        <p role="alert" className="mt-4 rounded border border-destructive/60 bg-destructive/15 p-3 text-sm text-destructive">
           {error}
         </p>
       ) : null}
@@ -167,7 +167,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
               {PROVIDERS.map((p) => (
                 <label
                   key={p.id}
-                  className="cursor-pointer rounded border border-zinc-700 p-3 hover:border-zinc-500 has-checked:border-zinc-200"
+                  className="cursor-pointer rounded border border-border p-3 hover:border-ring has-checked:border-foreground"
                 >
                   <input
                     type="radio"
@@ -178,7 +178,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
                     className="sr-only"
                   />
                   <span className="block font-medium">{p.label}</span>
-                  <span className="block text-xs text-zinc-500">{p.help}</span>
+                  <span className="block text-xs text-muted-foreground">{p.help}</span>
                 </label>
               ))}
             </div>
@@ -190,7 +190,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
                 type="url"
                 value={baseURL}
                 onChange={(e) => setBaseURL(e.target.value)}
-                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 p-2"
+                className="mt-1 w-full rounded border border-border bg-input p-2"
               />
             </label>
           ) : (
@@ -202,7 +202,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
                 onChange={(e) => setApiKey(e.target.value)}
                 required
                 autoComplete="off"
-                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 p-2"
+                className="mt-1 w-full rounded border border-border bg-input p-2"
               />
             </label>
           )}
@@ -212,7 +212,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
               <select
                 value={opencodeModel}
                 onChange={(e) => setOpencodeModel(e.target.value)}
-                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 p-2"
+                className="mt-1 w-full rounded border border-border bg-input p-2"
               >
                 <optgroup label="Open-weight (qwen, glm, kimi, deepseek, minimax)">
                   {OPENCODE_MODELS.filter((m) => m.tier === "go").map((m) => (
@@ -229,7 +229,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
                   ))}
                 </optgroup>
               </select>
-              <span className="mt-1 block text-xs text-zinc-500">
+              <span className="mt-1 block text-xs text-muted-foreground">
                 Every model — including open-weight ones — bills against your
                 OpenCode Zen credit balance. The OpenCode Go plan ($10/mo)
                 covers the OpenCode CLI/TUI, not external API consumption.
@@ -240,7 +240,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
           <button
             type="submit"
             disabled={busy}
-            className="rounded bg-zinc-100 px-4 py-2 text-zinc-900 disabled:opacity-50"
+            className="rounded bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
           >
             {busy ? "Validating…" : "Validate & continue"}
           </button>
@@ -249,7 +249,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
 
       {step === 2 ? (
         <form onSubmit={handleSteward} className="mt-8 space-y-4">
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-muted-foreground">
             Create the first steward account. You will sign in with these credentials.
           </p>
           <label className="block text-sm">
@@ -259,7 +259,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 p-2"
+              className="mt-1 w-full rounded border border-border bg-input p-2"
             />
           </label>
           <label className="block text-sm">
@@ -271,13 +271,13 @@ export function SetupWizard({ initialStep = 1 }: Props) {
               required
               minLength={8}
               autoComplete="new-password"
-              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 p-2"
+              className="mt-1 w-full rounded border border-border bg-input p-2"
             />
           </label>
           <button
             type="submit"
             disabled={busy}
-            className="rounded bg-zinc-100 px-4 py-2 text-zinc-900 disabled:opacity-50"
+            className="rounded bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
           >
             {busy ? "Creating…" : "Create account"}
           </button>
@@ -292,7 +292,7 @@ export function SetupWizard({ initialStep = 1 }: Props) {
               {SEEDS.map((s) => (
                 <label
                   key={s.id}
-                  className="cursor-pointer rounded border border-zinc-700 p-3 hover:border-zinc-500 has-checked:border-zinc-200"
+                  className="cursor-pointer rounded border border-border p-3 hover:border-ring has-checked:border-foreground"
                 >
                   <input
                     type="radio"
@@ -303,19 +303,19 @@ export function SetupWizard({ initialStep = 1 }: Props) {
                     className="sr-only"
                   />
                   <span className="block font-medium">{s.label}</span>
-                  <span className="block text-xs text-zinc-500">{s.help}</span>
+                  <span className="block text-xs text-muted-foreground">{s.help}</span>
                 </label>
               ))}
             </div>
           </fieldset>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-muted-foreground">
             This copies the seed files, generates types, and runs database migrations.
             It can take 10–30 seconds.
           </p>
           <button
             type="submit"
             disabled={busy}
-            className="rounded bg-zinc-100 px-4 py-2 text-zinc-900 disabled:opacity-50"
+            className="rounded bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
           >
             {busy ? "Installing ontology…" : "Finish setup"}
           </button>

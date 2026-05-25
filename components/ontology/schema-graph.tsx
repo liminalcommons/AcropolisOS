@@ -23,8 +23,8 @@ function toFlowNode(n: SchemaGraph["nodes"][number]): Node {
     data: {
       label: (
         <div className="text-center">
-          <div className="font-semibold text-zinc-100">{n.data.label}</div>
-          <div className="text-[10px] uppercase tracking-wider text-zinc-400">
+          <div className="font-semibold text-foreground">{n.data.label}</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
             {n.data.propertyCount} props
           </div>
         </div>
@@ -61,7 +61,7 @@ export function SchemaGraphView({ graph }: Props): React.ReactElement {
   return (
     <div
       data-testid="ontology-schema-graph"
-      className="h-[60vh] w-full rounded-md border border-zinc-800 bg-zinc-950"
+      className="h-[60vh] w-full rounded-md border border-border bg-background"
     >
       <ReactFlowProvider>
         <ReactFlow
@@ -73,7 +73,7 @@ export function SchemaGraphView({ graph }: Props): React.ReactElement {
           <Background color="rgb(39 39 42)" gap={20} />
           <Controls
             showInteractive={false}
-            className="!bg-zinc-900 !text-zinc-200"
+            className="!bg-card !text-foreground"
           />
         </ReactFlow>
       </ReactFlowProvider>

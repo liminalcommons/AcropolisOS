@@ -54,12 +54,12 @@ export default async function BundleIndexPage({
   if (!tables) notFound();
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main>
       <div className="mx-auto max-w-5xl px-8 py-12">
         <div className="flex items-center gap-4">
           <Link
             href="/seed"
-            className="text-xs text-zinc-500 hover:text-zinc-300"
+            className="text-xs text-muted-foreground hover:text-foreground"
           >
             ← seed bundles
           </Link>
@@ -67,7 +67,7 @@ export default async function BundleIndexPage({
         <h1 className="mt-1 font-mono text-2xl font-semibold tracking-tight">
           {bundle}
         </h1>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-xs text-muted-foreground">
           Schema: <code className="font-mono">{schemaName}</code> · {tables.length}{" "}
           tables
         </p>
@@ -76,7 +76,7 @@ export default async function BundleIndexPage({
           data-testid="seed-bundle-tables"
           className="mt-8 w-full text-left text-sm"
         >
-          <thead className="text-zinc-500 uppercase tracking-wider text-xs">
+          <thead className="text-muted-foreground uppercase tracking-wider text-xs">
             <tr>
               <th className="py-2 pr-3">table</th>
               <th className="py-2 pr-3">rows</th>
@@ -85,11 +85,11 @@ export default async function BundleIndexPage({
           </thead>
           <tbody>
             {tables.map((t) => (
-              <tr key={t.table_name} className="border-t border-zinc-900">
+              <tr key={t.table_name} className="border-t border-border">
                 <td className="py-2 pr-3 font-mono text-emerald-300">
                   {t.table_name}
                 </td>
-                <td className="py-2 pr-3 font-mono text-zinc-300">
+                <td className="py-2 pr-3 font-mono text-foreground">
                   {t.row_count}
                 </td>
                 <td className="py-2 pr-3">
@@ -101,7 +101,7 @@ export default async function BundleIndexPage({
                       open →
                     </Link>
                   ) : (
-                    <span className="text-zinc-600">empty</span>
+                    <span className="text-muted-foreground">empty</span>
                   )}
                 </td>
               </tr>

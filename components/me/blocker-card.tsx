@@ -54,7 +54,7 @@ const REVERSIBILITY_COLORS: Record<string, string> = {
 function ReversibilityDot({ reversibility }: { reversibility: string }) {
   return (
     <span
-      className={`inline-block w-2 h-2 rounded-full shrink-0 ${REVERSIBILITY_COLORS[reversibility] ?? "bg-zinc-500"}`}
+      className={`inline-block w-2 h-2 rounded-full shrink-0 ${REVERSIBILITY_COLORS[reversibility] ?? "bg-muted-foreground"}`}
       title={`Reversibility: ${reversibility}`}
       aria-label={`Reversibility: ${reversibility}`}
     />
@@ -74,7 +74,7 @@ function PathwaysResolution({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
         Choose a path forward:
       </p>
       <ul className="space-y-1.5">
@@ -84,24 +84,24 @@ function PathwaysResolution({
             <button
               type="button"
               onClick={() => onResolveWithPathway?.(id, p.id)}
-              className="text-left text-xs text-zinc-300 hover:text-zinc-100"
+              className="text-left text-xs text-foreground hover:text-foreground"
             >
               <span className="font-medium">{p.label}</span>
               {" — "}
-              <span className="text-zinc-500">{p.rationale}</span>
+              <span className="text-muted-foreground">{p.rationale}</span>
             </button>
           </li>
         ))}
         {/* Other (write your own) escape hatch */}
         <li className="flex items-start gap-2">
-          <span className="inline-block w-2 h-2 rounded-full shrink-0 bg-zinc-600" title="Custom resolution" />
+          <span className="inline-block w-2 h-2 rounded-full shrink-0 bg-secondary" title="Custom resolution" />
           <button
             type="button"
             onClick={() => {
               const custom = prompt("Describe your custom resolution (action type + params as JSON):");
               if (custom) onResolveWithPathway?.(id, "custom:" + custom);
             }}
-            className="text-left text-xs text-zinc-500 hover:text-zinc-300"
+            className="text-left text-xs text-muted-foreground hover:text-foreground"
           >
             Other (write your own)
           </button>
@@ -110,7 +110,7 @@ function PathwaysResolution({
       <button
         type="button"
         onClick={() => onDismiss?.(id)}
-        className="mt-2 text-[10px] text-zinc-600 hover:text-zinc-400"
+        className="mt-2 text-[10px] text-muted-foreground hover:text-foreground"
         data-testid={`dismiss-blocker-${id}`}
       >
         Dismiss this blocker
@@ -132,12 +132,12 @@ function TextInputResolution({
 }) {
   return (
     <div className="space-y-2">
-      <label className="block text-xs text-zinc-400">{inputSchema.prompt}</label>
+      <label className="block text-xs text-muted-foreground">{inputSchema.prompt}</label>
       <div className="flex gap-2">
         <input
           type={inputSchema.kind === "number" ? "number" : inputSchema.kind === "date" ? "date" : "text"}
           id={`input-${id}`}
-          className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200"
+          className="flex-1 rounded-md border border-border bg-input px-3 py-1.5 text-xs text-foreground"
           placeholder={inputSchema.prompt}
         />
         <button
@@ -149,7 +149,7 @@ function TextInputResolution({
             }
           }}
           data-testid={`submit-input-${id}`}
-          className="rounded-md bg-emerald-700 px-3 py-1.5 text-[11px] font-medium text-zinc-50 hover:bg-emerald-600"
+          className="rounded-md bg-emerald-700 px-3 py-1.5 text-[11px] font-medium text-emerald-50 hover:bg-emerald-600"
         >
           Submit
         </button>
@@ -157,7 +157,7 @@ function TextInputResolution({
       <button
         type="button"
         onClick={() => onDismiss?.(id)}
-        className="text-[10px] text-zinc-600 hover:text-zinc-400"
+        className="text-[10px] text-muted-foreground hover:text-foreground"
         data-testid={`dismiss-blocker-${id}`}
       >
         Dismiss
@@ -179,13 +179,13 @@ function ConfirmBinaryResolution({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-xs text-zinc-300">{confirmAction.label}</p>
+      <p className="text-xs text-foreground">{confirmAction.label}</p>
       <div className="flex gap-2">
         <button
           type="button"
           onClick={() => onResolveWithInput?.(id, JSON.stringify({ confirmed: true }))}
           data-testid={`confirm-yes-${id}`}
-          className="rounded-md bg-emerald-700 px-4 py-1.5 text-[11px] font-medium text-zinc-50 hover:bg-emerald-600"
+          className="rounded-md bg-emerald-700 px-4 py-1.5 text-[11px] font-medium text-emerald-50 hover:bg-emerald-600"
         >
           Yes
         </button>
@@ -193,7 +193,7 @@ function ConfirmBinaryResolution({
           type="button"
           onClick={() => onDismiss?.(id, "Declined")}
           data-testid={`confirm-no-${id}`}
-          className="rounded-md bg-zinc-800 px-4 py-1.5 text-[11px] font-medium text-zinc-400 hover:bg-zinc-700"
+          className="rounded-md bg-secondary px-4 py-1.5 text-[11px] font-medium text-secondary-foreground hover:bg-secondary/80"
         >
           No
         </button>
@@ -221,30 +221,30 @@ export function BlockerCard({
     <li
       id={`blocker-${id}`}
       data-testid={`blocker-card-${id}`}
-      className="rounded-md border border-zinc-700 bg-zinc-900/60 p-4 space-y-3"
+      className="rounded-md border border-border bg-card/60 p-4 space-y-3"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span
               className={`pill text-[10px] px-2 py-0.5 rounded font-mono ${
-                REASON_COLORS[reason_kind] ?? "bg-zinc-800 text-zinc-400"
+                REASON_COLORS[reason_kind] ?? "bg-secondary text-secondary-foreground"
               }`}
             >
               {REASON_LABELS[reason_kind] ?? reason_kind}
             </span>
-            <span className="font-medium text-sm text-zinc-100">{summary}</span>
+            <span className="font-medium text-sm text-foreground">{summary}</span>
           </div>
-          <p className="mt-2 text-xs text-zinc-400 leading-relaxed">{detail}</p>
+          <p className="mt-2 text-xs text-muted-foreground leading-relaxed">{detail}</p>
           {blocked_work_ref && (
-            <p className="mt-1 text-[10px] font-mono text-zinc-600">ref: {blocked_work_ref}</p>
+            <p className="mt-1 text-[10px] font-mono text-muted-foreground">ref: {blocked_work_ref}</p>
           )}
-          <time className="mt-1 block text-[10px] text-zinc-600">{created_at.replace("T", " ").slice(0, 16)}</time>
+          <time className="mt-1 block text-[10px] text-muted-foreground">{created_at.replace("T", " ").slice(0, 16)}</time>
         </div>
       </div>
 
       {/* Resolution UI */}
-      <div className="pt-2 border-t border-zinc-800">
+      <div className="pt-2 border-t border-border">
         {resolution_mode === "pathways" && pathways && pathways.length > 0 && (
           <PathwaysResolution
             id={id}
@@ -276,7 +276,7 @@ export function BlockerCard({
               type="button"
               onClick={() => onResolveWithPathway?.(id, "00000000-0000-0000-0000-000000000000")}
               data-testid={`resolve-blocker-${id}`}
-              className="rounded-md bg-emerald-700 px-3 py-1.5 text-[11px] font-medium text-zinc-50 hover:bg-emerald-600"
+              className="rounded-md bg-emerald-700 px-3 py-1.5 text-[11px] font-medium text-emerald-50 hover:bg-emerald-600"
             >
               Resolve
             </button>
@@ -284,7 +284,7 @@ export function BlockerCard({
               type="button"
               onClick={() => onDismiss?.(id)}
               data-testid={`dismiss-blocker-${id}`}
-              className="rounded-md bg-zinc-800 px-3 py-1.5 text-[11px] font-medium text-zinc-400 hover:bg-zinc-700"
+              className="rounded-md bg-secondary px-3 py-1.5 text-[11px] font-medium text-secondary-foreground hover:bg-secondary/80"
             >
               Dismiss
             </button>

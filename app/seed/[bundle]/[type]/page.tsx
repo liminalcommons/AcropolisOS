@@ -59,21 +59,21 @@ export default async function SeedTablePage({
   if (!data) notFound();
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main>
       <div className="mx-auto max-w-7xl px-8 py-12">
-        <div className="flex items-center gap-4 text-xs text-zinc-500">
-          <Link href="/seed" className="hover:text-zinc-300">
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <Link href="/seed" className="hover:text-foreground">
             seed
           </Link>
           <span>·</span>
-          <Link href={`/seed/${bundle}`} className="hover:text-zinc-300">
+          <Link href={`/seed/${bundle}`} className="hover:text-foreground">
             {bundle}
           </Link>
         </div>
         <h1 className="mt-1 font-mono text-2xl font-semibold tracking-tight">
           {tableName}
         </h1>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-xs text-muted-foreground">
           <code className="font-mono">{schemaName}.{tableName}</code> — showing{" "}
           {data.rows.length} of up to {MAX_ROWS} rows.
         </p>
@@ -83,7 +83,7 @@ export default async function SeedTablePage({
             data-testid="seed-table-rows"
             className="w-full text-left text-xs"
           >
-            <thead className="text-zinc-500 uppercase tracking-wider">
+            <thead className="text-muted-foreground uppercase tracking-wider">
               <tr>
                 {data.cols.map((c) => (
                   <th key={c.column_name} className="py-2 pr-3 font-mono">
@@ -92,9 +92,9 @@ export default async function SeedTablePage({
                 ))}
               </tr>
             </thead>
-            <tbody className="text-zinc-300">
+            <tbody className="text-foreground">
               {data.rows.map((r, i) => (
-                <tr key={i} className="border-t border-zinc-900">
+                <tr key={i} className="border-t border-border">
                   {data.cols.map((c) => (
                     <td
                       key={c.column_name}

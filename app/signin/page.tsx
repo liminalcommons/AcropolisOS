@@ -5,10 +5,10 @@ export const dynamic = "force-dynamic";
 
 export default function SignInPage() {
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-md px-8 py-16">
         <h1 className="text-3xl font-semibold tracking-tight">Sign in</h1>
-        <p className="mt-2 text-sm text-zinc-400">
+        <p className="mt-2 text-sm text-muted-foreground">
           acropolisOS uses a local credentials store. Use the steward email and
           password you created during setup.
         </p>

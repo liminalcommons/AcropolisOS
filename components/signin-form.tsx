@@ -47,7 +47,7 @@ export function SignInForm() {
       {error ? (
         <p
           role="alert"
-          className="rounded border border-red-700 bg-red-900/30 p-3 text-sm"
+          className="rounded border border-destructive/60 bg-destructive/15 p-3 text-sm text-destructive"
         >
           {error}
         </p>
@@ -61,7 +61,7 @@ export function SignInForm() {
           required
           autoComplete="email"
           autoFocus
-          className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 p-2"
+          className="mt-1 w-full rounded border border-border bg-input p-2"
         />
       </label>
       <label className="block text-sm">
@@ -72,13 +72,13 @@ export function SignInForm() {
           onChange={(e) => setPassword(e.target.value)}
           required
           autoComplete="current-password"
-          className="mt-1 w-full rounded border border-zinc-700 bg-zinc-900 p-2"
+          className="mt-1 w-full rounded border border-border bg-input p-2"
         />
       </label>
       <button
         type="submit"
         disabled={busy}
-        className="rounded bg-zinc-100 px-4 py-2 text-zinc-900 disabled:opacity-50"
+        className="rounded bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
       >
         {busy ? "Signing in…" : "Sign in"}
       </button>

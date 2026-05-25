@@ -134,7 +134,7 @@ export function InlineProposalPanel({
     return (
       <div
         data-testid="inline-proposal-loading"
-        className="mx-2 mb-3 flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-400"
+        className="mx-2 mb-3 flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground"
       >
         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
         loading proposal {proposalId.slice(0, 8)}…
@@ -146,7 +146,7 @@ export function InlineProposalPanel({
     return (
       <div
         data-testid="inline-proposal-error"
-        className="mx-2 mb-3 rounded-md border border-rose-900 bg-rose-950/40 px-3 py-2 text-xs text-rose-200"
+        className="mx-2 mb-3 rounded-md border border-destructive/40 bg-destructive/15 px-3 py-2 text-xs text-destructive"
       >
         could not load proposal: {load.message}
       </div>
@@ -164,23 +164,23 @@ export function InlineProposalPanel({
     <section
       data-testid="inline-proposal-panel"
       data-proposal-id={proposal.id}
-      className="mx-2 mb-3 overflow-hidden rounded-lg border border-emerald-900 bg-zinc-900/60 text-xs text-zinc-200 shadow-inner"
+      className="mx-2 mb-3 overflow-hidden rounded-lg border border-emerald-900 bg-card/60 text-xs text-foreground shadow-inner"
     >
-      <header className="flex items-center justify-between border-b border-zinc-800 bg-zinc-950 px-3 py-2">
+      <header className="flex items-center justify-between border-b border-border bg-background px-3 py-2">
         <div className="flex items-center gap-2 font-mono text-[11px]">
           <span className="rounded bg-emerald-900/60 px-1.5 py-0.5 text-emerald-200">
             proposal
           </span>
-          <span className="text-zinc-400">{proposal.id.slice(0, 8)}</span>
-          <span className="text-zinc-600">·</span>
-          <span className="text-zinc-400">{proposal.status}</span>
+          <span className="text-muted-foreground">{proposal.id.slice(0, 8)}</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="text-muted-foreground">{proposal.status}</span>
         </div>
         {onDismiss ? (
           <button
             type="button"
             onClick={onDismiss}
             aria-label="Dismiss proposal"
-            className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+            className="rounded p-1 text-muted-foreground hover:bg-card hover:text-foreground"
           >
             <X className="h-3 w-3" aria-hidden />
           </button>
@@ -189,7 +189,7 @@ export function InlineProposalPanel({
 
       <div className="space-y-2 px-3 py-3">
         {summary.isEmpty ? (
-          <p className="text-zinc-500">
+          <p className="text-muted-foreground">
             (this proposal is empty — no schema deltas were staged)
           </p>
         ) : (
@@ -248,7 +248,7 @@ export function InlineProposalPanel({
                 />
               </li>
             ) : null}
-            <li className="flex flex-wrap gap-2 pt-1 text-zinc-500">
+            <li className="flex flex-wrap gap-2 pt-1 text-muted-foreground">
               <Tally label="functions" n={summary.function_count} />
               <Tally label="views" n={summary.view_count} />
               <Tally label="seeds" n={summary.seed_count} />
@@ -258,12 +258,12 @@ export function InlineProposalPanel({
         )}
       </div>
 
-      <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-800 bg-zinc-950/40 px-3 py-2">
+      <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-background/40 px-3 py-2">
         {action.state === "error" && action.error ? (
-          <span className="mr-auto text-rose-300">{action.error}</span>
+          <span className="mr-auto text-destructive">{action.error}</span>
         ) : null}
         {actions.length === 0 ? (
-          <span className="mr-auto text-zinc-500">sign in to act on this proposal</span>
+          <span className="mr-auto text-muted-foreground">sign in to act on this proposal</span>
         ) : null}
         {actions.includes("apply") ? (
           <button
@@ -271,7 +271,7 @@ export function InlineProposalPanel({
             onClick={() => runAction("apply")}
             disabled={action.state === "pending" || action.state === "done"}
             data-testid="inline-proposal-apply"
-            className="inline-flex items-center gap-1 rounded-md bg-emerald-700 px-2.5 py-1 text-zinc-50 hover:bg-emerald-600 disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md bg-emerald-700 px-2.5 py-1 text-emerald-50 hover:bg-emerald-600 disabled:opacity-50"
           >
             {wasApplied ? <Check className="h-3 w-3" aria-hidden /> : null}
             {wasApplied ? "Applied" : "Apply"}
@@ -281,7 +281,7 @@ export function InlineProposalPanel({
           <Link
             href={`/proposals/${proposal.id}`}
             data-testid="inline-proposal-edit"
-            className="inline-flex items-center gap-1 rounded-md border border-zinc-700 px-2.5 py-1 text-zinc-200 hover:bg-zinc-800"
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-foreground hover:bg-card"
           >
             <ExternalLink className="h-3 w-3" aria-hidden />
             Edit
@@ -293,7 +293,7 @@ export function InlineProposalPanel({
             onClick={() => runAction("reject")}
             disabled={action.state === "pending" || action.state === "done"}
             data-testid="inline-proposal-reject"
-            className="inline-flex items-center gap-1 rounded-md border border-rose-800 px-2.5 py-1 text-rose-200 hover:bg-rose-950 disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md border border-destructive/60 px-2.5 py-1 text-destructive hover:bg-destructive/10 disabled:opacity-50"
           >
             {wasRejected ? "Rejected" : "Reject"}
           </button>
@@ -304,7 +304,7 @@ export function InlineProposalPanel({
             onClick={() => runAction("submit-for-review")}
             disabled={action.state === "pending" || action.state === "done"}
             data-testid="inline-proposal-submit-for-review"
-            className="inline-flex items-center gap-1 rounded-md bg-emerald-700 px-2.5 py-1 text-zinc-50 hover:bg-emerald-600 disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md bg-emerald-700 px-2.5 py-1 text-emerald-50 hover:bg-emerald-600 disabled:opacity-50"
           >
             <Send className="h-3 w-3" aria-hidden />
             {wasSubmitted ? "Submitted" : "Submit for review"}
@@ -326,14 +326,14 @@ function DiffRow({
 }): React.ReactElement {
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-      <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
       <ul data-testid={testid} className="flex flex-wrap gap-1 font-mono text-[11px]">
         {items.map((item) => (
           <li
             key={item}
-            className="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-100"
+            className="rounded bg-secondary px-1.5 py-0.5 text-secondary-foreground"
           >
             {item}
           </li>
@@ -345,8 +345,8 @@ function DiffRow({
 
 function Tally({ label, n }: { label: string; n: number }): React.ReactElement {
   return (
-    <span className="rounded border border-zinc-800 px-1.5 py-0.5">
-      <span className="text-zinc-300">{n}</span> {label}
+    <span className="rounded border border-border px-1.5 py-0.5">
+      <span className="text-foreground">{n}</span> {label}
     </span>
   );
 }

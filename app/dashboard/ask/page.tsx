@@ -25,7 +25,7 @@ export default async function AskAgentPage(): Promise<React.ReactElement> {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
+    <main className="font-sans">
       <div className="mx-auto max-w-2xl px-6 py-10 flex flex-col" style={{ minHeight: "100vh" }}>
 
         {/* Header */}
@@ -33,15 +33,15 @@ export default async function AskAgentPage(): Promise<React.ReactElement> {
           <div className="flex items-center gap-3 mb-1">
             <a
               href="/"
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               ← dashboard
             </a>
           </div>
-          <h1 className="text-lg font-semibold tracking-tight text-zinc-100">
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">
             Ask the agent
           </h1>
-          <p className="text-xs text-zinc-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Describe the information you want to pin as a widget. The agent will propose one you can add to your dashboard.
           </p>
         </div>

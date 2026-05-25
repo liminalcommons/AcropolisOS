@@ -9,17 +9,17 @@ export default async function ChatPage() {
       ? session.user.email
       : "steward";
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main>
       <div className="mx-auto max-w-2xl px-8 py-16">
         <h1 className="text-3xl font-semibold tracking-tight">
           Welcome to acropolisOS
         </h1>
-        <p className="mt-3 text-zinc-400">
+        <p className="mt-3 text-muted-foreground">
           Signed in as {name}. Setup is complete.
         </p>
-        <p className="mt-6 text-sm text-zinc-500">
+        <p className="mt-6 text-sm text-muted-foreground">
           Open the chat panel to start exploring your ontology. Stewards can
-          review proposals at <code className="text-zinc-300">/proposals</code>.
+          review proposals at <code className="text-foreground">/proposals</code>.
         </p>
       </div>
     </main>

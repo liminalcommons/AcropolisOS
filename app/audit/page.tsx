@@ -38,7 +38,7 @@ function jsonPreview(v: unknown): string {
 function OntologyTab({ rows }: { rows: AuditRow[] }): React.ReactElement {
   if (rows.length === 0) {
     return (
-      <p className="mt-4 text-sm text-zinc-500">
+      <p className="mt-4 text-sm text-muted-foreground">
         No ontology audit rows match this filter.
       </p>
     );
@@ -48,7 +48,7 @@ function OntologyTab({ rows }: { rows: AuditRow[] }): React.ReactElement {
       data-testid="audit-table-ontology"
       className="mt-4 w-full text-left text-xs"
     >
-      <thead className="text-zinc-500 uppercase tracking-wider">
+      <thead className="text-muted-foreground uppercase tracking-wider">
         <tr>
           <th className="py-2 pr-3">at</th>
           <th className="py-2 pr-3">actor</th>
@@ -58,19 +58,19 @@ function OntologyTab({ rows }: { rows: AuditRow[] }): React.ReactElement {
           <th className="py-2 pr-3">link</th>
         </tr>
       </thead>
-      <tbody className="text-zinc-300">
+      <tbody className="text-foreground">
         {rows.map((r) => (
-          <tr key={r.id} className="border-t border-zinc-900">
+          <tr key={r.id} className="border-t border-border">
             <td className="py-2 pr-3 font-mono">{fmtTime(r.at)}</td>
             <td className="py-2 pr-3">
               {r.actor}{" "}
-              <span className="text-zinc-600">({r.actor_role})</span>
+              <span className="text-muted-foreground">({r.actor_role})</span>
             </td>
             <td className="py-2 pr-3 font-mono">{r.via}</td>
             <td className="py-2 pr-3 font-mono">
               {r.subject_type}/{r.subject_id.slice(0, 8)}
             </td>
-            <td className="py-2 pr-3 font-mono text-zinc-500">
+            <td className="py-2 pr-3 font-mono text-muted-foreground">
               {jsonPreview(r.metadata)}
             </td>
             <td className="py-2 pr-3">
@@ -93,7 +93,7 @@ function OntologyTab({ rows }: { rows: AuditRow[] }): React.ReactElement {
 function ActionTab({ rows }: { rows: AuditRow[] }): React.ReactElement {
   if (rows.length === 0) {
     return (
-      <p className="mt-4 text-sm text-zinc-500">
+      <p className="mt-4 text-sm text-muted-foreground">
         No action audit rows match this filter.
       </p>
     );
@@ -103,7 +103,7 @@ function ActionTab({ rows }: { rows: AuditRow[] }): React.ReactElement {
       data-testid="audit-table-action"
       className="mt-4 w-full text-left text-xs"
     >
-      <thead className="text-zinc-500 uppercase tracking-wider">
+      <thead className="text-muted-foreground uppercase tracking-wider">
         <tr>
           <th className="py-2 pr-3">at</th>
           <th className="py-2 pr-3">actor</th>
@@ -112,19 +112,19 @@ function ActionTab({ rows }: { rows: AuditRow[] }): React.ReactElement {
           <th className="py-2 pr-3">metadata</th>
         </tr>
       </thead>
-      <tbody className="text-zinc-300">
+      <tbody className="text-foreground">
         {rows.map((r) => (
-          <tr key={r.id} className="border-t border-zinc-900">
+          <tr key={r.id} className="border-t border-border">
             <td className="py-2 pr-3 font-mono">{fmtTime(r.at)}</td>
             <td className="py-2 pr-3">
               {r.actor}{" "}
-              <span className="text-zinc-600">({r.actor_role})</span>
+              <span className="text-muted-foreground">({r.actor_role})</span>
             </td>
             <td className="py-2 pr-3 font-mono">{r.via}</td>
             <td className="py-2 pr-3 font-mono">
               {r.subject_type}/{r.subject_id.slice(0, 8)}
             </td>
-            <td className="py-2 pr-3 font-mono text-zinc-500">
+            <td className="py-2 pr-3 font-mono text-muted-foreground">
               {jsonPreview(r.metadata)}
             </td>
           </tr>
@@ -137,7 +137,7 @@ function ActionTab({ rows }: { rows: AuditRow[] }): React.ReactElement {
 function DataTab({ rows }: { rows: DataAuditRow[] }): React.ReactElement {
   if (rows.length === 0) {
     return (
-      <p className="mt-4 text-sm text-zinc-500">
+      <p className="mt-4 text-sm text-muted-foreground">
         No data audit rows match this filter. Only object types with{" "}
         <code className="font-mono">data_audit: true</code> emit rows here.
       </p>
@@ -148,7 +148,7 @@ function DataTab({ rows }: { rows: DataAuditRow[] }): React.ReactElement {
       data-testid="audit-table-data"
       className="mt-4 w-full text-left text-xs"
     >
-      <thead className="text-zinc-500 uppercase tracking-wider">
+      <thead className="text-muted-foreground uppercase tracking-wider">
         <tr>
           <th className="py-2 pr-3">at</th>
           <th className="py-2 pr-3">table</th>
@@ -158,15 +158,15 @@ function DataTab({ rows }: { rows: DataAuditRow[] }): React.ReactElement {
           <th className="py-2 pr-3">after</th>
         </tr>
       </thead>
-      <tbody className="text-zinc-300">
+      <tbody className="text-foreground">
         {rows.map((r) => (
-          <tr key={r.id} className="border-t border-zinc-900">
+          <tr key={r.id} className="border-t border-border">
             <td className="py-2 pr-3 font-mono">{fmtTime(r.at)}</td>
             <td className="py-2 pr-3 font-mono">{r.table_name}</td>
             <td className="py-2 pr-3 font-mono">{r.row_id.slice(0, 12)}</td>
             <td className="py-2 pr-3 font-mono">{r.operation}</td>
             <td className="py-2 pr-3 font-mono">{r.db_actor}</td>
-            <td className="py-2 pr-3 font-mono text-zinc-500">
+            <td className="py-2 pr-3 font-mono text-muted-foreground">
               {jsonPreview(r.after)}
             </td>
           </tr>
@@ -206,15 +206,15 @@ export default async function AuditPage({
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main>
       <div className="mx-auto max-w-6xl px-8 py-12">
-        <Link href="/ontology-editor" className="text-xs text-zinc-500 hover:text-zinc-300">
+        <Link href="/ontology-editor" className="text-xs text-muted-foreground hover:text-foreground">
           ← ontology editor
         </Link>
         <h1 className="mt-1 font-mono text-2xl font-semibold tracking-tight">
           audit
         </h1>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-xs text-muted-foreground">
           three append-only logs: ontology mutations, action invocations, and
           per-row data audit (object types with{" "}
           <code className="font-mono">data_audit: true</code>).
@@ -222,7 +222,7 @@ export default async function AuditPage({
 
         <nav
           data-testid="audit-tabs"
-          className="mt-8 flex gap-2 border-b border-zinc-800"
+          className="mt-8 flex gap-2 border-b border-border"
         >
           {TABS.map((t) => (
             <Link
@@ -232,7 +232,7 @@ export default async function AuditPage({
               className={
                 tab === t
                   ? "border-b-2 border-emerald-400 px-3 py-2 text-sm font-medium text-emerald-300"
-                  : "px-3 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-200"
+                  : "px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
               }
             >
               {t}
@@ -252,13 +252,13 @@ export default async function AuditPage({
                 name="actor"
                 defaultValue={params.actor ?? ""}
                 placeholder="actor"
-                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-100"
+                className="rounded-md border border-border bg-input px-2 py-1 font-mono text-xs text-foreground"
               />
               <input
                 name="subject_type"
                 defaultValue={params.subject_type ?? ""}
                 placeholder="subject_type"
-                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-100"
+                className="rounded-md border border-border bg-input px-2 py-1 font-mono text-xs text-foreground"
               />
             </>
           ) : (
@@ -267,13 +267,13 @@ export default async function AuditPage({
                 name="table"
                 defaultValue={params.table ?? ""}
                 placeholder="table_name"
-                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-100"
+                className="rounded-md border border-border bg-input px-2 py-1 font-mono text-xs text-foreground"
               />
               <input
                 name="operation"
                 defaultValue={params.operation ?? ""}
                 placeholder="INSERT/UPDATE/DELETE"
-                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-100"
+                className="rounded-md border border-border bg-input px-2 py-1 font-mono text-xs text-foreground"
               />
             </>
           )}

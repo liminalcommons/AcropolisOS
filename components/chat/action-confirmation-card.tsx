@@ -73,7 +73,7 @@ export function ActionConfirmationCard(
               params: envelope.params,
             })
           }
-          className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-amber-50 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
         >
           Confirm
         </button>

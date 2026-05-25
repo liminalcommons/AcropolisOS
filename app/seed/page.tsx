@@ -31,15 +31,15 @@ async function listSeedSchemas(): Promise<SchemaRow[]> {
 export default async function SeedIndexPage(): Promise<React.ReactElement> {
   const schemas = await listSeedSchemas();
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main>
       <div className="mx-auto max-w-5xl px-8 py-12">
-        <Link href="/ontology-editor" className="text-xs text-zinc-500 hover:text-zinc-300">
+        <Link href="/ontology-editor" className="text-xs text-muted-foreground hover:text-foreground">
           ← ontology editor
         </Link>
         <h1 className="mt-1 font-mono text-2xl font-semibold tracking-tight">
           seed bundles
         </h1>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-xs text-muted-foreground">
           Domain ontologies loaded into namespaced Postgres schemas (see{" "}
           <code className="font-mono">scripts/seed-from-bundle.ts</code>).
           The kernel <code className="font-mono">public.*</code> schema is
@@ -47,7 +47,7 @@ export default async function SeedIndexPage(): Promise<React.ReactElement> {
         </p>
 
         {schemas.length === 0 ? (
-          <p className="mt-8 text-sm text-zinc-500">
+          <p className="mt-8 text-sm text-muted-foreground">
             No seed bundles loaded. Run{" "}
             <code className="font-mono">
               npx tsx scripts/seed-from-bundle.ts &lt;bundle&gt; --insert
@@ -59,7 +59,7 @@ export default async function SeedIndexPage(): Promise<React.ReactElement> {
             data-testid="seed-bundle-list"
             className="mt-8 w-full text-left text-sm"
           >
-            <thead className="text-zinc-500 uppercase tracking-wider text-xs">
+            <thead className="text-muted-foreground uppercase tracking-wider text-xs">
               <tr>
                 <th className="py-2 pr-3">schema</th>
                 <th className="py-2 pr-3">tables</th>
@@ -70,11 +70,11 @@ export default async function SeedIndexPage(): Promise<React.ReactElement> {
               {schemas.map((s) => {
                 const bundleName = s.schema_name.replace(/^seed_/, "");
                 return (
-                  <tr key={s.schema_name} className="border-t border-zinc-900">
+                  <tr key={s.schema_name} className="border-t border-border">
                     <td className="py-2 pr-3 font-mono text-emerald-300">
                       {s.schema_name}
                     </td>
-                    <td className="py-2 pr-3 font-mono text-zinc-300">
+                    <td className="py-2 pr-3 font-mono text-foreground">
                       {s.table_count}
                     </td>
                     <td className="py-2 pr-3">
