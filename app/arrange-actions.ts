@@ -29,18 +29,31 @@ async function resolveMember() {
   return { db, member: rows[0] };
 }
 
+// Selections here are always catalog-valid by construction (derived from
+// resolvePerUserDashboard or SLICE_SPEC), so a validation_error means an
+// invariant broke — surface it instead of silently revalidating to stale state.
+async function persist(
+  db: Awaited<ReturnType<typeof resolveMember>>["db"],
+  memberId: string,
+  next: Parameters<typeof compose_dashboard>[2],
+): Promise<void> {
+  const res = await compose_dashboard(db, memberId, next);
+  if (res.status !== "ok") {
+    throw new Error(`compose_failed: ${JSON.stringify(res.errors)}`);
+  }
+  revalidatePath("/");
+}
+
 export async function moveWidgetAction(id: string, dir: "up" | "down"): Promise<void> {
   const { db, member } = await resolveMember();
   const next = moveItem(await currentArrangement(db, member), id, dir);
-  await compose_dashboard(db, member.id, toSelections(next));
-  revalidatePath("/");
+  await persist(db, member.id, toSelections(next));
 }
 
 export async function removeWidgetAction(id: string): Promise<void> {
   const { db, member } = await resolveMember();
   const next = removeItem(await currentArrangement(db, member), id);
-  await compose_dashboard(db, member.id, toSelections(next));
-  revalidatePath("/");
+  await persist(db, member.id, toSelections(next));
 }
 
 // index is the position in addableForRole(role); resolved server-side so the
@@ -51,13 +64,11 @@ export async function addWidgetAction(addableIndex: number): Promise<void> {
   const sel = menu[addableIndex];
   if (!sel) throw new Error("invalid_addable_index");
   const next = addItem(await currentArrangement(db, member), sel);
-  await compose_dashboard(db, member.id, toSelections(next));
-  revalidatePath("/");
+  await persist(db, member.id, toSelections(next));
 }
 
 export async function resetArrangementAction(): Promise<void> {
   const { db, member } = await resolveMember();
   // Empty pins → resolvePerUserDashboard falls back to the role-default floor.
-  await compose_dashboard(db, member.id, []);
-  revalidatePath("/");
+  await persist(db, member.id, []);
 }
