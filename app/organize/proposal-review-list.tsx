@@ -46,14 +46,14 @@ interface RowState {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const SOURCE_COLORS: Record<string, string> = {
-  manual: "bg-zinc-800 text-zinc-300",
+  manual: "bg-card text-foreground",
   "sheets-import": "bg-blue-900/50 text-blue-300",
-  "webhook-booking": "bg-violet-900/50 text-violet-300",
+  "webhook-booking": "bg-primary/20 text-primary",
   "file-drop": "bg-teal-900/50 text-teal-300",
 };
 
 function sourceBadgeClass(source: string): string {
-  return SOURCE_COLORS[source] ?? "bg-zinc-800 text-zinc-400";
+  return SOURCE_COLORS[source] ?? "bg-card text-muted-foreground";
 }
 
 function confidenceColor(conf: number): string {
@@ -152,23 +152,23 @@ function ProposalCard({
   const unmappedSet = new Set(proposal.unmapped);
 
   return (
-    <div className="mt-3 rounded-lg border border-zinc-700 bg-zinc-900/50 p-4 space-y-4">
+    <div className="mt-3 rounded-lg border border-border bg-card/50 p-4 space-y-4">
 
       {/* Type + confidence */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <span className="text-[10px] uppercase tracking-widest text-zinc-500 mr-2">
+          <span className="text-xs uppercase tracking-widest text-muted-foreground mr-2">
             target type
           </span>
-          <span className="font-mono text-sm font-semibold text-zinc-100">
+          <span className="font-mono text-sm font-semibold text-foreground">
             {proposal.target_type}
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[10px] text-zinc-500">
+          <span className="text-xs text-muted-foreground">
             {Math.round(proposal.confidence * 100)}% confidence
           </span>
-          <div className="w-20 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+          <div className="w-20 h-1.5 rounded-full bg-card overflow-hidden">
             <div
               className={`h-full rounded-full ${confidenceColor(proposal.confidence)}`}
               style={{ width: `${Math.round(proposal.confidence * 100)}%` }}
@@ -179,43 +179,43 @@ function ProposalCard({
 
       {/* Field mapping table */}
       <div>
-        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">
+        <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
           field mapping
         </p>
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-zinc-600">
+            <tr className="text-muted-foreground/60">
               <th className="text-left font-normal pb-1 pr-4">source key</th>
               <th className="text-left font-normal pb-1">→ target field</th>
             </tr>
           </thead>
           <tbody>
             {allMapped.map(([src, tgt]) => (
-              <tr key={src} className="border-t border-zinc-800/60">
-                <td className="py-1 pr-4 font-mono text-zinc-300">{src}</td>
+              <tr key={src} className="border-t border-border/60">
+                <td className="py-1 pr-4 font-mono text-foreground">{src}</td>
                 <td className="py-1 font-mono text-emerald-400">{tgt}</td>
               </tr>
             ))}
             {proposal.unmapped.map((src) => (
-              <tr key={src} className="border-t border-zinc-800/60">
-                <td className="py-1 pr-4 font-mono text-zinc-600">{src}</td>
-                <td className="py-1 font-mono text-zinc-600 italic">unmapped</td>
+              <tr key={src} className="border-t border-border/60">
+                <td className="py-1 pr-4 font-mono text-muted-foreground/60">{src}</td>
+                <td className="py-1 font-mono text-muted-foreground/60 italic">unmapped</td>
               </tr>
             ))}
           </tbody>
         </table>
         {allMapped.length === 0 && proposal.unmapped.length === 0 && (
-          <p className="text-zinc-600 text-xs italic">No keys extracted.</p>
+          <p className="text-muted-foreground/60 text-xs italic">No keys extracted.</p>
         )}
       </div>
 
       {/* Reasoning */}
       {proposal.reasoning && (
         <div>
-          <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
             reasoning
           </p>
-          <p className="text-xs text-zinc-400 leading-relaxed">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             {proposal.reasoning}
           </p>
         </div>
@@ -233,11 +233,11 @@ function ProposalCard({
         ) : confirmState.tag === "forbidden" ? (
           <p className="text-xs text-red-400">Forbidden — steward role required.</p>
         ) : confirmState.tag === "incomplete_refs" ? (
-          <div className="text-xs text-zinc-400 space-y-0.5">
-            <p className="text-zinc-400">
+          <div className="text-xs text-muted-foreground space-y-0.5">
+            <p className="text-muted-foreground">
               Needs resolution — links to other records (handled in A4).
             </p>
-            <p className="text-zinc-500 font-mono">
+            <p className="text-muted-foreground/60 font-mono">
               Missing: {confirmState.missing.join(", ")}
             </p>
           </div>
@@ -248,7 +248,7 @@ function ProposalCard({
         ) : confirmState.tag === "error" ? (
           <p className="text-xs text-red-400 font-mono">{confirmState.message}</p>
         ) : confirmState.tag === "merged" ? (
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-muted-foreground">
             Merged into existing row{" "}
             <span className="font-mono opacity-70">{confirmState.merged_into}</span>
             {" "}— incoming duplicate discarded.
@@ -257,21 +257,21 @@ function ProposalCard({
           // A4: human-gated resolve — show candidates, no silent action
           <div className="w-full space-y-3">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1.5">
+              <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1.5">
                 possible duplicate — choose action
               </p>
               <div className="space-y-2">
                 {confirmState.candidates.map((c) => (
                   <div
                     key={c.id}
-                    className="flex items-center justify-between gap-3 rounded border border-zinc-700/60 bg-zinc-800/30 px-3 py-2"
+                    className="flex items-center justify-between gap-3 rounded border border-border/60 bg-card/30 px-3 py-2"
                   >
                     <div className="min-w-0">
-                      <span className="text-xs text-zinc-200 font-medium truncate">{c.label}</span>
-                      <span className="text-[10px] text-zinc-500 ml-2">
+                      <span className="text-xs text-foreground font-medium truncate">{c.label}</span>
+                      <span className="text-xs text-muted-foreground ml-2">
                         {Math.round(c.score * 100)}% match
                       </span>
-                      <span className="text-[10px] font-mono text-zinc-600 ml-2 truncate">
+                      <span className="text-xs font-mono text-muted-foreground/60 ml-2 truncate">
                         {c.id.slice(0, 8)}…
                       </span>
                     </div>
@@ -279,7 +279,7 @@ function ProposalCard({
                       type="button"
                       onClick={() => void handleConfirm({ merge_into: c.id })}
                       disabled={confirming}
-                      className="shrink-0 rounded border border-zinc-600 bg-zinc-700/40 px-3 py-1 text-[11px] font-medium text-zinc-300 hover:bg-zinc-600/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="shrink-0 rounded border border-border bg-card/40 px-3 py-1 text-[11px] font-medium text-foreground hover:bg-card/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {confirming ? "…" : `Merge into "${c.label.slice(0, 24)}${c.label.length > 24 ? "…" : ""}"`}
                     </button>
@@ -299,7 +299,7 @@ function ProposalCard({
               <button
                 type="button"
                 onClick={onReject}
-                className="rounded-md border border-zinc-700 bg-zinc-800/40 px-4 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-700/50 transition-colors"
+                className="rounded-md border border-border bg-card/40 px-4 py-1.5 text-xs font-medium text-muted-foreground hover:bg-card/50 transition-colors"
               >
                 Cancel
               </button>
@@ -318,7 +318,7 @@ function ProposalCard({
             <button
               type="button"
               onClick={onReject}
-              className="rounded-md border border-zinc-700 bg-zinc-800/40 px-4 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-700/50 transition-colors"
+              className="rounded-md border border-border bg-card/40 px-4 py-1.5 text-xs font-medium text-muted-foreground hover:bg-card/50 transition-colors"
             >
               Reject
             </button>
@@ -383,21 +383,21 @@ export function ProposalReviewList({ rows, isSteward }: ProposalReviewListProps)
         return (
           <li
             key={row.id}
-            className="rounded-lg border border-zinc-800 bg-zinc-900 p-4"
+            className="rounded-lg border border-border bg-card p-4"
             data-inbox-id={row.id}
           >
             {/* Row header */}
             <div className="flex items-start justify-between gap-3 mb-2">
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${sourceBadgeClass(row.source)}`}>
+              <span className={`text-xs font-mono px-2 py-0.5 rounded ${sourceBadgeClass(row.source)}`}>
                 {row.source}
               </span>
-              <span className="text-[10px] font-mono text-zinc-600 shrink-0">
+              <span className="text-xs font-mono text-muted-foreground/60 shrink-0">
                 {new Date(row.received_at).toISOString().replace("T", " ").slice(0, 16)}
               </span>
             </div>
 
             {/* Payload preview */}
-            <p className="text-xs text-zinc-400 font-mono leading-relaxed mb-3 truncate">
+            <p className="text-xs text-muted-foreground font-mono leading-relaxed mb-3 truncate">
               {payloadPreview(row.payload)}
             </p>
 
@@ -408,16 +408,16 @@ export function ProposalReviewList({ rows, isSteward }: ProposalReviewListProps)
                 onClick={() => void handleClassify(row)}
                 disabled={!isSteward}
                 title={isSteward ? undefined : "Steward role required"}
-                className="rounded-md border border-zinc-700 bg-zinc-800/40 px-4 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-700/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="rounded-md border border-border bg-card/40 px-4 py-1.5 text-xs font-medium text-foreground hover:bg-card/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 Classify
               </button>
             )}
 
             {phase.tag === "classifying" && (
-              <div className="flex items-center gap-2 text-xs text-zinc-400">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span
-                  className="inline-block h-3 w-3 rounded-full border-2 border-zinc-400 border-t-transparent animate-spin"
+                  className="inline-block h-3 w-3 rounded-full border-2 border-muted-foreground border-t-transparent animate-spin"
                   aria-hidden="true"
                 />
                 Classifying… (LLM running, ~60–120 s)
@@ -426,12 +426,12 @@ export function ProposalReviewList({ rows, isSteward }: ProposalReviewListProps)
 
             {phase.tag === "error" && (
               <div className="space-y-2">
-                <p className="text-xs text-red-400 font-mono">{phase.message}</p>
+                <p className="text-xs text-destructive font-mono">{phase.message}</p>
                 <button
                   type="button"
                   onClick={() => void handleClassify(row)}
                   disabled={!isSteward}
-                  className="rounded-md border border-zinc-700 bg-zinc-800/40 px-3 py-1 text-xs text-zinc-400 hover:bg-zinc-700/60 transition-colors"
+                  className="rounded-md border border-border bg-card/40 px-3 py-1 text-xs text-muted-foreground hover:bg-card/60 transition-colors"
                 >
                   Retry
                 </button>
@@ -452,11 +452,11 @@ export function ProposalReviewList({ rows, isSteward }: ProposalReviewListProps)
 
             {phase.tag === "rejected" && (
               <div className="flex items-center gap-3 text-xs">
-                <span className="text-zinc-600">Proposal rejected.</span>
+                <span className="text-muted-foreground/60">Proposal rejected.</span>
                 <button
                   type="button"
                   onClick={() => setPhase(row.id, { tag: "idle" })}
-                  className="text-zinc-500 hover:text-zinc-300 underline underline-offset-2 transition-colors"
+                  className="text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
                 >
                   Re-classify
                 </button>

@@ -37,24 +37,24 @@ export default async function OrganizePage(): Promise<React.ReactElement> {
     .orderBy(raw_inbox.received_at);
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
+    <main className="min-h-full font-sans">
       <div className="mx-auto max-w-3xl px-6 py-10 space-y-6">
 
         {/* Header */}
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <Link href="/" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+            <Link href="/" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               ← dashboard
             </Link>
           </div>
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-100">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
             Proposal review{" "}
-            <span className="text-zinc-500 font-normal">·</span>{" "}
-            <span className="text-zinc-400 font-normal text-base">
+            <span className="text-muted-foreground font-normal">·</span>{" "}
+            <span className="text-muted-foreground font-normal text-base">
               {unclassified.length} unclassified row{unclassified.length !== 1 ? "s" : ""}
             </span>
           </h1>
-          <p className="mt-1 text-xs text-zinc-500">
+          <p className="mt-1 text-xs text-muted-foreground">
             Classify each raw inbox row to generate a typed proposal, then confirm or reject.
           </p>
           {!isSteward && (
@@ -65,11 +65,11 @@ export default async function OrganizePage(): Promise<React.ReactElement> {
         </div>
 
         {unclassified.length === 0 ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/20 p-8 text-center">
-            <p className="text-sm text-zinc-500">No unclassified rows in raw_inbox.</p>
-            <p className="text-xs text-zinc-600 mt-2">
+          <div className="rounded-lg border border-border bg-card/20 p-8 text-center">
+            <p className="text-sm text-muted-foreground">No unclassified rows in raw_inbox.</p>
+            <p className="text-xs text-muted-foreground/60 mt-2">
               Drop a CSV or JSON file at{" "}
-              <Link href="/connect" className="underline underline-offset-2 hover:text-zinc-400">
+              <Link href="/connect" className="underline underline-offset-2 hover:text-foreground">
                 /connect
               </Link>{" "}
               to ingest data.

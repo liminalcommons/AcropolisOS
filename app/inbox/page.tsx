@@ -41,9 +41,9 @@ export default async function InboxPage(): Promise<React.ReactElement> {
   const unread = rows.filter((r) => r.read_at === null).length;
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main className="min-h-full">
       <div className="mx-auto max-w-4xl px-8 py-12">
-        <Link href="/ontology-editor" className="text-xs text-zinc-500 hover:text-zinc-300">
+        <Link href="/ontology-editor" className="text-xs text-muted-foreground hover:text-foreground">
           ← ontology editor
         </Link>
         <div className="mt-1 flex items-baseline justify-between">
@@ -51,7 +51,7 @@ export default async function InboxPage(): Promise<React.ReactElement> {
             <h1 className="font-mono text-2xl font-semibold tracking-tight">
               inbox
             </h1>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Notifications delivered to you by the notify_member side-effect.
               Newest first. {rows.length} row(s) · {unread} unread.
             </p>
@@ -61,7 +61,7 @@ export default async function InboxPage(): Promise<React.ReactElement> {
               <button
                 type="submit"
                 data-testid="mark-all-read"
-                className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-100 hover:bg-zinc-700"
+                className="rounded-md bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-card/80"
               >
                 Mark all read
               </button>
@@ -70,14 +70,14 @@ export default async function InboxPage(): Promise<React.ReactElement> {
         </div>
 
         {rows.length === 0 ? (
-          <p className="mt-12 text-sm text-zinc-500">
+          <p className="mt-12 text-sm text-muted-foreground">
             No notifications yet. Actions that declare notify_member will
             drop rows here.
           </p>
         ) : (
           <ul
             data-testid="inbox-list"
-            className="mt-8 divide-y divide-zinc-800 rounded-md border border-zinc-800"
+            className="mt-8 divide-y divide-border rounded-md border border-border"
           >
             {rows.map((r) => {
               const isUnread = r.read_at === null;
@@ -88,7 +88,7 @@ export default async function InboxPage(): Promise<React.ReactElement> {
                   data-state={isUnread ? "unread" : "read"}
                   className={
                     isUnread
-                      ? "bg-zinc-900/40 px-4 py-3"
+                      ? "bg-card/40 px-4 py-3"
                       : "px-4 py-3 opacity-60"
                   }
                 >
@@ -98,13 +98,13 @@ export default async function InboxPage(): Promise<React.ReactElement> {
                         {isUnread ? (
                           <span
                             aria-label="unread"
-                            className="inline-block h-2 w-2 rounded-full bg-violet-400"
+                            className="inline-block h-2 w-2 rounded-full bg-primary"
                           />
                         ) : null}
-                        <span className="truncate font-medium text-sm text-zinc-100">
+                        <span className="truncate font-medium text-sm text-foreground">
                           {r.title}
                         </span>
-                        <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+                        <span className="text-xs uppercase tracking-widest text-muted-foreground">
                           {r.kind}
                         </span>
                       </div>
@@ -122,7 +122,7 @@ export default async function InboxPage(): Promise<React.ReactElement> {
                     <div className="shrink-0 text-right">
                       <time
                         dateTime={r.created_at.toISOString()}
-                        className="block font-mono text-[10px] text-zinc-500"
+                        className="block font-mono text-xs text-muted-foreground"
                       >
                         {fmtTime(r.created_at)}
                       </time>
@@ -134,13 +134,13 @@ export default async function InboxPage(): Promise<React.ReactElement> {
                           <button
                             type="submit"
                             data-testid={`mark-read-${r.id}`}
-                            className="rounded-md bg-emerald-700 px-2 py-1 text-[11px] font-medium text-zinc-50 hover:bg-emerald-600"
+                            className="rounded-md bg-emerald-700 px-2 py-1 text-[11px] font-medium text-foreground hover:bg-emerald-600"
                           >
                             Mark read
                           </button>
                         </form>
                       ) : (
-                        <span className="mt-2 inline-block text-[10px] text-zinc-600">
+                        <span className="mt-2 inline-block text-xs text-muted-foreground/60">
                           read {fmtTime(r.read_at!)}
                         </span>
                       )}

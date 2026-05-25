@@ -71,7 +71,7 @@ export default async function OntologyEditorPage(): Promise<React.ReactElement> 
     <div className="fixed top-2 right-4 z-50">
       <Link
         href="/ontology"
-        className="text-xs text-zinc-500 hover:text-zinc-300"
+        className="text-xs text-muted-foreground hover:text-foreground"
       >
         Schema graph →
       </Link>
