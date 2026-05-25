@@ -403,8 +403,8 @@ export function ChatPanel({
       aria-label="Chat panel"
       data-state={expanded ? "expanded" : "idle"}
       className={cn(
-        "fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] -translate-x-1/2 overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-950/50 text-zinc-100 shadow-2xl backdrop-blur-md transition-[height] duration-200 ease-out md:bottom-6 md:w-[70%]",
-        expanded ? "h-[min(30vh,320px)]" : "h-11",
+        "relative flex h-full w-full flex-col overflow-hidden",
+        "border-l border-border bg-card text-card-foreground",
       )}
     >
       <div className="absolute inset-x-0 top-0 bottom-11 flex flex-col">

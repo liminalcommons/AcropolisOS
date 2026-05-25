@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { ChatPanel } from "@/components/chat-panel";
 import { ReloadToast } from "@/components/dev/reload-toast";
 import { TopProgressBar } from "@/components/top-progress-bar";
 import { MutationPulseMount } from "@/components/home/mutation-pulse-mount";
+import { AppShell } from "@/components/shell/app-shell";
 import { auth } from "@/lib/auth";
 import { createCtx } from "@/lib/ctx";
 import { resolveProviderConfig } from "@/lib/agent/mastra";
@@ -18,10 +18,8 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // ChatPanel needs the actor role to decide which proposal-panel buttons to
-  // show (steward → Apply/Edit/Reject, member → Submit for review). The chat
-  // panel is a client component so we resolve the session server-side here and
-  // pass it down as plain props.
+  // AppShell (and the CoPilotDock inside it) needs the actor role/email to
+  // decide which proposal-panel buttons to show and to personalise the nav.
   // Cast: NextAuth's stock Session type narrows email as `string | null`
   // whereas our AcropolisSession projects it as `string | undefined`.
   // createCtx tolerates both; this cast just satisfies the static checker.
@@ -38,16 +36,19 @@ export default async function RootLayout({
     modelName = undefined;
   }
 
+  // Map createCtx actor → AppShell's { userId, role, email } | null shape.
+  // actor.userId and actor.role match exactly; actor is null when no session.
+  const shellActor = actor
+    ? { userId: actor.userId, role: actor.role, email: actor.email }
+    : null;
+
   return (
     <html lang="en">
-      <body className="pb-20 antialiased md:pb-24">
+      <body className="antialiased">
         <TopProgressBar />
-        {children}
-        <ChatPanel
-          actorRole={actor?.role ?? null}
-          actorEmail={actor?.email}
-          modelName={modelName}
-        />
+        <AppShell actor={shellActor} modelName={modelName}>
+          {children}
+        </AppShell>
         <MutationPulseMount />
         <ReloadToast />
       </body>
