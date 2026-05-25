@@ -22,7 +22,8 @@
 import { useState } from "react";
 import type { RawInboxRow } from "@/lib/db/schema";
 import { confirmProposal } from "./actions";
-import type { CommitProposalInput } from "@/lib/organize/commit";
+import type { CommitProposalInput, Resolution } from "@/lib/organize/commit";
+import type { DuplicateCandidate } from "@/lib/organize/resolve";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -78,7 +79,10 @@ type ConfirmState =
   | { tag: "forbidden" }
   | { tag: "incomplete_refs"; missing: string[] }
   | { tag: "commit_error"; detail: string }
-  | { tag: "error"; message: string };
+  | { tag: "error"; message: string }
+  // A4 statuses
+  | { tag: "duplicate_candidate"; candidates: DuplicateCandidate[]; proposal: CommitProposalInput }
+  | { tag: "merged"; merged_into: string };
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -94,10 +98,14 @@ function ProposalCard({
   const [confirming, setConfirming] = useState(false);
   const [confirmState, setConfirmState] = useState<ConfirmState>({ tag: "idle" });
 
-  async function handleConfirm() {
+  async function handleConfirm(resolution?: Resolution) {
     setConfirming(true);
+    // If we're resolving a duplicate_candidate, use the proposal stored in state
+    // (the server already validated it and returned it back in the candidate response).
+    const proposalToSubmit =
+      confirmState.tag === "duplicate_candidate" ? confirmState.proposal : proposal;
     try {
-      const result = await confirmProposal(proposal);
+      const result = await confirmProposal(proposalToSubmit, resolution);
       if (result.status === "committed") {
         setConfirmState({
           tag: "committed",
@@ -113,10 +121,21 @@ function ProposalCard({
         setConfirmState({ tag: "incomplete_refs", missing: result.missing });
       } else if (result.status === "commit_error") {
         setConfirmState({ tag: "commit_error", detail: result.detail });
+      } else if (result.status === "duplicate_candidate") {
+        // A4: server found near-match candidates — show them for human resolution
+        setConfirmState({
+          tag: "duplicate_candidate",
+          candidates: result.candidates,
+          proposal: result.proposal,
+        });
+      } else if (result.status === "merged") {
+        // A4: human chose merge-into-existing — row is marked processed, no new row
+        setConfirmState({ tag: "merged", merged_into: result.merged_into });
+        onConfirm();
       } else {
         setConfirmState({
           tag: "error",
-          message: result.status,
+          message: (result as { status: string }).status,
         });
       }
     } catch (err) {
@@ -228,11 +247,69 @@ function ProposalCard({
           </p>
         ) : confirmState.tag === "error" ? (
           <p className="text-xs text-red-400 font-mono">{confirmState.message}</p>
+        ) : confirmState.tag === "merged" ? (
+          <p className="text-xs text-zinc-400">
+            Merged into existing row{" "}
+            <span className="font-mono opacity-70">{confirmState.merged_into}</span>
+            {" "}— incoming duplicate discarded.
+          </p>
+        ) : confirmState.tag === "duplicate_candidate" ? (
+          // A4: human-gated resolve — show candidates, no silent action
+          <div className="w-full space-y-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1.5">
+                possible duplicate — choose action
+              </p>
+              <div className="space-y-2">
+                {confirmState.candidates.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between gap-3 rounded border border-zinc-700/60 bg-zinc-800/30 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <span className="text-xs text-zinc-200 font-medium truncate">{c.label}</span>
+                      <span className="text-[10px] text-zinc-500 ml-2">
+                        {Math.round(c.score * 100)}% match
+                      </span>
+                      <span className="text-[10px] font-mono text-zinc-600 ml-2 truncate">
+                        {c.id.slice(0, 8)}…
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleConfirm({ merge_into: c.id })}
+                      disabled={confirming}
+                      className="shrink-0 rounded border border-zinc-600 bg-zinc-700/40 px-3 py-1 text-[11px] font-medium text-zinc-300 hover:bg-zinc-600/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {confirming ? "…" : `Merge into "${c.label.slice(0, 24)}${c.label.length > 24 ? "…" : ""}"`}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void handleConfirm("create_new")}
+                disabled={confirming}
+                className="rounded-md border border-emerald-800/50 bg-emerald-900/15 px-4 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {confirming ? "…" : "Create new anyway"}
+              </button>
+              <button
+                type="button"
+                onClick={onReject}
+                className="rounded-md border border-zinc-700 bg-zinc-800/40 px-4 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-700/50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         ) : (
           <>
             <button
               type="button"
-              onClick={handleConfirm}
+              onClick={() => void handleConfirm()}
               disabled={confirming}
               className="rounded-md border border-emerald-700/60 bg-emerald-900/20 px-4 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
@@ -245,17 +322,6 @@ function ProposalCard({
             >
               Reject
             </button>
-            <button
-              type="button"
-              title="Edit-mapping wired in A4"
-              disabled
-              className="rounded-md border border-zinc-800 bg-transparent px-4 py-1.5 text-xs font-medium text-zinc-600 cursor-not-allowed"
-            >
-              Edit mapping
-            </button>
-            <span className="text-[10px] text-zinc-600 ml-1">
-              (Edit-mapping wired in A4)
-            </span>
           </>
         )}
       </div>

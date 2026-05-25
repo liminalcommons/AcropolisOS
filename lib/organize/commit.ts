@@ -1,8 +1,18 @@
+// A4: commitProposalCore — extended with dedup/resolve step.
 // A3: commitProposalCore — the governed assimilation commit step.
 //
 // Maps a structured proposal (from A1 classify) to a typed world-model row and
 // stamps provenance on the raw_inbox row. This is the step that closes the
 // F4-fake: a real typed row is written with a real provenance trail.
+//
+// A4 extension — resolution argument:
+//   - absent (default): run near-match dedup first. If ≥1 candidate found →
+//     return { status: "duplicate_candidate", candidates, proposal } without
+//     writing anything. If no candidate → proceed to A3 create.
+//   - "create_new": skip dedup, run A3 create (user explicitly chose new row).
+//   - { merge_into: "<id>" }: no new row; stamp provenance on raw_inbox
+//     (classified_as/at/by) so the row is marked processed and leaves /organize.
+//     Returns { status: "merged", merged_into: id }.
 //
 // Design invariants:
 //   - Steward-gated: caller MUST supply a steward actor; non-steward returns 403.
@@ -38,6 +48,7 @@ import {
   work_trade_agreement as workTradeTable,
 } from "../db/schema.generated";
 import { validateFieldMap } from "../../app/api/organize/classify/route";
+import { findDuplicates, type DuplicateCandidate } from "./resolve";
 import type { Actor } from "../ctx";
 
 // ── Input schema ──────────────────────────────────────────────────────────────
@@ -74,7 +85,17 @@ export type CommitProposalResult =
   | { status: "field_map_error"; invalid_fields: string[] }
   | { status: "inbox_not_found" }
   | { status: "incomplete_required_refs"; missing: string[] }
-  | { status: "commit_error"; detail: string };
+  | { status: "commit_error"; detail: string }
+  // A4 statuses
+  | { status: "duplicate_candidate"; candidates: DuplicateCandidate[]; proposal: CommitProposalInput }
+  | { status: "merged"; merged_into: string };
+
+// ── A4 Resolution argument ────────────────────────────────────────────────────
+// Passed by the UI after the human has made a choice from the duplicate_candidate list.
+
+export type Resolution =
+  | "create_new"
+  | { merge_into: string };
 
 // ── Required FK columns per type ─────────────────────────────────────────────
 // These are the NOT NULL foreign-key columns derived from schema.generated.ts.
@@ -205,6 +226,7 @@ export async function commitProposalCore(
   actorRole: string,
   actorId: string,
   proposal: CommitProposalInput,
+  resolution?: Resolution,
 ): Promise<CommitProposalResult> {
   // 1. Steward gate
   if (actorRole !== "steward") {
@@ -223,6 +245,64 @@ export async function commitProposalCore(
   const fieldMapCheck = validateFieldMap(target_type, field_map);
   if (!fieldMapCheck.ok) {
     return { status: "field_map_error", invalid_fields: fieldMapCheck.invalid };
+  }
+
+  // ── A4: Handle merge_into resolution path ─────────────────────────────────
+  // resolution = { merge_into: "<existing_id>" }:
+  //   No new row is created. Stamp provenance on raw_inbox so the row is marked
+  //   processed and disappears from /organize. The existing row already holds
+  //   the canonical data — the incoming duplicate is simply discarded.
+  if (resolution !== undefined && resolution !== "create_new" && typeof resolution === "object" && "merge_into" in resolution) {
+    const mergeTarget = (resolution as { merge_into: string }).merge_into;
+    try {
+      await db.execute(
+        sql`UPDATE raw_inbox
+            SET classified_as = ${target_type},
+                classified_at = NOW(),
+                classified_by = ${actorId}
+            WHERE id = ${inbox_id} AND classified_as IS NULL`,
+      );
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      return { status: "commit_error", detail };
+    }
+    return { status: "merged", merged_into: mergeTarget };
+  }
+
+  // ── A4: Dedup check (when no resolution provided → default path) ──────────
+  // resolution absent → run near-match dedup before committing.
+  // resolution = "create_new" → skip dedup (user explicitly chose new row).
+  if (resolution === undefined) {
+    // We need the payload to build mappedFields for dedup scoring.
+    // Read it here before the transaction (read-only, no lock needed yet).
+    let dedupPayload: Record<string, unknown> = {};
+    try {
+      const payloadRows = await db.execute(
+        sql`SELECT payload FROM raw_inbox WHERE id = ${inbox_id}`,
+      ) as unknown as Array<Record<string, unknown>>;
+      const payloadArray: Array<Record<string, unknown>> = Array.isArray(payloadRows)
+        ? payloadRows
+        : ((payloadRows as { rows?: Array<Record<string, unknown>> }).rows ?? []);
+      const raw = payloadArray[0]?.payload;
+      if (raw !== null && raw !== undefined && typeof raw === "object" && !Array.isArray(raw)) {
+        dedupPayload = raw as Record<string, unknown>;
+      }
+    } catch {
+      // If the read fails (inbox not found), the transaction below will catch it properly.
+    }
+
+    // Build mapped fields for scoring — same logic as applyFieldMap but for dedup only.
+    const mappedForDedup = applyFieldMap(dedupPayload, field_map);
+
+    const candidates = await findDuplicates(db, target_type, mappedForDedup);
+    if (candidates.length > 0) {
+      return {
+        status: "duplicate_candidate",
+        candidates,
+        proposal: validated.data,
+      };
+    }
+    // No candidates → fall through to normal A3 create below.
   }
 
   // 4. Transactional atomic commit with idempotency guard
