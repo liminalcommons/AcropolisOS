@@ -1,27 +1,25 @@
-// F4: /organize — raw inbox listing (storyboard frame 3 → frame 4 entry point).
+// A2: /organize — proposal review surface (human-in-the-loop gate).
 //
-// Server component. Auth-gated. Lists all raw_inbox rows as JSON cards with
-// source badges. A "Have the agent organize these" button leads to /organize/run.
+// Server component shell. Auth-gated (anon → /signin; non-steward sees
+// restricted notice but can still view the queue — classify triggers are
+// steward-only in the client gate). Lists unclassified raw_inbox rows and
+// delegates interactive classify + proposal rendering to ProposalReviewList.
+//
+// SCOPE: this page is READ-ONLY. Zero world-model writes. No modification of
+// raw_inbox.classified_as/at/by. The Confirm action returns a placeholder
+// { status: "not_implemented" } — commit is A3.
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { getDb } from "@/lib/db/client";
 import { raw_inbox } from "@/lib/db/schema";
+import { isNull } from "drizzle-orm";
 import type { RawInboxRow } from "@/lib/db/schema";
+import { ProposalReviewList } from "./proposal-review-list";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const SOURCE_COLORS: Record<string, string> = {
-  manual: "bg-zinc-800 text-zinc-300",
-  "sheets-import": "bg-blue-900/50 text-blue-300",
-  "webhook-booking": "bg-violet-900/50 text-violet-300",
-};
-
-function sourceBadgeClass(source: string): string {
-  return SOURCE_COLORS[source] ?? "bg-zinc-800 text-zinc-400";
-}
 
 export default async function OrganizePage(): Promise<React.ReactElement> {
   const chatRuntime = await buildChatRuntime();
@@ -29,13 +27,14 @@ export default async function OrganizePage(): Promise<React.ReactElement> {
     redirect("/signin");
   }
 
+  const isSteward = chatRuntime.actor.role === "steward";
+
   const db = getDb();
-  const rows: RawInboxRow[] = await db
+  const unclassified: RawInboxRow[] = await db
     .select()
     .from(raw_inbox)
+    .where(isNull(raw_inbox.classified_as))
     .orderBy(raw_inbox.received_at);
-
-  const unclassified = rows.filter((r) => r.classified_as === null);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
@@ -49,71 +48,35 @@ export default async function OrganizePage(): Promise<React.ReactElement> {
             </Link>
           </div>
           <h1 className="text-xl font-semibold tracking-tight text-zinc-100">
-            Raw inbox{" "}
+            Proposal review{" "}
             <span className="text-zinc-500 font-normal">·</span>{" "}
             <span className="text-zinc-400 font-normal text-base">
               {unclassified.length} unclassified row{unclassified.length !== 1 ? "s" : ""}
             </span>
           </h1>
           <p className="mt-1 text-xs text-zinc-500">
-            Inbound data waiting to be organized into typed objects.
+            Classify each raw inbox row to generate a typed proposal, then confirm or reject.
           </p>
+          {!isSteward && (
+            <p className="mt-2 text-xs text-amber-500/80">
+              View-only — steward role required to classify.
+            </p>
+          )}
         </div>
 
-        {/* Raw row cards */}
-        {rows.length === 0 ? (
+        {unclassified.length === 0 ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/20 p-8 text-center">
-            <p className="text-sm text-zinc-500">No rows in raw_inbox yet.</p>
+            <p className="text-sm text-zinc-500">No unclassified rows in raw_inbox.</p>
             <p className="text-xs text-zinc-600 mt-2">
-              Data ingested via manual entry, spreadsheet import, or webhooks will appear here.
+              Drop a CSV or JSON file at{" "}
+              <Link href="/connect" className="underline underline-offset-2 hover:text-zinc-400">
+                /connect
+              </Link>{" "}
+              to ingest data.
             </p>
           </div>
         ) : (
-          <ul className="space-y-3">
-            {rows.map((row) => (
-              <li
-                key={row.id}
-                className="rounded-lg border border-zinc-800 bg-zinc-900 p-4"
-              >
-                <div className="flex items-start justify-between gap-3 mb-2">
-                  <span
-                    className={`text-[10px] font-mono px-2 py-0.5 rounded ${sourceBadgeClass(row.source)}`}
-                  >
-                    {row.source}
-                  </span>
-                  <span className="text-[10px] font-mono text-zinc-600 shrink-0">
-                    {new Date(row.received_at).toISOString().replace("T", " ").slice(0, 16)}
-                  </span>
-                </div>
-                <pre className="text-xs font-mono text-zinc-300 bg-zinc-950 rounded p-3 overflow-x-auto leading-relaxed">
-                  {JSON.stringify(row.payload, null, 2)}
-                </pre>
-                {row.classified_as && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-[10px] text-emerald-500 font-mono">
-                      classified as: {row.classified_as}
-                    </span>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {/* Organize CTA */}
-        {rows.length > 0 && (
-          <div className="pt-2">
-            <Link
-              href="/organize/run"
-              className="inline-flex items-center gap-2 rounded-lg bg-zinc-800 border border-zinc-700 px-5 py-3 text-sm font-medium text-zinc-200 hover:bg-zinc-700 hover:border-zinc-600 transition-colors"
-            >
-              <span className="text-zinc-500">⌗</span>
-              Have the agent organize these
-            </Link>
-            <p className="mt-2 text-xs text-zinc-600">
-              The agent will read the rows and narrate what it sees — types, field mappings, duplicates.
-            </p>
-          </div>
+          <ProposalReviewList rows={unclassified} isSteward={isSteward} />
         )}
 
       </div>
