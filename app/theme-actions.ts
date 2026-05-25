@@ -40,9 +40,17 @@ async function resolveMemberContextId(): Promise<{ runtime: ChatRuntime; memberI
   return { runtime, memberId: me.id, mcId: mc.id };
 }
 
-// design ONLY — does not persist. Returns the validated result for client preview.
+// design ONLY — does not persist, so it needs auth but NOT a Member row. A signed-in
+// user with no Member row can still preview a theme (the persist step needs the row).
+async function requireSignedIn(): Promise<void> {
+  const runtime = await buildChatRuntime();
+  if (isAnonymous(runtime.actor)) {
+    throw new Error("unauthorized");
+  }
+}
+
 export async function designThemeAction(prompt: string): Promise<DesignThemeResult> {
-  await resolveMemberContextId(); // gate: must be signed in
+  await requireSignedIn();
   return designTheme({ prompt });
 }
 
