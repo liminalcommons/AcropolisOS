@@ -14,6 +14,15 @@
 // support the json_schema response_format that ai-SDK v6 generateObject
 // sends — the call hangs. generateText with explicit JSON instructions
 // in the prompt works reliably and the zod parse gives the same safety.
+//
+// Hardening (A1 negativa fixes):
+// - FIX 1: Non-object payloads (null/array/string/number) → 422 unclassifiable_payload
+//           before any LLM call. Prevents Object.keys(null) crash and garbage proposals.
+// - FIX 2: field_map values validated against VALID_FIELDS[target_type] after safeParse.
+//           Any off-list value → 502 llm_field_error. validateFieldMap is exported for
+//           unit testing. Makes existing-fields-only a hard guarantee.
+// - FIX 3: generateText wrapped in try/catch → 503 llm_unavailable (mirrors
+//           llm_not_configured block), so A2 UI can distinguish model-down from bad output.
 
 import { generateText } from "ai";
 import { z } from "zod";
@@ -76,6 +85,24 @@ const VALID_FIELDS: Record<TargetType, string[]> = {
     "start_date", "end_date", "status", "notes",
   ],
 };
+
+// FIX 2: Pure exported helper — validates every field_map value is in
+// VALID_FIELDS[targetType]. Exported for deterministic unit testing without HTTP/LLM.
+export function validateFieldMap(
+  targetType: TargetType,
+  fieldMap: Record<string, string>,
+): { ok: true } | { ok: false; invalid: string[] } {
+  const allowed = VALID_FIELDS[targetType];
+  if (!allowed) {
+    return { ok: false, invalid: Object.values(fieldMap) };
+  }
+  const allowedSet = new Set(allowed);
+  const invalid = Object.values(fieldMap).filter((v) => !allowedSet.has(v));
+  if (invalid.length > 0) {
+    return { ok: false, invalid };
+  }
+  return { ok: true };
+}
 
 const ProposalSchema = z.object({
   inbox_id: z.string(),
@@ -141,7 +168,23 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const inboxRow = rows[0];
-  const payload = inboxRow.payload as Record<string, unknown>;
+
+  // FIX 1: Guard against non-object payloads before any LLM call.
+  // null/array/string/number all reach here via jsonb — Object.keys(null) throws
+  // an uncaught 500 and arrays/strings produce nonsense sourceKeys.
+  const rawPayload = inboxRow.payload;
+  if (
+    rawPayload === null ||
+    typeof rawPayload !== "object" ||
+    Array.isArray(rawPayload)
+  ) {
+    return Response.json(
+      { error: "unclassifiable_payload" },
+      { status: 422 },
+    );
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
   const sourceKeys = Object.keys(payload);
 
   // Build the classification prompt, injecting allowed types + fields so the
@@ -180,10 +223,24 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  const textResult = await generateText({
-    model,
-    prompt,
-  });
+  // FIX 3: Wrap generateText — glm-5.1 calls are slow (~60-120s) and can time out
+  // or return 5xx. Bare await lets that throw an uncaught 500. Mirror the
+  // llm_not_configured 503 block so A2 UI can distinguish model-down from bad output.
+  let textResult: Awaited<ReturnType<typeof generateText>>;
+  try {
+    textResult = await generateText({
+      model,
+      prompt,
+    });
+  } catch (err) {
+    return Response.json(
+      {
+        error: "llm_unavailable",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      { status: 503 },
+    );
+  }
 
   // Parse and validate — zod enforces the type enum and field structure.
   let parsed: unknown;
@@ -203,6 +260,24 @@ export async function POST(req: Request): Promise<Response> {
         error: "llm_schema_error",
         issues: validated.error.issues,
         raw: parsed,
+      },
+      { status: 502 },
+    );
+  }
+
+  // FIX 2: Validate every field_map value is in VALID_FIELDS[target_type].
+  // ProposalSchema only checks z.record(z.string(), z.string()); values are
+  // unconstrained. The LLM can emit a non-existent column that passes zod and
+  // would reach A3's ctx.objects.<Type>.create → DB error / silent data loss.
+  const fieldMapCheck = validateFieldMap(
+    validated.data.target_type,
+    validated.data.field_map,
+  );
+  if (!fieldMapCheck.ok) {
+    return Response.json(
+      {
+        error: "llm_field_error",
+        invalid_fields: fieldMapCheck.invalid,
       },
       { status: 502 },
     );
