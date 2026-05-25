@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Home, Inbox, Plug, Network, Users, Bell,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, Workflow,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_KEY, readCollapsed, writeCollapsed } from "./shell-state";
@@ -16,6 +16,7 @@ const ITEMS = [
   { href: "/organize", label: "Organize", icon: Inbox },
   { href: "/connect", label: "Connect", icon: Plug },
   { href: "/ontology", label: "Ontology", icon: Network },
+  { href: "/graph", label: "Graph", icon: Workflow },
   { href: "/me", label: "People", icon: Users },
 ] as const;
 
