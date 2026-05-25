@@ -120,33 +120,42 @@ visually verifying each. It is the largest single chunk and the highest-value on
 
 ### 3. Tier-1 theming system
 
-- **`lib/theme/palettes.ts`** — a typed registry of preset palettes. Each palette is a
-  full set of token values (oklch) for the variables in `globals.css`. Starter set
-  (user can revise): `indigo-dark` (default), `desert-ochre`, `clean-light`, plus one
-  more (e.g. `forest`/`slate`). This registry **is the governed vocabulary**.
-- **`lib/theme/resolve.ts`** — `resolveTheme({ memberPref, role, orgSeed })` with
-  precedence: **explicit user pref → per-role default → data-derived seed → system default**.
-  Mirrors the dashboard's `pinned_widgets > SLICE_SPEC` precedence exactly.
+**Approach (revised):** ship **one** base palette now; make the *generative source* an
+**AI color-designer agent**, not a preset registry. The governed vocabulary is the
+**fixed token schema** — the token *names and roles* (`--background`, `--foreground`,
+`--primary`, `--card`, `--border`, …) are invariant. The agent fills in *values* within
+that schema; it cannot add tokens or alter structure. Validation (valid oklch + WCAG
+contrast floors) is the governance that replaces the preset list.
+
+- **`lib/theme/base.ts`** — the single base palette = the token value set already in
+  `globals.css` `:root`/`.dark` (`indigo`-ish dark default), formalized as the canonical
+  `TokenSet` type. This is the always-available floor.
+- **`TokenSet`** — typed shape: every CSS variable name → oklch string. The schema is the
+  vocabulary; a theme is *any valid TokenSet*, base or agent-generated.
+- **AI color-designer agent** (the generative source — *lower priority per user, later phase*):
+  - Agent tool `design_theme({ prompt?, dataContext? }) → TokenSet`.
+  - **System prompt persona:** a senior UI designer / color expert in interface aesthetics.
+    It receives (a) the user's prompt ("make it warm / oceanic / like our brand") and/or
+    (b) data context (org domain, dominant ontology types) and produces a complete `TokenSet`.
+  - **Output discipline:** `generateText` → JSON-parse → **zod-validate** (glm-5.1 has no
+    json_schema support — see memory). Then a **contrast/accessibility check** (foreground-on-
+    background, primary-on-primary-foreground meet WCAG AA); reject + retry/fallback if it fails.
+    This is the structural guardrail: the agent has color freedom but cannot ship an unreadable
+    or malformed theme.
+- **`lib/theme/resolve.ts`** — `resolveTheme({ memberPref, role, orgSeed })` precedence:
+  **explicit user pref (stored TokenSet) → per-role default → data-derived → base**.
+  Mirrors the dashboard's `pinned_widgets > SLICE_SPEC` precedence.
 - **`<ThemeProvider>`** — resolved **server-side in the shell** (no flash-of-wrong-theme).
-  Emits the resolved palette's token values as inline CSS variables on the shell root
-  (`<div style="--background: …; --primary: …">` or a `<style>` block). Tailwind classes
-  then read them.
-- **Storage** — add `theme_pref text` (nullable) to `member_context` (sits beside
-  `pinned_widgets`; same per-member table). **Gotcha:** `member_context` is in
-  `schema.generated.ts`; adding a column must go through the generated-schema path AND
-  get a matching `ALTER TABLE … ADD COLUMN IF NOT EXISTS` in the bootstrap/migrate path
-  (see memory: calendar bootstrap schema-drift + acropolisOS generated-files-not-bind-mounted).
-  Plan must confirm the exact codegen vs. system-column decision.
-- **Agent-requestable** — a bounded agent tool `set_theme(palette: <enum of preset names>)`
-  that writes `member_context.theme_pref`. Vocabulary-constrained (enum, zod-validated) —
-  the agent can pick a preset, never emit arbitrary CSS. Follows the existing
-  `generateText + JSON-parse + zod-validate` pattern (glm-5.1 has no json_schema support).
-- **Data-derived (v1, modest)** — `orgSeed`: a simple mapping from org domain / dominant
-  ontology type → a preset name (e.g. hospitality → desert-ochre). Full data-derivation
-  (computing a palette from data distributions) is explicitly a **later enhancement**,
-  not in this rework.
-- **Theme switcher UI** — a control in LeftNav: pick a preset; writes `theme_pref`;
-  applies immediately.
+  Emits the resolved `TokenSet` as inline CSS variables on the shell root
+  (`<div style="--background: …; --primary: …">` or a `<style>` block). Tailwind classes read them.
+- **Storage** — `theme_pref text` (nullable) on `member_context` (beside `pinned_widgets`),
+  storing the resolved **TokenSet as JSON** (same JSON-in-text pattern as `pinned_widgets`),
+  not an enum. **Decision (open Q1):** plain system column on `member_context` — theming is a
+  UI preference, not a world-model entity, so it does **not** go through the ontology codegen
+  path. Still needs a matching `ALTER TABLE member_context ADD COLUMN IF NOT EXISTS theme_pref text`
+  in the bootstrap/migrate path (memory: schema-drift gotcha).
+- **Theme switcher UI** — a control in LeftNav: opens a prompt ("describe the look you want"),
+  calls `design_theme`, previews, applies → writes `theme_pref`. A "reset to base" always exists.
 
 ### 4. Tier-2 arrangement
 
@@ -234,11 +243,19 @@ stays strictly read-only via `ReadOnlyDataApi`.
 
 ---
 
-## Open questions for the plan
+## Resolved decisions (were open questions)
 
-1. `member_context.theme_pref` — add via the ontology codegen path, or as a hand-maintained
-   system column? Must also land the `ALTER … ADD COLUMN IF NOT EXISTS` in the bootstrap.
-2. Preset palette starter set — confirm the 3–4 palettes and their oklch values
-   (user invited to supply brand colors; default set proposed above).
-3. Widget reorder fidelity for v1 — add/remove + up/down vs. full drag-drop.
+1. **`member_context.theme_pref`** → **plain system column** (not codegen path); theming is a
+   UI preference, not a world-model entity. Bootstrap gets `ALTER … ADD COLUMN IF NOT EXISTS`.
+2. **Palettes** → **one base palette ships now**; the generative source is the **AI color-designer
+   agent** (§3), not a preset registry. (Lower priority per user — agent designer is a later phase.)
+3. **Widget reorder fidelity v1** → **add/remove + up/down** first (lower risk); full drag-drop later.
+
+## Phasing (priority order)
+
+1. **App shell** — collapsible nav + dashboard + right co-pilot dock (repositions ChatPanel).
+2. **Token migration** — `zinc-*` → semantic tokens across 21 files. *The high-value core.*
+3. **Base palette formalized** + `ThemeProvider` server-side application (one theme, themeable plumbing).
+4. **Tier-2 arrangement** — pin/unpin/reorder UI over existing `compose_dashboard`.
+5. **AI color-designer agent** — `design_theme` tool + persona + contrast-validated output. *(lower priority)*
 ```
