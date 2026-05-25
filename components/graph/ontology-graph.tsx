@@ -18,8 +18,7 @@ import "@xyflow/react/dist/style.css";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { GraphModel, GraphAction } from "@/lib/graph/derive";
 import { layoutGraph } from "@/lib/graph/layout";
-import { POLICY_VAR } from "./legend";
-import { Legend } from "./legend";
+import { POLICY_VAR, Legend } from "./legend";
 import { Inspector } from "./inspector";
 
 interface ObjectNodeData extends Record<string, unknown> {
@@ -100,6 +99,9 @@ export function OntologyGraph({ model }: { model: GraphModel }): React.ReactElem
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={onNodeClick}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
         fitView
         proOptions={{ hideAttribution: true }}
       >
