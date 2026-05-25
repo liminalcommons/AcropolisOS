@@ -1,62 +1,35 @@
 // components/shell/theme-switcher.tsx
 //
-// LeftNav theme control: prompt → AI-designed palette → LIVE preview on the
-// whole shell → Keep (persist to member_context.theme_pref) or Reset (drop
-// overrides + clear theme_pref). The live preview writes CSS vars directly onto
-// #app-shell-root; descendants read those inline vars, overriding the
-// server-rendered values. removeProperty restores the server theme.
+// LeftNav theme control: a PICKER of curated presets (no prompt). Clicking a
+// swatch live-previews it across the whole shell (CSS vars on #app-shell-root)
+// and persists the choice to member_context.theme_pref. The default preset
+// stores no override (resetThemeAction → null) so it tracks the base palette.
 "use client";
 
 import { useState, useTransition } from "react";
-import { Palette, RotateCcw, Check, Loader2 } from "lucide-react";
+import { Palette, Check, Loader2 } from "lucide-react";
 import { TOKEN_KEYS, type TokenSet } from "@/lib/theme/tokens";
-import { designThemeAction, applyThemeAction, resetThemeAction } from "@/app/theme-actions";
+import { THEME_PRESETS, DEFAULT_PRESET_ID, type ThemePreset } from "@/lib/theme/presets";
+import { applyThemeAction, resetThemeAction } from "@/app/theme-actions";
 
-function applyPreview(tokens: TokenSet | null): void {
+function applyPreview(tokens: TokenSet): void {
   const root = document.getElementById("app-shell-root");
   if (!root) return;
-  for (const k of TOKEN_KEYS) {
-    if (tokens) root.style.setProperty(`--${k}`, tokens[k]);
-    else root.style.removeProperty(`--${k}`);
-  }
+  for (const k of TOKEN_KEYS) root.style.setProperty(`--${k}`, tokens[k]);
 }
 
 export function ThemeSwitcher(): React.ReactElement {
   const [open, setOpen] = useState(false);
-  const [prompt, setPrompt] = useState("");
-  const [preview, setPreview] = useState<TokenSet | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function generate(): void {
-    setError(null);
+  function choose(preset: ThemePreset): void {
+    applyPreview(preset.tokens); // instant live preview across the shell
+    setActiveId(preset.id);
     startTransition(async () => {
-      const r = await designThemeAction(prompt);
-      if (r.status === "ok") {
-        setPreview(r.tokens);
-        applyPreview(r.tokens); // live preview on the shell root
-      } else {
-        setError(r.reason);
-      }
-    });
-  }
-
-  function keep(): void {
-    if (!preview) return;
-    startTransition(async () => {
-      await applyThemeAction(preview);
-      setPreview(null);
-      setOpen(false);
-    });
-  }
-
-  function reset(): void {
-    applyPreview(null); // drop live overrides
-    setPreview(null);
-    setError(null);
-    startTransition(async () => {
-      await resetThemeAction();
-      setOpen(false);
+      // Default preset tracks the base palette → store no override (null).
+      if (preset.id === DEFAULT_PRESET_ID) await resetThemeAction();
+      else await applyThemeAction(preset.tokens);
     });
   }
 
@@ -68,49 +41,46 @@ export function ThemeSwitcher(): React.ReactElement {
         className="inline-flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
       >
         <Palette className="h-4 w-4" /> Theme
+        {pending && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin" />}
       </button>
 
       {open && (
-        <div className="mt-2 space-y-2 rounded-lg border border-border bg-card p-2.5">
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={2}
-            placeholder="Describe the look (e.g. warm earthy, oceanic, high-contrast)…"
-            className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-          />
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={pending || prompt.trim().length === 0}
-              onClick={generate}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground hover:opacity-90 disabled:opacity-50"
-            >
-              {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Palette className="h-3.5 w-3.5" />}
-              Generate
-            </button>
-            {preview && (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={keep}
-                className="inline-flex items-center gap-1.5 rounded-md border border-primary px-2.5 py-1 text-xs text-primary hover:bg-primary/15 disabled:opacity-50"
-              >
-                <Check className="h-3.5 w-3.5" /> Keep
-              </button>
-            )}
-            <button
-              type="button"
-              disabled={pending}
-              onClick={reset}
-              className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
-            >
-              <RotateCcw className="h-3.5 w-3.5" /> Reset
-            </button>
+        <div className="mt-2 rounded-lg border border-border bg-card p-2.5">
+          <p className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">Pick a theme</p>
+          <div className="grid grid-cols-2 gap-2">
+            {THEME_PRESETS.map((p) => {
+              const t = p.tokens;
+              const active = activeId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => choose(p)}
+                  aria-label={`Apply ${p.name} theme`}
+                  aria-pressed={active}
+                  className={`group relative overflow-hidden rounded-md border text-left transition-colors disabled:opacity-60 ${
+                    active ? "border-primary ring-1 ring-primary" : "border-border hover:border-primary/60"
+                  }`}
+                  style={{ backgroundColor: t.background }}
+                >
+                  <span className="flex items-center gap-1 px-2 pt-2">
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: t.primary }} />
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: t.accent }} />
+                    <span
+                      className="h-3 w-3 rounded-full border"
+                      style={{ backgroundColor: t.card, borderColor: t.border }}
+                    />
+                    {active && <Check className="ml-auto h-3.5 w-3.5" style={{ color: t.primary }} />}
+                  </span>
+                  <span className="block px-2 pb-2 pt-1 text-xs" style={{ color: t.foreground }}>
+                    {p.name}
+                    {p.id === DEFAULT_PRESET_ID && <span className="ml-1 opacity-60">· default</span>}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          {error && (
-            <p className="text-[11px] text-destructive">Couldn’t design that theme ({error}). Try again.</p>
-          )}
         </div>
       )}
     </div>
