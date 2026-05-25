@@ -18,8 +18,10 @@ import {
   convertToModelMessages,
   stepCountIs,
   streamText,
+  tool,
   type UIMessage,
 } from "ai";
+import { z } from "zod";
 import { AGENT_INSTRUCTIONS, buildLanguageModel } from "@/lib/agent/mastra";
 import { buildAiSdkProposalTools } from "@/lib/proposals/ai-sdk-tools";
 import { getProposalStore } from "@/lib/proposals/singleton";
@@ -29,6 +31,8 @@ import { createInProcessDispatcher } from "@/lib/actions/dispatcher";
 import { buildApplyActionAiSdkTool } from "@/lib/agent/apply-action-ai-sdk";
 import { buildMeReadTools } from "@/lib/agent/read-tools-me";
 import { buildN8nReadTools } from "@/lib/agent/n8n-tools";
+import { designTheme } from "@/lib/theme/design";
+import { getOrCreateMemberContext } from "@/lib/me/fetchers/member-context";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -54,6 +58,7 @@ const APPLY_ACTION_INSTRUCTIONS = [
   "  - propose_* + finalize_proposal: stage ONTOLOGY changes (new object/link/property/action types, new ingest mappings). These DO NOT mutate live state until a steward reviews and applies the proposal.",
   "  - apply_action: invoke a typed action to mutate LIVE state immediately (e.g., change_tier on an existing Member, record_attendance). These commit when called.",
   "  - n8n (list_workflows, create_workflow): inspect and create automation workflows in n8n. Use list_workflows when the user asks what automations exist or what's connected. Use create_workflow when the user asks to set up an automation or materialize an action path as a workflow. If either tool returns 'n8n not connected', inform the user the API key needs to be configured.",
+  "  - design_theme: when the user asks to re-skin / re-color the app ('make the theme oceanic', 'give me a warm earthy palette', 'I want a high-contrast theme'), call design_theme with their described look. It designs a structurally + accessibility-validated palette and applies it for the current member. Tell the user it's applied (or report the reason if it returns ok:false).",
   "Rules: never propose a new object type the ontology already has — call describe_<type> or query_<type> first to verify. Use apply_action only when the user asks to do something on the live data and the action_type already exists. If they ask for new behavior, propose first.",
   "Some actions have a confirmation policy. If apply_action returns confirmation_required, present the requested change in your text reply and let the user click the Confirm button — do NOT attempt to re-call apply_action yourself.",
 ].join(" ");
@@ -126,12 +131,44 @@ export async function POST(req: Request): Promise<Response> {
   // tool itself fails soft to an error message if N8N_API_KEY is absent.
   const n8nTools = buildN8nReadTools();
 
+  // P5: design_theme — the senior-color-expert agent surface. designTheme()
+  // governs structure (18-key TokenSet) + accessibility (WCAG contrast floor)
+  // before anything is applied. On success it persists theme_pref for the
+  // current member (same write path as app/theme-actions.ts applyThemeAction),
+  // resolving the Member row from the actor exactly like pinWidget.
+  const themeCtx = runtime.ctx;
+  const themeActor = runtime.actor;
+  const design_theme = tool({
+    description:
+      "Design and apply a new UI color theme for the current member from a description. The palette is validated for structure and accessibility (WCAG contrast) before it is applied.",
+    inputSchema: z.object({
+      prompt: z
+        .string()
+        .describe("The desired look, e.g. 'warm earthy tones' or 'high-contrast oceanic'"),
+      dataContext: z.string().optional(),
+    }),
+    execute: async ({ prompt, dataContext }) => {
+      const r = await designTheme({ prompt, dataContext });
+      if (r.status !== "ok") return { ok: false, reason: r.reason };
+      const members = await themeCtx.objects.Member.findMany();
+      const me = members.find((m) => m.id === themeActor.userId);
+      if (!me) return { ok: false, reason: "no_member_row" };
+      const mc = await getOrCreateMemberContext(themeCtx, me.id);
+      await themeCtx.objects.MemberContext.update(mc.id, {
+        theme_pref: JSON.stringify(r.tokens),
+        updated_at: new Date().toISOString(),
+      });
+      return { ok: true, applied: true, summary: `Applied a new theme (${prompt}).` };
+    },
+  });
+
   const tools = {
     ...readTools,
     ...proposalTools,
     apply_action: applyActionTool,
     ...meReadTools,
     ...n8nTools,
+    design_theme,
   };
 
   const result = streamText({
