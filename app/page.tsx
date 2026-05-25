@@ -43,14 +43,14 @@ function MetricWidget({ widget }: { widget: ResolvedWidget }) {
     : config.type;
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-5">
-      <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">
+    <div className="rounded-lg border border-border bg-card p-5">
+      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
         {label}
       </p>
-      <p className="text-4xl font-bold tabular-nums text-zinc-100">
+      <p className="text-4xl font-bold tabular-nums text-foreground">
         {data.value}
       </p>
-      <p className="text-xs text-zinc-600 mt-1">{config.agg}</p>
+      <p className="text-xs text-muted-foreground mt-1">{config.agg}</p>
     </div>
   );
 }
@@ -61,24 +61,24 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
 
   if (data.rows.length === 0) {
     return (
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-5">
-        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">
+      <div className="rounded-lg border border-border bg-card p-5">
+        <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
           {config.type}
         </p>
-        <p className="text-xs text-zinc-500">No rows.</p>
+        <p className="text-xs text-muted-foreground">No rows.</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-5">
-      <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-3">
+    <div className="rounded-lg border border-border bg-card p-5">
+      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
         {config.type}
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-zinc-500 text-left">
+            <tr className="text-muted-foreground text-left">
               {data.columns.map((col) => (
                 <th key={col} className="font-normal pb-2 pr-4">
                   {col}
@@ -86,11 +86,11 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
               ))}
             </tr>
           </thead>
-          <tbody className="text-zinc-300">
+          <tbody className="text-foreground">
             {data.rows.map((row, i) => (
               <tr
                 key={i}
-                className={i > 0 ? "border-t border-zinc-800/60" : ""}
+                className={i > 0 ? "border-t border-border/60" : ""}
               >
                 {data.columns.map((col) => (
                   <td key={col} className="py-1 pr-4 align-top">
@@ -112,31 +112,31 @@ function RosterWidget({ widget }: { widget: ResolvedWidget }) {
 
   if (data.entries.length === 0) {
     return (
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-5">
-        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">
+      <div className="rounded-lg border border-border bg-card p-5">
+        <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
           {config.type} roster
         </p>
-        <p className="text-xs text-zinc-500">No entries.</p>
+        <p className="text-xs text-muted-foreground">No entries.</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-5">
-      <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-3">
+    <div className="rounded-lg border border-border bg-card p-5">
+      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
         {config.type} roster
       </p>
       <ul className="space-y-2">
         {data.entries.map((entry, i) => (
           <li
             key={i}
-            className={`text-xs ${i > 0 ? "pt-2 border-t border-zinc-800/60" : ""}`}
+            className={`text-xs ${i > 0 ? "pt-2 border-t border-border/60" : ""}`}
           >
             <div className="flex flex-wrap gap-x-4 gap-y-0.5">
               {data.fields.map((f) => (
-                <span key={f} className="text-zinc-400">
-                  <span className="text-zinc-600">{f}:</span>{" "}
-                  <span className="text-zinc-200">
+                <span key={f} className="text-muted-foreground">
+                  <span className="text-muted-foreground/60">{f}:</span>{" "}
+                  <span className="text-foreground">
                     {entry[f] != null ? String(entry[f]) : "—"}
                   </span>
                 </span>
@@ -157,25 +157,25 @@ function CalendarWidget({ widget }: { widget: ResolvedWidget }) {
 
   if (bucketKeys.length === 0) {
     return (
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-5">
-        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">
+      <div className="rounded-lg border border-border bg-card p-5">
+        <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
           {config.type} calendar
         </p>
-        <p className="text-xs text-zinc-500">No events.</p>
+        <p className="text-xs text-muted-foreground">No events.</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-5">
-      <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-3">
+    <div className="rounded-lg border border-border bg-card p-5">
+      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
         {config.type} calendar ({config.date_field})
       </p>
       <ul className="space-y-2">
         {bucketKeys.slice(0, 10).map((date) => (
           <li key={date} className="text-xs">
-            <span className="text-zinc-500 font-mono">{date}</span>{" "}
-            <span className="text-zinc-400">
+            <span className="text-muted-foreground font-mono">{date}</span>{" "}
+            <span className="text-muted-foreground">
               {data.buckets[date].length} item
               {data.buckets[date].length !== 1 ? "s" : ""}
             </span>
@@ -198,8 +198,8 @@ function WidgetCard({ widget }: { widget: ResolvedWidget }) {
       return <CalendarWidget widget={widget} />;
     default:
       return (
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-5">
-          <p className="text-xs text-zinc-500 font-mono">{widget.kind}</p>
+        <div className="rounded-lg border border-border bg-card p-5">
+          <p className="text-xs text-muted-foreground font-mono">{widget.kind}</p>
         </div>
       );
   }
@@ -233,8 +233,8 @@ export default async function Home(): Promise<React.ReactElement> {
 
   if (memberRows.length === 0) {
     return (
-      <main className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
-        <p className="text-sm text-zinc-500">
+      <main className="flex min-h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">
           No Member row found for your account. Contact a steward.
         </p>
       </main>
@@ -258,33 +258,33 @@ export default async function Home(): Promise<React.ReactElement> {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
+    <div className="font-sans">
       <div className="mx-auto max-w-3xl px-6 py-10 space-y-8">
 
         {/* Header */}
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-100">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
             {me.full_name}{" "}
-            <span className="text-zinc-500 font-normal">·</span>{" "}
-            <span className="text-zinc-400 font-normal text-base">
+            <span className="text-muted-foreground font-normal">·</span>{" "}
+            <span className="text-muted-foreground font-normal text-base">
               {me.tier_role}
             </span>
           </h1>
-          <p className="mt-1 text-xs text-zinc-500">{TODAY_LABEL}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{TODAY_LABEL}</p>
         </div>
 
         {/* Role slice label */}
-        <div className="text-[10px] uppercase tracking-widest text-zinc-600 border-b border-zinc-800 pb-2">
+        <div className="text-xs uppercase tracking-widest text-muted-foreground border-b border-border pb-2">
           Your ontological slice · {me.tier_role}
         </div>
 
         {/* Widget grid — per-user ontological slice */}
         {widgets.length === 0 ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/20 p-8 text-center">
-            <p className="text-sm text-zinc-500">
+          <div className="rounded-lg border border-border bg-card/20 p-8 text-center">
+            <p className="text-sm text-muted-foreground">
               No widgets configured for your role ({me.tier_role}).
             </p>
-            <p className="text-xs text-zinc-600 mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               Ask the agent to add a widget below.
             </p>
           </div>
@@ -324,15 +324,15 @@ export default async function Home(): Promise<React.ReactElement> {
         <section>
           <Link
             href="/dashboard/ask"
-            className="block rounded-lg border border-dashed border-zinc-700 p-4 hover:border-zinc-500 transition-colors"
+            className="block rounded-lg border border-dashed border-border p-4 hover:border-border/80 transition-colors"
           >
             <div className="flex items-start gap-3">
-              <span className="text-zinc-600 text-sm mt-0.5">⌗</span>
+              <span className="text-muted-foreground text-sm mt-0.5">⌗</span>
               <div>
-                <p className="text-sm font-medium text-zinc-500">
+                <p className="text-sm font-medium text-muted-foreground">
                   + Ask the agent to add a widget
                 </p>
-                <p className="text-[11px] text-zinc-600 mt-0.5 italic">
+                <p className="text-xs text-muted-foreground mt-0.5 italic">
                   e.g. &quot;show me tonight&apos;s check-ins&quot; or &quot;pin kitchen stock levels&quot;
                 </p>
               </div>
@@ -344,15 +344,15 @@ export default async function Home(): Promise<React.ReactElement> {
         <section>
           <Link
             href="/organize"
-            className="block rounded-lg border border-dashed border-zinc-700/60 p-4 hover:border-zinc-500 transition-colors"
+            className="block rounded-lg border border-dashed border-border/60 p-4 hover:border-border/80 transition-colors"
           >
             <div className="flex items-start gap-3">
-              <span className="text-zinc-600 text-sm mt-0.5">⊞</span>
+              <span className="text-muted-foreground text-sm mt-0.5">⊞</span>
               <div>
-                <p className="text-sm font-medium text-zinc-500">
+                <p className="text-sm font-medium text-muted-foreground">
                   Organize raw inbox
                 </p>
-                <p className="text-[11px] text-zinc-600 mt-0.5 italic">
+                <p className="text-xs text-muted-foreground mt-0.5 italic">
                   Let the agent classify inbound messy data into typed objects
                 </p>
               </div>
@@ -361,6 +361,6 @@ export default async function Home(): Promise<React.ReactElement> {
         </section>
 
       </div>
-    </main>
+    </div>
   );
 }

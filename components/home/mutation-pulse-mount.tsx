@@ -15,7 +15,7 @@ import { useEffect } from "react";
 // gets the same animation without each component having to wire up its own
 // listener.
 
-const PULSE_CLASSES = ["ring-2", "ring-violet-400", "animate-pulse"];
+const PULSE_CLASSES = ["ring-2", "ring-primary", "animate-pulse"];
 const PULSE_DURATION_MS = 3000;
 
 interface MutationEventDetail {

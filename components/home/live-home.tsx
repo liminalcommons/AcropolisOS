@@ -182,8 +182,8 @@ const INTENT_STYLES: Record<
 > = {
   review: {
     card:
-      "border-violet-500/30 bg-violet-500/[0.04] hover:border-violet-500/60 hover:bg-violet-500/[0.08]",
-    badge: "bg-violet-500/15 text-violet-300",
+      "border-primary/30 bg-primary/[0.04] hover:border-primary/60 hover:bg-primary/[0.08]",
+    badge: "bg-primary/15 text-primary",
   },
   approve: {
     card:
@@ -229,26 +229,26 @@ export function LiveHome({
     computeAdaptiveLayout(pending.length);
   return (
     <main
-      className="min-h-screen bg-zinc-950 text-zinc-100"
+      className="min-h-full"
       data-state="live"
       data-queue-dominant={queueDominant ? "true" : "false"}
     >
-      <header className="sticky top-0 z-30 border-b border-zinc-900 bg-zinc-950/85 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
         <div className="flex h-12 items-center gap-4 px-5">
           <div className="flex items-center gap-2">
-            <span className="inline-block h-2 w-2 rounded-sm bg-violet-400" />
+            <span className="inline-block h-2 w-2 rounded-sm bg-primary" />
             <span className="font-semibold tracking-tight">acropolisOS</span>
           </div>
-          <div className="hidden h-7 flex-1 items-center gap-2 rounded border border-zinc-800 bg-zinc-900/60 px-3 text-xs text-zinc-500 md:flex">
+          <div className="hidden h-7 flex-1 items-center gap-2 rounded border border-border bg-card/60 px-3 text-xs text-muted-foreground md:flex">
             <span>⌕</span>
             <span>Search the ontology — objects, actions, proposals…</span>
-            <span className="ml-auto rounded border border-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-500">
+            <span className="ml-auto rounded border border-border px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
               ⌘K
             </span>
           </div>
           <Link
             href="/proposals"
-            className="text-xs text-zinc-400 hover:text-zinc-100"
+            className="text-xs text-muted-foreground hover:text-foreground"
           >
             Proposals
           </Link>
@@ -260,15 +260,15 @@ export function LiveHome({
         <aside
           data-testid="types-rail"
           className={cn(
-            "col-span-12 border-r border-zinc-900 px-4 py-6 md:min-h-[calc(100vh-3rem)]",
+            "col-span-12 border-r border-border px-4 py-6 md:min-h-[calc(100vh-3rem)]",
             typesSpan,
           )}
         >
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               Types · {typeKeys.length}
             </p>
-            <span className="text-[10px] text-zinc-600">
+            <span className="text-xs text-muted-foreground">
               {actionCount} actions · {linkCount} links
             </span>
           </div>
@@ -281,10 +281,10 @@ export function LiveHome({
                     href={`/${k}`}
                     data-testid={`type-card-${k}`}
                     data-type={k}
-                    className="flex items-center justify-between rounded px-2 py-1.5 text-sm transition hover:bg-zinc-900/60"
+                    className="flex items-center justify-between rounded px-2 py-1.5 text-sm transition hover:bg-card/60"
                   >
-                    <span className="text-zinc-200">{prettify(k)}</span>
-                    <span className="font-mono text-[11px] text-zinc-500">
+                    <span className="text-foreground">{prettify(k)}</span>
+                    <span className="font-mono text-xs text-muted-foreground">
                       {c === null ? "—" : c}
                     </span>
                   </Link>
@@ -293,24 +293,24 @@ export function LiveHome({
             })}
           </ul>
 
-          <p className="mt-6 mb-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+          <p className="mt-6 mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Workspace
           </p>
           <div className="space-y-1 text-sm">
             <Link
               href="/proposals"
-              className="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-900/60"
+              className="block rounded px-2 py-1.5 text-foreground hover:bg-card/60"
             >
               All proposals
               {pending.length > 0 ? (
-                <span className="ml-2 rounded-full bg-violet-500/15 px-1.5 py-0.5 font-mono text-[10px] text-violet-300">
+                <span className="ml-2 rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-xs text-primary">
                   {pending.length}
                 </span>
               ) : null}
             </Link>
             <Link
               href="/chat"
-              className="block rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-900/60"
+              className="block rounded px-2 py-1.5 text-foreground hover:bg-card/60"
             >
               Full chat
             </Link>
@@ -323,7 +323,7 @@ export function LiveHome({
           className={cn("col-span-12 px-6 py-8", centerSpan, centerOrder)}
         >
           <div className="mb-6">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-violet-400">
+            <p className="text-xs font-semibold uppercase tracking-widest text-primary">
               Actions for you
               {pending.length > 0 ? ` · ${pending.length}` : ""}
             </p>
@@ -332,7 +332,7 @@ export function LiveHome({
                 ? "Pending review"
                 : "Your queue is clear"}
             </h1>
-            <p className="mt-1 text-sm text-zinc-400">
+            <p className="mt-1 text-sm text-muted-foreground">
               {pending.length > 0
                 ? "Each item below is a typed mutation awaiting your decision."
                 : "When the agent proposes ontology or data changes, they land here."}
@@ -360,24 +360,24 @@ export function LiveHome({
                           <div className="flex items-center gap-2">
                             <span
                               className={cn(
-                                "rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest",
+                                "rounded-sm px-1.5 py-0.5 text-xs font-semibold uppercase tracking-widest",
                                 styles.badge,
                               )}
                             >
                               {intent}
                             </span>
-                            <span className="font-mono text-xs text-zinc-500">
+                            <span className="font-mono text-xs text-muted-foreground">
                               {p.id.slice(0, 8)}
                             </span>
                           </div>
-                          <div className="mt-1.5 text-sm text-zinc-100">
+                          <div className="mt-1.5 text-sm text-foreground">
                             {summarizeDiff(p.diff)}
                           </div>
-                          <div className="mt-1 text-xs text-zinc-500">
+                          <div className="mt-1 text-xs text-muted-foreground">
                             proposed by agent · {formatRelative(p.created_at)}
                           </div>
                           {p.diff.impacted_tables.length > 0 ? (
-                            <div className="mt-1 text-xs text-zinc-500">
+                            <div className="mt-1 text-xs text-muted-foreground">
                               impacts: {p.diff.impacted_tables.join(", ")}
                             </div>
                           ) : null}
@@ -389,8 +389,8 @@ export function LiveHome({
               })}
             </ul>
           ) : (
-            <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/20 px-6 py-10">
-              <p className="text-sm text-zinc-400">
+            <div className="rounded-md border border-dashed border-border bg-card/20 px-6 py-10">
+              <p className="text-sm text-muted-foreground">
                 Try one of these to seed your first action:
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -398,21 +398,21 @@ export function LiveHome({
                   <PromptButton
                     key={s}
                     prompt={s}
-                    className="rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs text-zinc-300 transition hover:border-violet-500/50 hover:text-violet-200"
+                    className="rounded-full border border-border bg-card/60 px-3 py-1 text-xs text-foreground transition hover:border-primary/50 hover:text-primary"
                   >
                     {s}
                   </PromptButton>
                 ))}
               </div>
-              <p className="mt-5 text-xs text-zinc-500">
+              <p className="mt-5 text-xs text-muted-foreground">
                 Paste one into the chat at the bottom. The agent will propose a
                 typed change; it lands here for you to review.
               </p>
             </div>
           )}
 
-          <div className="mt-10 border-t border-zinc-900 pt-6">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+          <div className="mt-10 border-t border-border pt-6">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               Your world at a glance
             </p>
             <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -442,9 +442,9 @@ function Stat({
   value: number;
 }): React.ReactElement {
   return (
-    <div className="rounded-md border border-zinc-800 bg-zinc-900/30 px-3 py-3">
+    <div className="rounded-md border border-border bg-card px-3 py-3">
       <div className="text-xl font-semibold tracking-tight">{value}</div>
-      <div className="mt-0.5 text-[11px] uppercase tracking-widest text-zinc-500">
+      <div className="mt-0.5 text-xs uppercase tracking-widest text-muted-foreground">
         {label}
       </div>
     </div>
