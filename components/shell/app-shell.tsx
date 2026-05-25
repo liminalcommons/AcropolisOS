@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { member as memberTable, member_context } from "@/lib/db/schema.generated";
 import { resolveTheme } from "@/lib/theme/resolve";
+import { BASE_TOKENS } from "@/lib/theme/tokens";
 import { tokenSetToCssVars } from "@/lib/theme/css";
 import { LeftNav } from "./left-nav";
 import { CoPilotDock } from "./co-pilot-dock";
@@ -15,7 +16,17 @@ interface Props {
 
 export async function AppShell({ children, actor, modelName }: Props): Promise<React.ReactElement> {
   if (!actor) {
-    return <div className="min-h-screen bg-background text-foreground">{children}</div>;
+    // Unauthenticated (signin/setup) — render bare, but still apply the base
+    // palette so these pages match the app's dark-first skin (globals.css :root
+    // is light; the dark theme lives only in the injected vars, not a .dark class).
+    return (
+      <div
+        style={tokenSetToCssVars(BASE_TOKENS)}
+        className="min-h-screen bg-background text-foreground"
+      >
+        {children}
+      </div>
+    );
   }
 
   const db = getDb();

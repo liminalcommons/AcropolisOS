@@ -259,9 +259,9 @@ export function ChatPanel({
     }
   }, [messages, activeProposalId]);
 
-  // S2 · Expand-on-stream. While the agent is processing (status === submitted
-  // or streaming) the strip grows to min(30vh, 320px) so messages become
-  // visible. 3s after status returns to "ready" it collapses back to h-11.
+  // Tracks active streaming (+3s tail) to surface the keyboard-hint overlay and
+  // the data-state attribute while the agent works. The panel itself fills the
+  // co-pilot dock at full height; this no longer drives any height animation.
   const [expanded, setExpanded] = useState(false);
   const streaming = status !== "ready";
   useEffect(() => {
@@ -391,13 +391,9 @@ export function ChatPanel({
     setActiveProposalId((current) => (current === id ? null : current));
   };
 
-  // S1 · Bottom chat strip. Aside is fixed to the viewport bottom at h-11
-  // (44px) idle. The input form is absolutely positioned to the bottom 44px
-  // so it's always visible regardless of the aside's height. The history
-  // pane sits above the form (bottom-11) and is clipped while the aside is
-  // h-11; S2 will grow the aside (`min(30vh, 320px)`) when the agent is
-  // streaming so the history pane becomes visible. Layout.tsx pads body
-  // with pb-11 so page content never sits under the strip.
+  // Fills the co-pilot dock at full height. The input form is pinned to the
+  // bottom 44px (h-11), the history pane sits above it (bottom-11), and the
+  // file drop-zone slots between header and form.
   return (
     <aside
       aria-label="Chat panel"
@@ -466,7 +462,7 @@ export function ChatPanel({
             display: inline-block;
             width: 0.5em;
             height: 1em;
-            background: #a78bfa;
+            background: var(--primary);
             margin-left: 2px;
             vertical-align: text-bottom;
             animation: acro-cursor-blink 1s steps(2) infinite;
