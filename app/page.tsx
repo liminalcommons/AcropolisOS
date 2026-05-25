@@ -22,6 +22,8 @@ import { member as memberTable } from "@/lib/db/schema.generated";
 import { eq } from "drizzle-orm";
 import { TODAY_LABEL } from "@/lib/me/today";
 import { resolvePerUserDashboard } from "@/lib/widgets/per-user";
+import { addableForRole } from "@/lib/widgets/arrange";
+import { WidgetControls } from "@/components/dashboard/widget-controls";
 import type { ResolvedWidget } from "@/lib/widgets/compose";
 import type {
   MetricData,
@@ -207,6 +209,23 @@ function WidgetCard({ widget }: { widget: ResolvedWidget }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+function widgetLabel(kind: string, config: unknown): string {
+  const c = (config ?? {}) as { type?: string; agg?: string };
+  const type = c.type ? c.type.replace(/_/g, " ") : "";
+  switch (kind) {
+    case "metric":
+      return `${c.agg ?? "count"} of ${type || "items"}`;
+    case "data_table":
+      return `${type || "data"} table`;
+    case "roster":
+      return `${type || "items"} roster`;
+    case "calendar":
+      return `${type || "items"} calendar`;
+    default:
+      return kind;
+  }
+}
+
 export default async function Home(): Promise<React.ReactElement> {
   // Auth guard — middleware enforces this; defense-in-depth for direct calls.
   // SESSION IS THE ONLY SOURCE OF TRUTH for memberId and role (V3 contract).
@@ -277,6 +296,15 @@ export default async function Home(): Promise<React.ReactElement> {
         <div className="text-xs uppercase tracking-widest text-muted-foreground border-b border-border pb-2">
           Your ontological slice · {me.tier_role}
         </div>
+
+        {/* Arrangement controls — Tier-2: arrange within the role's catalog */}
+        <WidgetControls
+          widgets={widgets.map((w) => ({ id: w.id, label: widgetLabel(w.kind, w.config) }))}
+          addable={addableForRole(me.tier_role).map((s, index) => ({
+            index,
+            label: widgetLabel(s.kind, s.config),
+          }))}
+        />
 
         {/* Widget grid — per-user ontological slice */}
         {widgets.length === 0 ? (
