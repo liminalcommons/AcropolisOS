@@ -34,21 +34,23 @@ type ObjectNodeType = Node<ObjectNodeData, "object">;
 
 function ObjectNode({ data }: NodeProps<ObjectNodeType>): React.ReactElement {
   return (
-    <div className="min-w-[160px] rounded-md border border-border bg-card px-3 py-2 shadow-sm">
+    <div className="w-52 rounded-md border border-border bg-card px-3 py-2 shadow-sm">
       <Handle type="target" position={Position.Top} className="!opacity-0" />
-      <div className="text-sm font-medium text-foreground">{data.label}</div>
+      <div className="truncate text-sm font-medium text-foreground" title={data.label}>
+        {data.label}
+      </div>
       <div className="text-[10px] text-muted-foreground">{data.propertyCount} properties</div>
       {data.actions.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
+        <div className="mt-1.5 space-y-1">
           {data.actions.map((a) => (
-            <span
+            <div
               key={a.id}
               title={`${a.id} — ${a.policy} (${a.permissions.join(", ") || "no roles"})`}
-              className="rounded px-1.5 py-0.5 text-[9px] font-medium text-background"
+              className="flex items-center gap-1.5 rounded px-1.5 py-0.5"
               style={{ backgroundColor: POLICY_VAR[a.policy] }}
             >
-              {a.label}
-            </span>
+              <span className="truncate text-[10px] font-medium text-background">{a.label}</span>
+            </div>
           ))}
         </div>
       )}
@@ -108,6 +110,7 @@ export function OntologyGraph({ model }: { model: GraphModel }): React.ReactElem
         nodesConnectable={false}
         elementsSelectable={false}
         fitView
+        fitViewOptions={{ padding: 0.25 }}
         proOptions={{ hideAttribution: true }}
       >
         <Background color="var(--border)" gap={20} />

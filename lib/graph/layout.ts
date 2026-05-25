@@ -1,6 +1,8 @@
 // Pure dagre layout: GraphModel relations form the DAG; returns x/y per node.
-// Action chips are positioned client-side relative to their primaryTarget, so
-// only object nodes + relations participate in the dagre pass.
+// Nodes are a FIXED width and a height derived from how many action chips they
+// carry (chips stack vertically in the renderer), so dagre reserves the right
+// box per node and neighbours don't visually collide. Action chips are not graph
+// nodes; only object nodes + relations participate in the dagre pass.
 import dagre from "@dagrejs/dagre";
 import type { GraphModel } from "./derive";
 
@@ -10,15 +12,28 @@ export interface PositionedNode {
   y: number;
 }
 
-const NODE_W = 180;
-const NODE_H = 64;
+// Must stay in sync with the ObjectNode renderer (components/graph/ontology-graph.tsx):
+// NODE_W = the node's fixed width (w-52 = 13rem = 208px); BASE_H = header + padding;
+// CHIP_H = one stacked action-chip row.
+const NODE_W = 208;
+const BASE_H = 60;
+const CHIP_H = 24;
 
 export function layoutGraph(model: GraphModel): PositionedNode[] {
+  const chipCount = new Map<string, number>();
+  for (const a of model.actions) {
+    if (!a.primaryTarget) continue;
+    chipCount.set(a.primaryTarget, (chipCount.get(a.primaryTarget) ?? 0) + 1);
+  }
+
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "TB", nodesep: 60, ranksep: 90 });
+  g.setGraph({ rankdir: "TB", nodesep: 80, ranksep: 110 });
   g.setDefaultEdgeLabel(() => ({}));
 
-  for (const n of model.nodes) g.setNode(n.id, { width: NODE_W, height: NODE_H });
+  for (const n of model.nodes) {
+    const height = BASE_H + (chipCount.get(n.id) ?? 0) * CHIP_H;
+    g.setNode(n.id, { width: NODE_W, height });
+  }
   for (const r of model.relations) {
     if (g.hasNode(r.source) && g.hasNode(r.target)) g.setEdge(r.source, r.target);
   }
@@ -28,6 +43,6 @@ export function layoutGraph(model: GraphModel): PositionedNode[] {
   return model.nodes.map((n) => {
     const pos = g.node(n.id);
     // dagre centers nodes; React Flow positions by top-left corner.
-    return { id: n.id, x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2 };
+    return { id: n.id, x: pos.x - pos.width / 2, y: pos.y - pos.height / 2 };
   });
 }
