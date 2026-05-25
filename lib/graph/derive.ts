@@ -39,9 +39,10 @@ export interface GraphAction {
   policy: AgentPolicy;
   permissions: string[];
   sideEffects: SideEffectChannel[];
+  // The object node an action chip anchors to. Null when an action declares no
+  // object effect and no ref parameter; such actions are not placed on the graph.
   primaryTarget: string | null;
   targets: GraphActionTarget[];
-  createsLink: string | null;
 }
 
 export interface GraphModel {
@@ -102,7 +103,6 @@ export function ontologyToGraph(ontology: Ontology): GraphModel {
         sideEffects: at.side_effects ?? [],
         primaryTarget,
         targets,
-        createsLink: at.creates_link ?? null,
       };
     })
     .sort(byId);

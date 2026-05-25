@@ -29,8 +29,7 @@ export function Legend(): React.ReactElement {
       </ul>
       <p className="mt-3 mb-1 font-medium text-foreground">Edges</p>
       <ul className="space-y-1">
-        <li>— solid: relation between objects</li>
-        <li>– – dashed: action mutates an object</li>
+        <li>— line: relation between objects</li>
       </ul>
     </div>
   );

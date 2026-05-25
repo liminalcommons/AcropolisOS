@@ -110,7 +110,7 @@ export function OntologyGraph({ model }: { model: GraphModel }): React.ReactElem
         fitView
         proOptions={{ hideAttribution: true }}
       >
-        <Background color="var(--color-border)" gap={20} />
+        <Background color="var(--border)" gap={20} />
         <Controls />
         <Panel position="top-left"><Legend /></Panel>
         {selectedNode && (
