@@ -9,7 +9,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { getOrCreateMemberContext } from "@/lib/me/fetchers/member-context";
-import { WIDGET_KINDS } from "@/lib/me/widgets";
+import { WIDGET_KINDS, CATALOG_WIDGET_KINDS } from "@/lib/me/widgets";
 
 // Widget shape for the ask page — a superset that handles agent-proposed widgets.
 // Stored into MemberContext.pinned_widgets (text column = JSON array).
@@ -19,6 +19,17 @@ export interface DashboardWidget {
   title: string;
   props: Record<string, unknown>;
 }
+
+// Catalog kinds that must be composed via compose_dashboard, not pinWidget.
+// pinWidget uses a different descriptor shape ({kind,title,props}) whereas
+// compose_dashboard uses the validated {kind,config} shape. Two writers,
+// two shapes → silent schema split. pinWidget rejects catalog kinds so
+// compose_dashboard is the single governed writer for catalog widgets.
+const CATALOG_KINDS_SET = new Set<string>(CATALOG_WIDGET_KINDS);
+
+export type PinWidgetResult =
+  | { status: "ok" }
+  | { status: "use_compose_dashboard"; detail: string };
 
 const PinWidgetInput = z.object({
   kind: z.enum(WIDGET_KINDS),
@@ -31,11 +42,25 @@ const PinWidgetInput = z.object({
 // Appends a widget to the current user's MemberContext.pinned_widgets array.
 // Called from the "Pin to dashboard" button in /dashboard/ask.
 // Redirects to / so the user lands on the dashboard with the new widget visible.
+//
+// GOVERNANCE: catalog kinds (metric/data_table/roster/calendar) are REJECTED here.
+// compose_dashboard (lib/widgets/compose.ts) is the one validated writer for those.
+// This keeps a single descriptor shape in pinned_widgets and prevents unvalidated
+// catalog configs from bypassing validateWidgetConfig.
 
-export async function pinWidget(widget: DashboardWidget): Promise<void> {
+export async function pinWidget(widget: DashboardWidget): Promise<PinWidgetResult | void> {
   const runtime = await buildChatRuntime();
   if (isAnonymous(runtime.actor)) {
     throw new Error("unauthorized");
+  }
+
+  // Reject catalog kinds before any further processing.
+  // compose_dashboard is the governed writer for metric/data_table/roster/calendar.
+  if (CATALOG_KINDS_SET.has(widget.kind)) {
+    return {
+      status: "use_compose_dashboard",
+      detail: `catalog widgets (${widget.kind}) are composed via compose_dashboard, not pinWidget`,
+    };
   }
 
   // Input validation — reject unknown widget kinds.

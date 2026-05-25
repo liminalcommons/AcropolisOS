@@ -156,6 +156,22 @@ function filterToValidColumns(
   return requestedColumns.filter((c) => allowed.has(c));
 }
 
+// ── In-binding type resolver ──────────────────────────────────────────────────
+//
+// Resolves config.type to a verified table name string via TABLE_MAP.
+// Returns null for any type not in the whitelist — the binding must check and
+// return a safe empty result. This is symmetric with filterToValidColumns and
+// ensures no caller can inject a SQL identifier via config.type, even if it
+// bypassed validateWidgetConfig.
+
+function resolveTableName(type: string): string | null {
+  if (!(CATALOG_VALID_TYPES as readonly string[]).includes(type)) {
+    return null;
+  }
+  // type is now a verified CatalogType — safe to use as SQL identifier
+  return type as CatalogType;
+}
+
 // ── The catalog ───────────────────────────────────────────────────────────────
 
 export const WIDGET_CATALOG: {
@@ -170,7 +186,14 @@ export const WIDGET_CATALOG: {
   metric: {
     configSchema: MetricConfigSchema,
     queryBinding: async (config, db) => {
-      const table = TABLE_MAP[config.type];
+      // In-binding type whitelist check — symmetric with filterToValidColumns.
+      // Guards against callers that skipped validateWidgetConfig.
+      const resolvedType = resolveTableName(config.type);
+      if (!resolvedType) {
+        return { value: 0, label: `${config.type} (unknown type — rejected)` };
+      }
+
+      const table = TABLE_MAP[resolvedType as CatalogType];
 
       // Build count query — READ-ONLY select
       let countResult: Array<{ count: unknown }>;
@@ -181,18 +204,18 @@ export const WIDGET_CATALOG: {
         // The field is constrained to CATALOG_VALID_FIELDS (validated at
         // compose_dashboard time), so no injection risk from config.filter.field.
         // config.filter.value is passed as a bound parameter via sql``.
-        const validFields = new Set(CATALOG_VALID_FIELDS[config.type]);
+        const validFields = new Set(CATALOG_VALID_FIELDS[resolvedType as CatalogType]);
         const field = validFields.has(config.filter.field)
           ? config.filter.field
           : null;
 
         if (!field) {
-          return { value: 0, label: `${config.type} (invalid filter field)` };
+          return { value: 0, label: `${resolvedType} (invalid filter field)` };
         }
 
         countResult = await db.execute(
           sql`SELECT COUNT(*)::int AS count FROM ${sql.raw(
-            `"${config.type}"`,
+            `"${resolvedType}"`,
           )} WHERE ${sql.raw(`"${field}"`)} = ${config.filter.value}`,
         ) as Array<{ count: unknown }>;
       } else {
@@ -207,7 +230,7 @@ export const WIDGET_CATALOG: {
 
       return {
         value,
-        label: config.type,
+        label: resolvedType,
       };
     },
   },
@@ -219,8 +242,15 @@ export const WIDGET_CATALOG: {
   data_table: {
     configSchema: DataTableConfigSchema,
     queryBinding: async (config, db) => {
+      // In-binding type whitelist check — symmetric with filterToValidColumns.
+      // Guards against callers that skipped validateWidgetConfig.
+      const resolvedType = resolveTableName(config.type);
+      if (!resolvedType) {
+        return { columns: [], rows: [] };
+      }
+
       // Validate columns against the known field list — filter out unknown fields
-      const validColumns = filterToValidColumns(config.type, config.columns);
+      const validColumns = filterToValidColumns(resolvedType as CatalogType, config.columns);
       if (validColumns.length === 0) {
         return { columns: [], rows: [] };
       }
@@ -231,7 +261,7 @@ export const WIDGET_CATALOG: {
       // READ-ONLY: raw SELECT query against the world-model table
       const rows = await db.execute(
         sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(
-          `"${config.type}"`,
+          `"${resolvedType}"`,
         )} LIMIT ${limit}`,
       ) as Record<string, unknown>[];
 
@@ -248,7 +278,14 @@ export const WIDGET_CATALOG: {
   roster: {
     configSchema: RosterConfigSchema,
     queryBinding: async (config, db) => {
-      const validFields = filterToValidColumns(config.type, config.fields);
+      // In-binding type whitelist check — symmetric with filterToValidColumns.
+      // Guards against callers that skipped validateWidgetConfig.
+      const resolvedType = resolveTableName(config.type);
+      if (!resolvedType) {
+        return { fields: [], entries: [] };
+      }
+
+      const validFields = filterToValidColumns(resolvedType as CatalogType, config.fields);
       if (validFields.length === 0) {
         return { fields: [], entries: [] };
       }
@@ -259,7 +296,7 @@ export const WIDGET_CATALOG: {
       // READ-ONLY: raw SELECT query
       const entries = await db.execute(
         sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(
-          `"${config.type}"`,
+          `"${resolvedType}"`,
         )} LIMIT ${limit}`,
       ) as Record<string, unknown>[];
 
