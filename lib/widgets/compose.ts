@@ -1,4 +1,4 @@
-// V1: compose_dashboard + resolveDashboard
+// V2: compose_dashboard + resolveDashboard
 //
 // compose_dashboard — steward/self-gated action: validates each selection's
 //   config against WIDGET_CATALOG[kind].configSchema, then writes validated
@@ -6,13 +6,13 @@
 //   Invalid configs are rejected with a structured error — garbage is never
 //   persisted.
 //
-// resolveDashboard — read-only: reads pinned_widgets, runs each descriptor's
-//   queryBinding, returns [{id, kind, config, data}] ready to render.
+// resolveDashboard — read-only: reads pinned_widgets, builds a ReadOnlyDataApi
+//   once, then for each descriptor runs queryBinding(config, api).
+//   Bindings receive the api, NOT db — structurally cannot write.
 //
-// THE FENCE: resolveDashboard calls only read-only queryBindings (see catalog.ts).
-// compose_dashboard writes only to member_context.pinned_widgets, which is the
-// dashboard config column, not world-model data. The world-model remains
-// unmodified by the view layer.
+// THE FENCE: resolveDashboard passes a ReadOnlyDataApi (no mutation methods) to
+// queryBindings. compose_dashboard writes only to member_context.pinned_widgets,
+// which is the dashboard config column, not world-model data.
 
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
@@ -28,6 +28,7 @@ import {
   type RosterData,
   type CalendarData,
 } from "./catalog";
+import { createReadOnlyDataApi } from "./read-api";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -143,10 +144,11 @@ export async function compose_dashboard(
 
 // ── resolveDashboard ─────────────────────────────────────────────────────────
 //
-// Reads pinned_widgets for the given member, then for each descriptor runs
-// WIDGET_CATALOG[kind].queryBinding(config, db) to fetch live data.
+// Reads pinned_widgets for the given member, builds a ReadOnlyDataApi once,
+// then for each descriptor runs queryBinding(config, api).
 //
-// READ-ONLY: queryBindings are all SELECT-only (see catalog.ts THE FENCE).
+// THE FENCE (V2): bindings receive api (ReadOnlyDataApi), NOT db. The api type
+// has no insert/update/delete/create method — bindings physically cannot write.
 // This function never writes to the world-model.
 
 export async function resolveDashboard(
@@ -172,6 +174,10 @@ export async function resolveDashboard(
     return [];
   }
 
+  // Build the read-only api once — passed to ALL bindings.
+  // Bindings receive this api, NOT db, so they physically cannot write.
+  const api = createReadOnlyDataApi(db);
+
   // Resolve each descriptor — run READ-ONLY queryBinding
   const resolved: ResolvedWidget[] = [];
 
@@ -187,7 +193,7 @@ export async function resolveDashboard(
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = await entry.queryBinding(validation.config as any, db);
+      const data = await entry.queryBinding(validation.config as any, api);
       resolved.push({
         id: descriptor.id,
         kind,

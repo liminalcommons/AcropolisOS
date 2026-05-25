@@ -1,8 +1,9 @@
-// V1: Widget catalog — typed config schemas + READ-ONLY queryBindings.
+// V2: Widget catalog — typed config schemas + READ-ONLY queryBindings.
 //
 // THE FENCE (ARCHITECTURE §2/§7): every queryBinding is strictly READ-ONLY.
-// The functions below only call db.select(). There are no insert/update/delete
-// calls anywhere in this file — the view layer cannot write through the catalog.
+// queryBindings receive a ReadOnlyDataApi, NOT the raw db handle — they
+// physically cannot call db.insert/update/delete. Raw SQL lives exclusively
+// in lib/widgets/read-api.ts behind the type+field whitelists.
 //
 // Composition over generation: the agent's job is "pick widget kind → supply
 // config → the catalog drives the query." No hardcoded data; config drives
@@ -13,18 +14,7 @@
 // be reflected here too (they share the same source of truth: schema.generated.ts).
 
 import { z } from "zod";
-import {
-  guest as guestTable,
-  member as memberTable,
-  booking as bookingTable,
-  event as eventTable,
-  bed as bedTable,
-  room as roomTable,
-  shift as shiftTable,
-  work_trade_agreement as wtaTable,
-} from "@/lib/db/schema.generated";
-import type { Database } from "@/lib/db/client";
-import { sql } from "drizzle-orm";
+import type { ReadOnlyDataApi } from "./read-api";
 
 // ── Ontology type registry ────────────────────────────────────────────────────
 //
@@ -53,19 +43,6 @@ export const CATALOG_VALID_FIELDS: Record<CatalogType, string[]> = {
   room: ["id", "code", "kind", "capacity", "floor", "notes"],
   shift: ["id", "label", "kind", "starts_at", "duration_hours", "claimed_by", "status", "notes", "member_id"],
   work_trade_agreement: ["id", "label", "guest", "bed_comp", "hours_per_week", "start_date", "end_date", "status", "notes"],
-};
-
-// Table map for dynamic queries — keyed by CatalogType.
-// READ-ONLY: used only in .select() calls.
-const TABLE_MAP: Record<CatalogType, typeof guestTable> = {
-  guest: guestTable as unknown as typeof guestTable,
-  member: memberTable as unknown as typeof guestTable,
-  booking: bookingTable as unknown as typeof guestTable,
-  event: eventTable as unknown as typeof guestTable,
-  bed: bedTable as unknown as typeof guestTable,
-  room: roomTable as unknown as typeof guestTable,
-  shift: shiftTable as unknown as typeof guestTable,
-  work_trade_agreement: wtaTable as unknown as typeof guestTable,
 };
 
 // ── Widget kind names ─────────────────────────────────────────────────────────
@@ -142,34 +119,9 @@ export interface CalendarData {
 
 export interface CatalogEntry<TConfig, TData> {
   configSchema: z.ZodType<TConfig>;
-  // READ-ONLY: implementations must only call db.select(). No insert/update/delete.
-  queryBinding: (config: TConfig, db: Database) => Promise<TData>;
-}
-
-// ── Helper: validate columns against known fields ────────────────────────────
-
-function filterToValidColumns(
-  type: CatalogType,
-  requestedColumns: string[],
-): string[] {
-  const allowed = new Set(CATALOG_VALID_FIELDS[type]);
-  return requestedColumns.filter((c) => allowed.has(c));
-}
-
-// ── In-binding type resolver ──────────────────────────────────────────────────
-//
-// Resolves config.type to a verified table name string via TABLE_MAP.
-// Returns null for any type not in the whitelist — the binding must check and
-// return a safe empty result. This is symmetric with filterToValidColumns and
-// ensures no caller can inject a SQL identifier via config.type, even if it
-// bypassed validateWidgetConfig.
-
-function resolveTableName(type: string): string | null {
-  if (!(CATALOG_VALID_TYPES as readonly string[]).includes(type)) {
-    return null;
-  }
-  // type is now a verified CatalogType — safe to use as SQL identifier
-  return type as CatalogType;
+  // READ-ONLY: implementations receive a ReadOnlyDataApi — no mutation method
+  // exists on the type. Raw SQL lives in read-api.ts behind the whitelists.
+  queryBinding: (config: TConfig, api: ReadOnlyDataApi) => Promise<TData>;
 }
 
 // ── The catalog ───────────────────────────────────────────────────────────────
@@ -182,159 +134,78 @@ export const WIDGET_CATALOG: {
 } = {
   // ── metric ──────────────────────────────────────────────────────────────────
   // Returns a COUNT(*) aggregate for any ontology type with optional filter.
-  // READ-ONLY: db.select() + count aggregate only.
+  // READ-ONLY: delegates to api.count() — no raw SQL, no db handle.
   metric: {
     configSchema: MetricConfigSchema,
-    queryBinding: async (config, db) => {
-      // In-binding type whitelist check — symmetric with filterToValidColumns.
-      // Guards against callers that skipped validateWidgetConfig.
-      const resolvedType = resolveTableName(config.type);
-      if (!resolvedType) {
+    queryBinding: async (config, api) => {
+      // api.count() validates type against CATALOG_VALID_TYPES whitelist and
+      // the filter field against CATALOG_VALID_FIELDS — returns 0 for unknowns.
+      const value = await api.count(config.type, config.filter);
+      // Distinguish unknown type from valid-type-zero-count via type check:
+      // resolveTableName would return null for unknowns → api.count returns 0.
+      // For label signaling, check whitelist inline (no SQL).
+      const isKnown = (CATALOG_VALID_TYPES as readonly string[]).includes(config.type);
+      if (!isKnown) {
         return { value: 0, label: `${config.type} (unknown type — rejected)` };
       }
-
-      const table = TABLE_MAP[resolvedType as CatalogType];
-
-      // Build count query — READ-ONLY select
-      let countResult: Array<{ count: unknown }>;
-
-      if (config.filter) {
-        // Filtered count: WHERE <field> = <value>
-        // Use raw SQL for the WHERE clause since columns are dynamic.
-        // The field is constrained to CATALOG_VALID_FIELDS (validated at
-        // compose_dashboard time), so no injection risk from config.filter.field.
-        // config.filter.value is passed as a bound parameter via sql``.
-        const validFields = new Set(CATALOG_VALID_FIELDS[resolvedType as CatalogType]);
-        const field = validFields.has(config.filter.field)
-          ? config.filter.field
-          : null;
-
-        if (!field) {
-          return { value: 0, label: `${resolvedType} (invalid filter field)` };
-        }
-
-        countResult = await db.execute(
-          sql`SELECT COUNT(*)::int AS count FROM ${sql.raw(
-            `"${resolvedType}"`,
-          )} WHERE ${sql.raw(`"${field}"`)} = ${config.filter.value}`,
-        ) as Array<{ count: unknown }>;
-      } else {
-        // Unfiltered count — simplest path
-        countResult = await db
-          .select({ count: sql<number>`COUNT(*)::int` })
-          .from(table) as Array<{ count: unknown }>;
-      }
-
-      const raw = countResult[0]?.count;
-      const value = typeof raw === "number" ? raw : Number(raw ?? 0);
-
-      return {
-        value,
-        label: resolvedType,
-      };
+      return { value, label: config.type };
     },
   },
 
   // ── data_table ───────────────────────────────────────────────────────────────
   // Returns live rows of any ontology type with config-specified columns.
-  // Uses raw SQL SELECT so column selection is driven by config, not hardcode.
-  // READ-ONLY: db.select() equivalent (raw SELECT query, no mutations).
+  // READ-ONLY: delegates to api.select() — no raw SQL, no db handle.
   data_table: {
     configSchema: DataTableConfigSchema,
-    queryBinding: async (config, db) => {
-      // In-binding type whitelist check — symmetric with filterToValidColumns.
-      // Guards against callers that skipped validateWidgetConfig.
-      const resolvedType = resolveTableName(config.type);
-      if (!resolvedType) {
-        return { columns: [], rows: [] };
-      }
-
-      // Validate columns against the known field list — filter out unknown fields
-      const validColumns = filterToValidColumns(resolvedType as CatalogType, config.columns);
-      if (validColumns.length === 0) {
-        return { columns: [], rows: [] };
-      }
-
-      const limit = config.limit ?? 20;
-      const colList = validColumns.map((c) => `"${c}"`).join(", ");
-
-      // READ-ONLY: raw SELECT query against the world-model table
-      const rows = await db.execute(
-        sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(
-          `"${resolvedType}"`,
-        )} LIMIT ${limit}`,
-      ) as Record<string, unknown>[];
-
-      return {
-        columns: validColumns,
-        rows: rows as Record<string, unknown>[],
-      };
+    queryBinding: async (config, api) => {
+      // api.select() validates type + columns against whitelists internally.
+      return api.select(config.type, {
+        columns: config.columns,
+        limit: config.limit ?? 20,
+      });
     },
   },
 
   // ── roster ───────────────────────────────────────────────────────────────────
   // Returns a list of entities with config-specified fields.
-  // READ-ONLY: same SELECT-only pattern as data_table.
+  // READ-ONLY: delegates to api.select() — no raw SQL, no db handle.
   roster: {
     configSchema: RosterConfigSchema,
-    queryBinding: async (config, db) => {
-      // In-binding type whitelist check — symmetric with filterToValidColumns.
-      // Guards against callers that skipped validateWidgetConfig.
-      const resolvedType = resolveTableName(config.type);
-      if (!resolvedType) {
-        return { fields: [], entries: [] };
-      }
-
-      const validFields = filterToValidColumns(resolvedType as CatalogType, config.fields);
-      if (validFields.length === 0) {
-        return { fields: [], entries: [] };
-      }
-
-      const limit = config.limit ?? 50;
-      const colList = validFields.map((c) => `"${c}"`).join(", ");
-
-      // READ-ONLY: raw SELECT query
-      const entries = await db.execute(
-        sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(
-          `"${resolvedType}"`,
-        )} LIMIT ${limit}`,
-      ) as Record<string, unknown>[];
-
+    queryBinding: async (config, api) => {
+      // api.select() validates type + columns against whitelists internally.
+      // Roster uses "fields" terminology; api.select uses "columns" — same concept.
+      const result = await api.select(config.type, {
+        columns: config.fields,
+        limit: config.limit ?? 50,
+      });
       return {
-        fields: validFields,
-        entries: entries as Record<string, unknown>[],
+        fields: result.columns,
+        entries: result.rows,
       };
     },
   },
 
   // ── calendar ─────────────────────────────────────────────────────────────────
   // Returns items bucketed by date for event or booking types.
-  // READ-ONLY: db.select() only, buckets built in-memory.
+  // READ-ONLY: delegates to api.byDate() — no raw SQL, no db handle.
   calendar: {
     configSchema: CalendarConfigSchema,
-    queryBinding: async (config, db) => {
-      const table = TABLE_MAP[config.type as CatalogType];
-      const limit = config.limit ?? 50;
+    queryBinding: async (config, api) => {
+      // api.byDate() validates type and dateField against whitelists internally.
+      const rows = await api.byDate(
+        config.type,
+        config.date_field,
+        config.limit ?? 50,
+      );
 
-      // Validate date_field is a real field for this type
-      const validFields = new Set(CATALOG_VALID_FIELDS[config.type as CatalogType]);
-      const dateField = validFields.has(config.date_field)
-        ? config.date_field
-        : null;
-
-      if (!dateField) {
+      if (rows.length === 0) {
         return { date_field: config.date_field, buckets: {} };
       }
 
-      // READ-ONLY: select all rows, bucket in-memory by the date field value
-      const rows = await db
-        .select()
-        .from(table)
-        .limit(limit) as Record<string, unknown>[];
-
+      // Bucket in-memory by the date field value
       const buckets: Record<string, Record<string, unknown>[]> = {};
       for (const row of rows) {
-        const raw = row[dateField];
+        const raw = row[config.date_field];
         const key =
           raw instanceof Date
             ? raw.toISOString().slice(0, 10)
@@ -345,7 +216,7 @@ export const WIDGET_CATALOG: {
         buckets[key].push(row);
       }
 
-      return { date_field: dateField, buckets };
+      return { date_field: config.date_field, buckets };
     },
   },
 };
