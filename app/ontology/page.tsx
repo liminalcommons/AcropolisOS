@@ -1,8 +1,6 @@
 import path from "node:path";
 import Link from "next/link";
 import { loadOntology } from "@/lib/ontology/load";
-import { ontologyToGraph } from "@/lib/ontology/schema-graph";
-import { SchemaGraphView } from "@/components/ontology/schema-graph";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +22,6 @@ function summarizeProperty(body: unknown): string {
 export default async function OntologyPage(): Promise<React.ReactElement> {
   const ontologyRoot = path.join(process.cwd(), "ontology");
   const ontology = await loadOntology(ontologyRoot);
-  const graph = ontologyToGraph(ontology);
 
   const objectTypeRows = Object.entries(ontology.object_types).map(
     ([name, body]) => ({
@@ -88,12 +85,20 @@ export default async function OntologyPage(): Promise<React.ReactElement> {
         </div>
 
         <section className="mt-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Schema graph
-          </h2>
-          <div className="mt-2">
-            <SchemaGraphView graph={graph} />
-          </div>
+          <Link
+            href="/graph"
+            className="flex items-center justify-between rounded-md border border-border bg-card/50 p-4 transition-colors hover:border-primary/60"
+          >
+            <span>
+              <span className="block text-sm font-semibold text-foreground">
+                Interactive graph →
+              </span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                See objects, relations, and the actions the AI may run — colored by
+                whether each needs human confirmation.
+              </span>
+            </span>
+          </Link>
         </section>
 
         <section className="mt-10 grid gap-8 lg:grid-cols-2">
