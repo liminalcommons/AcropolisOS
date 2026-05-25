@@ -230,6 +230,113 @@ async function main() {
   console.log(sessionDerivedLine);
   pass("CASE 4 — member/role from buildChatRuntime() session, not a request param (see line above)");
 
+  // ── CASE 6: all-invalid pinned → role-default floor ──────────────────────
+
+  console.log("\n── CASE 6: all-invalid pinned_widgets → role-default floor ──");
+
+  // Set manager's pinned_widgets to a parseable but ALL-INVALID config
+  // (references a nonexistent column — validateWidgetConfig will reject it)
+  const allInvalidPinned = JSON.stringify([
+    { id: "x", kind: "data_table", config: { type: "guest", columns: ["nonexistent_col"], limit: 10 } },
+  ]);
+
+  // Ensure manager has a member_context row to update (create if missing)
+  const managerCtxRow = await db
+    .select()
+    .from(memberContextTable)
+    .where(eq(memberContextTable.member_id, managerMember.id))
+    .limit(1);
+
+  if (managerCtxRow.length === 0) {
+    // Insert a fresh context row with the all-invalid pinned config
+    await db.insert(memberContextTable).values({
+      member_id: managerMember.id,
+      pinned_widgets: allInvalidPinned,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+  } else {
+    await db
+      .update(memberContextTable)
+      .set({ pinned_widgets: allInvalidPinned, updated_at: new Date() })
+      .where(eq(memberContextTable.member_id, managerMember.id));
+  }
+
+  const managerAllInvalidWidgets = await resolvePerUserDashboard(db, {
+    id: managerMember.id,
+    tier_role: managerMember.tier_role,
+  });
+
+  console.log(`\nManager with all-invalid pinned_widgets:`);
+  console.log("  resolved:", widgetSummary(managerAllInvalidWidgets));
+  console.log("  expected (manager default):", managerSummary);
+
+  if (managerAllInvalidWidgets.length === 0) {
+    fail("CASE 6: all-invalid pinned returned [] — did NOT fall back to role default");
+  }
+
+  const case6Summary = widgetSummary(managerAllInvalidWidgets);
+  if (case6Summary !== managerSummary) {
+    fail(`CASE 6: fell back but not to manager SLICE_SPEC`, {
+      got: case6Summary,
+      expected: managerSummary,
+    });
+  }
+
+  pass(`CASE 6 — all-invalid pinned falls back to role default: resolved == manager SLICE_SPEC '${case6Summary}'`);
+
+  // ── CASE 7: partial-invalid pinned → keep valid only, no fallback ─────────
+
+  console.log("\n── CASE 7: partial-invalid pinned → keep valid only, no fallback ──");
+
+  // One VALID descriptor + one INVALID descriptor
+  const partialInvalidPinned = JSON.stringify([
+    // Valid: metric(guest, count) — this IS in WIDGET_CATALOG and valid config
+    { id: "valid-1", kind: "metric", config: { type: "guest", agg: "count" } },
+    // Invalid: data_table with nonexistent column — validateWidgetConfig rejects it
+    { id: "invalid-1", kind: "data_table", config: { type: "guest", columns: ["nonexistent_col"], limit: 10 } },
+  ]);
+
+  await db
+    .update(memberContextTable)
+    .set({ pinned_widgets: partialInvalidPinned, updated_at: new Date() })
+    .where(eq(memberContextTable.member_id, managerMember.id));
+
+  const managerPartialWidgets = await resolvePerUserDashboard(db, {
+    id: managerMember.id,
+    tier_role: managerMember.tier_role,
+  });
+
+  console.log(`\nManager with partial-invalid pinned_widgets (1 valid + 1 invalid):`);
+  console.log("  resolved:", widgetSummary(managerPartialWidgets));
+  console.log("  manager SLICE_SPEC default:", managerSummary);
+
+  if (managerPartialWidgets.length === 0) {
+    fail("CASE 7: partial-invalid returned [] — should have kept the valid widget");
+  }
+
+  // Must return ONLY the valid one (the metric) — NOT fall back to full role default
+  if (managerPartialWidgets.length !== 1) {
+    fail(`CASE 7: expected exactly 1 valid widget (metric), got ${managerPartialWidgets.length}`, {
+      widgets: widgetSummary(managerPartialWidgets),
+    });
+  }
+
+  const validWidget = managerPartialWidgets[0];
+  if (validWidget.kind !== "metric" || (validWidget.config as { type: string }).type !== "guest") {
+    fail("CASE 7: surviving widget is not the expected metric(guest)", {
+      got: validWidget,
+    });
+  }
+
+  // Must NOT equal the full role default (that would mean it fell back)
+  const case7Summary = widgetSummary(managerPartialWidgets);
+  if (case7Summary === managerSummary) {
+    fail("CASE 7: result matches full role default — incorrectly fell back instead of keeping valid widget");
+  }
+
+  pass(`CASE 7 — partial-invalid: only valid widget survives '${case7Summary}', no fallback to role default '${managerSummary}'`);
+
   // ── CASE 5: Cleanup ───────────────────────────────────────────────────────
 
   console.log("\n── CASE 5: Cleanup ──");
@@ -254,13 +361,23 @@ async function main() {
     }
   }
 
+  // Also clean up the manager context if we created it fresh for CASE 6/7
+  // (if it wasn't in originalContexts it means it didn't exist before)
+  if (!originalMemberIds.has(managerMember.id)) {
+    await db
+      .delete(memberContextTable)
+      .where(eq(memberContextTable.member_id, managerMember.id));
+  }
+
   console.log("cleanup done");
   pass("CASE 5 — cleanup done");
 
   console.log("\n── ALL CASES PASSED ─────────────────────────────────────────");
 }
 
-main().catch((err) => {
-  console.error("PROOF SCRIPT ERROR:", err);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error("PROOF SCRIPT ERROR:", err);
+    process.exit(1);
+  });

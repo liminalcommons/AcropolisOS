@@ -183,7 +183,14 @@ export async function resolvePerUserDashboard(
     if (stored && stored.length > 0) {
       // Explicit pinned_widgets exist — run them through the read-only api.
       // This mirrors resolveDashboard's logic exactly (same machinery, reuse path).
-      return runDescriptors(db, stored);
+      const pinned = await runDescriptors(db, stored);
+      if (pinned.length > 0) {
+        // At least one valid widget → return the valid set (partial-invalid is fine).
+        return pinned;
+      }
+      // All pinned configs stale/invalid (zero valid after validateWidgetConfig) →
+      // fall through to the SLICE_SPEC role default so the member always sees
+      // SOMETHING. Role default is the floor, not a blank "No widgets configured".
     }
   }
 
