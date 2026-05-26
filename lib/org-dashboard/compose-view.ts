@@ -26,7 +26,12 @@ import {
   type CatalogKind,
 } from "@/lib/widgets/catalog";
 import type { CanReadType } from "@/lib/widgets/read-api";
-import { addOrgWidget, type WidgetDescriptor } from "./store";
+import {
+  addOrgWidget,
+  removeOrgWidget,
+  clearOrgDashboard,
+  type WidgetDescriptor,
+} from "./store";
 
 export interface ComposeOrgViewInput {
   kind: CatalogKind;
@@ -36,9 +41,32 @@ export interface ComposeOrgViewInput {
   limit?: number;
 }
 
+// STRUCTURAL WRITE-AUTHORIZATION (Axiom 2): every dashboard MUTATION requires
+// proof of write-auth. canWriteDashboard is a REQUIRED boolean — there is no
+// default that allows, so a caller physically cannot mutate the dashboard
+// without supplying it. This is the orchestration layer; store.ts stays a dumb
+// persistence layer with no auth. All three write ops gate identically and
+// fail-closed (gate FIRST, before any other validation).
+export interface DashboardWriteAuth {
+  canReadType: CanReadType;
+  canWriteDashboard: boolean;
+}
+
 export type ComposeOrgViewResult =
   | { ok: true; descriptor: WidgetDescriptor }
   | { ok: false; reason: string };
+
+export type DashboardWriteResult =
+  | { ok: true; existed?: boolean }
+  | { ok: false; reason: string };
+
+const NOT_AUTHORIZED = "Not authorized to modify the org dashboard.";
+
+// Stable descriptor id for a composed widget: re-composing / removing the same
+// type+kind targets the SAME widget (decision #2 — replace, not duplicate).
+function composedId(type: string, kind: CatalogKind): string {
+  return `compose-${type}-${kind}`;
+}
 
 // Assemble the per-kind catalog config from the flat agent input. The catalog
 // schemas differ per kind (data_table/roster take a column list; metric takes
@@ -68,8 +96,16 @@ function buildConfig(input: ComposeOrgViewInput): unknown {
 
 export async function composeOrgView(
   input: ComposeOrgViewInput,
-  canReadType: CanReadType,
+  { canReadType, canWriteDashboard }: DashboardWriteAuth,
 ): Promise<ComposeOrgViewResult> {
+  // 0. STRUCTURAL WRITE-AUTH (fail-closed, FIRST). A caller cannot mutate the
+  // dashboard without proving write-auth — independent of, and prior to, the
+  // per-type read fence. A readable public type (e.g. shift) still cannot be
+  // composed by a non-writer.
+  if (!canWriteDashboard) {
+    return { ok: false, reason: NOT_AUTHORIZED };
+  }
+
   // 1. kind ∈ catalog
   if (!(input.kind in WIDGET_CATALOG)) {
     return { ok: false, reason: `unknown widget kind "${input.kind}"` };
@@ -100,11 +136,43 @@ export async function composeOrgView(
   // Stable id (compose-<type>-<kind>) means re-composing the same type+kind
   // REPLACES that widget rather than duplicating it (decision #2).
   const descriptor: WidgetDescriptor = {
-    id: `compose-${input.type}-${input.kind}`,
+    id: composedId(input.type, input.kind),
     kind: input.kind,
     config: validation.config,
   };
   await addOrgWidget(descriptor);
 
   return { ok: true, descriptor };
+}
+
+// ── removeOrgView ───────────────────────────────────────────────────────────────
+//
+// Remove a single composed widget by its selector (kind + type → the stable
+// composed id). Write-auth is gated FIRST (fail-closed), consistent with
+// composeOrgView. Idempotent: removing an absent widget is ok:true (existed:false).
+export async function removeOrgView(
+  selector: { kind: CatalogKind; type: string },
+  { canWriteDashboard }: { canWriteDashboard: boolean },
+): Promise<DashboardWriteResult> {
+  if (!canWriteDashboard) {
+    return { ok: false, reason: NOT_AUTHORIZED };
+  }
+  const existed = await removeOrgWidget(composedId(selector.type, selector.kind));
+  return { ok: true, existed };
+}
+
+// ── clearOrgView ────────────────────────────────────────────────────────────────
+//
+// Reset the whole dashboard to the default. Write-auth gated FIRST (fail-closed),
+// consistent with composeOrgView/removeOrgView.
+export async function clearOrgView({
+  canWriteDashboard,
+}: {
+  canWriteDashboard: boolean;
+}): Promise<DashboardWriteResult> {
+  if (!canWriteDashboard) {
+    return { ok: false, reason: NOT_AUTHORIZED };
+  }
+  await clearOrgDashboard();
+  return { ok: true };
 }

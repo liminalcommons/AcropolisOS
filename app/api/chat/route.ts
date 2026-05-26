@@ -34,7 +34,11 @@ import { buildN8nReadTools } from "@/lib/agent/n8n-tools";
 import { designTheme } from "@/lib/theme/design";
 import { getOrCreateMemberContext } from "@/lib/me/fetchers/member-context";
 import { buildCanReadType } from "@/lib/widgets/read-api";
-import { composeOrgView } from "@/lib/org-dashboard/compose-view";
+import {
+  composeOrgView,
+  removeOrgView,
+  clearOrgView,
+} from "@/lib/org-dashboard/compose-view";
 import { CATALOG_KINDS, CATALOG_VALID_TYPES } from "@/lib/widgets/catalog";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +67,7 @@ const APPLY_ACTION_INSTRUCTIONS = [
   "  - n8n (list_workflows, create_workflow): inspect and create automation workflows in n8n. Use list_workflows when the user asks what automations exist or what's connected. Use create_workflow when the user asks to set up an automation or materialize an action path as a workflow. If either tool returns 'n8n not connected', inform the user the API key needs to be configured.",
   "  - design_theme: when the user asks to re-skin / re-color the app ('make the theme oceanic', 'give me a warm earthy palette', 'I want a high-contrast theme'), call design_theme with their described look. It designs a structurally + accessibility-validated palette and applies it for the current member. Tell the user it's applied (or report the reason if it returns ok:false).",
   "  - compose_view: when the steward asks to show/add a table, list, metric, or calendar of some type on the org dashboard ('show me a table of guests on the dashboard', 'add a count of open shifts', 'put the bookings on /org'), call compose_view with the widget kind (data_table | roster | metric | calendar), the ontology type, and the columns/fields they want. The view appears on /org immediately — no approval step. Calling compose_view again for the same type+kind REPLACES that widget. If it returns ok:false, tell the user the reason (e.g. you are not authorized to read that type).",
+    "  - remove_widget / clear_dashboard: when the steward asks to remove or take off a specific widget from the org dashboard, call remove_widget with the same kind+type used to compose it; when they ask to reset, empty, or clear the whole dashboard, call clear_dashboard. Both apply immediately and are steward-only (they return ok:false otherwise).",
   "Rules: never propose a new object type the ontology already has — call describe_<type> or query_<type> first to verify. Use apply_action only when the user asks to do something on the live data and the action_type already exists. If they ask for new behavior, propose first.",
   "Some actions have a confirmation policy. If apply_action returns confirmation_required, present the requested change in your text reply and let the user click the Confirm button — do NOT attempt to re-call apply_action yourself.",
 ].join(" ");
@@ -197,27 +202,69 @@ export async function POST(req: Request): Promise<Response> {
       limit: z.number().int().optional().describe("Max rows (optional)."),
     }),
     execute: async ({ kind, type, columns, filter, limit }) => {
-      // WRITE-AUTHORIZATION: the org dashboard is a single shared admin surface
-      // (one steward view). Composing MUTATES it, so restrict the write to
-      // stewards — a non-steward can't view /org and must not reshape it.
-      // (The per-type read fence below is necessary but not sufficient: public
-      // types like bed/shift would otherwise let any member mutate the board.)
-      if (composeActor.role !== "steward") {
-        return { ok: false, reason: "Only a steward can compose the org dashboard." };
-      }
-      // Build the read fence from THIS request's actor + ontology — the same
-      // predicate the /org render path gates every read with. Fail-closed:
-      // an actor who cannot read the type cannot compose a widget over it.
-      const canReadType = buildCanReadType(composeActor, composeOntology);
+      // Write-auth is now STRUCTURAL: composeOrgView REQUIRES canWriteDashboard
+      // and gates on it FIRST (fail-closed), before the per-type read fence. The
+      // steward-only role check lives in the core — there is no separate gate
+      // here that could be forgotten on a future call site.
+      const canWriteDashboard = composeActor.role === "steward";
       const r = await composeOrgView(
         { kind, type, columns, filter, limit },
-        canReadType,
+        {
+          canReadType: buildCanReadType(composeActor, composeOntology),
+          canWriteDashboard,
+        },
       );
       if (!r.ok) return { ok: false, reason: r.reason };
       return {
         ok: true,
         applied: true,
         summary: `Added a ${kind} of ${type} to the org dashboard.`,
+      };
+    },
+  });
+
+  // Step-2b: remove_widget — take a single composed widget off the org dashboard.
+  // Same structural write-auth as compose_view (canWriteDashboard gated FIRST in
+  // the core). Idempotent — removing an absent widget still returns ok:true.
+  const remove_widget = tool({
+    description:
+      "Remove a single composed widget from the steward org dashboard (/org), identified by the same kind + type used to compose it. Applies immediately.",
+    inputSchema: z.object({
+      kind: z
+        .enum(CATALOG_KINDS)
+        .describe("The widget kind to remove: data_table | roster | metric | calendar."),
+      type: z
+        .enum(CATALOG_VALID_TYPES)
+        .describe("The ontology type of the widget to remove, e.g. guest, shift, booking."),
+    }),
+    execute: async ({ kind, type }) => {
+      const canWriteDashboard = composeActor.role === "steward";
+      const r = await removeOrgView({ kind, type }, { canWriteDashboard });
+      if (!r.ok) return { ok: false, reason: r.reason };
+      return {
+        ok: true,
+        applied: true,
+        summary: r.existed
+          ? `Removed the ${kind} of ${type} from the org dashboard.`
+          : `No ${kind} of ${type} was on the org dashboard.`,
+      };
+    },
+  });
+
+  // Step-2b: clear_dashboard — reset the org dashboard to its default. Same
+  // structural write-auth (canWriteDashboard gated FIRST in the core).
+  const clear_dashboard = tool({
+    description:
+      "Reset the steward org dashboard (/org) to its default, removing all composed widgets. Applies immediately.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      const canWriteDashboard = composeActor.role === "steward";
+      const r = await clearOrgView({ canWriteDashboard });
+      if (!r.ok) return { ok: false, reason: r.reason };
+      return {
+        ok: true,
+        applied: true,
+        summary: "Reset the org dashboard to its default.",
       };
     },
   });
@@ -230,6 +277,8 @@ export async function POST(req: Request): Promise<Response> {
     ...n8nTools,
     design_theme,
     compose_view,
+    remove_widget,
+    clear_dashboard,
   };
 
   const result = streamText({

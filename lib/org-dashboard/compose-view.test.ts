@@ -11,7 +11,7 @@
 
 import path from "node:path";
 import { describe, expect, it, beforeAll, afterEach } from "vitest";
-import { composeOrgView } from "./compose-view";
+import { composeOrgView, removeOrgView, clearOrgView } from "./compose-view";
 import { readOrgDashboard, clearOrgDashboard } from "./store";
 import { buildCanReadType } from "@/lib/widgets/read-api";
 import { loadOntology } from "@/lib/ontology/load";
@@ -54,7 +54,7 @@ describe("composeOrgView — governed + fail-closed", () => {
         columns: ["label", "kind", "starts_at", "status"],
         limit: 20,
       },
-      canReadType,
+      { canReadType, canWriteDashboard: true },
     );
 
     expect(result.ok).toBe(true);
@@ -71,6 +71,9 @@ describe("composeOrgView — governed + fail-closed", () => {
 
   it("data_table over booking with a MEMBER → rejected (fail-closed) and NOT persisted", async () => {
     const canReadType = buildCanReadType(member, ontology);
+    // A member is not a steward → canWriteDashboard:false. The structural
+    // write-auth gate fires FIRST (before the read fence), so the reason is the
+    // dashboard-write rejection, not the read-type rejection.
     const result = await composeOrgView(
       {
         kind: "data_table",
@@ -78,12 +81,12 @@ describe("composeOrgView — governed + fail-closed", () => {
         columns: ["label", "status"],
         limit: 10,
       },
-      canReadType,
+      { canReadType, canWriteDashboard: false },
     );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.reason).toContain("not authorized to read booking");
+    expect(result.reason).toContain("Not authorized to modify the org dashboard");
 
     // Nothing for booking was persisted — store returns the default (bed list).
     const dashboard = await readOrgDashboard();
@@ -97,7 +100,7 @@ describe("composeOrgView — governed + fail-closed", () => {
     const result = await composeOrgView(
       // @ts-expect-error — deliberately invalid kind
       { kind: "pie_chart", type: "shift", columns: ["label"] },
-      canReadType,
+      { canReadType, canWriteDashboard: true },
     );
     expect(result.ok).toBe(false);
 
@@ -111,7 +114,7 @@ describe("composeOrgView — governed + fail-closed", () => {
     const result = await composeOrgView(
       // "spaceship" is not in CATALOG_VALID_TYPES — rejected at the type gate.
       { kind: "data_table", type: "spaceship", columns: ["label"] },
-      canReadType,
+      { canReadType, canWriteDashboard: true },
     );
     expect(result.ok).toBe(false);
 
@@ -127,7 +130,7 @@ describe("composeOrgView — governed + fail-closed", () => {
         type: "shift",
         columns: ["not_a_real_field"],
       },
-      canReadType,
+      { canReadType, canWriteDashboard: true },
     );
     expect(result.ok).toBe(false);
 
@@ -135,5 +138,153 @@ describe("composeOrgView — governed + fail-closed", () => {
     expect(
       dashboard.widgets.some((w) => w.id === "compose-shift-data_table"),
     ).toBe(false);
+  });
+});
+
+describe("structural write-authorization — fail-closed and independent of read-auth", () => {
+  it("canWriteDashboard:false → rejected and NOT persisted, even for a READABLE public type (shift)", async () => {
+    // shift is read:["*"] — fully readable. Write-auth is INDEPENDENT of
+    // read-auth: a caller who cannot WRITE the dashboard cannot compose it even
+    // when they CAN read the type. Proves the write gate is structural and prior.
+    const canReadType = buildCanReadType(steward, ontology);
+    const result = await composeOrgView(
+      {
+        kind: "data_table",
+        type: "shift",
+        columns: ["label", "status"],
+      },
+      { canReadType, canWriteDashboard: false },
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain("Not authorized to modify the org dashboard");
+
+    const dashboard = await readOrgDashboard();
+    expect(
+      dashboard.widgets.some((w) => w.id === "compose-shift-data_table"),
+    ).toBe(false);
+  });
+
+  it("canWriteDashboard:true + readable type → persists", async () => {
+    const canReadType = buildCanReadType(steward, ontology);
+    const result = await composeOrgView(
+      { kind: "data_table", type: "shift", columns: ["label", "status"] },
+      { canReadType, canWriteDashboard: true },
+    );
+    expect(result.ok).toBe(true);
+
+    const dashboard = await readOrgDashboard();
+    expect(
+      dashboard.widgets.some((w) => w.id === "compose-shift-data_table"),
+    ).toBe(true);
+  });
+});
+
+describe("removeOrgView — gated, fail-closed, idempotent", () => {
+  it("with write-auth → removes the composed widget", async () => {
+    const canReadType = buildCanReadType(steward, ontology);
+    await composeOrgView(
+      { kind: "data_table", type: "shift", columns: ["label"] },
+      { canReadType, canWriteDashboard: true },
+    );
+    expect(
+      (await readOrgDashboard()).widgets.some(
+        (w) => w.id === "compose-shift-data_table",
+      ),
+    ).toBe(true);
+
+    const r = await removeOrgView(
+      { kind: "data_table", type: "shift" },
+      { canWriteDashboard: true },
+    );
+    expect(r.ok).toBe(true);
+
+    expect(
+      (await readOrgDashboard()).widgets.some(
+        (w) => w.id === "compose-shift-data_table",
+      ),
+    ).toBe(false);
+  });
+
+  it("without write-auth → {ok:false} and the widget is still present", async () => {
+    const canReadType = buildCanReadType(steward, ontology);
+    await composeOrgView(
+      { kind: "data_table", type: "shift", columns: ["label"] },
+      { canReadType, canWriteDashboard: true },
+    );
+
+    const r = await removeOrgView(
+      { kind: "data_table", type: "shift" },
+      { canWriteDashboard: false },
+    );
+    expect(r.ok).toBe(false);
+
+    expect(
+      (await readOrgDashboard()).widgets.some(
+        (w) => w.id === "compose-shift-data_table",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("clearOrgView — gated, fail-closed", () => {
+  it("with write-auth → dashboard returns to the default", async () => {
+    const canReadType = buildCanReadType(steward, ontology);
+    await composeOrgView(
+      { kind: "data_table", type: "shift", columns: ["label"] },
+      { canReadType, canWriteDashboard: true },
+    );
+
+    const r = await clearOrgView({ canWriteDashboard: true });
+    expect(r.ok).toBe(true);
+
+    const dashboard = await readOrgDashboard();
+    // Default = bed-list, no composed widgets.
+    expect(dashboard.widgets.every((w) => !w.id.startsWith("compose-"))).toBe(true);
+    expect(dashboard.widgets.some((w) => w.id === "admin-bed-list")).toBe(true);
+  });
+
+  it("without write-auth → {ok:false} and the dashboard is unchanged", async () => {
+    const canReadType = buildCanReadType(steward, ontology);
+    await composeOrgView(
+      { kind: "data_table", type: "shift", columns: ["label"] },
+      { canReadType, canWriteDashboard: true },
+    );
+
+    const r = await clearOrgView({ canWriteDashboard: false });
+    expect(r.ok).toBe(false);
+
+    expect(
+      (await readOrgDashboard()).widgets.some(
+        (w) => w.id === "compose-shift-data_table",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("multiple widgets coexist (append, not replace)", () => {
+  it("composing two DIFFERENT type+kind widgets → readOrgDashboard contains BOTH", async () => {
+    const canReadType = buildCanReadType(steward, ontology);
+
+    const a = await composeOrgView(
+      { kind: "data_table", type: "shift", columns: ["label", "status"] },
+      { canReadType, canWriteDashboard: true },
+    );
+    expect(a.ok).toBe(true);
+
+    const b = await composeOrgView(
+      { kind: "metric", type: "bed" },
+      { canReadType, canWriteDashboard: true },
+    );
+    expect(b.ok).toBe(true);
+
+    const dashboard = await readOrgDashboard();
+    expect(
+      dashboard.widgets.some((w) => w.id === "compose-shift-data_table"),
+    ).toBe(true);
+    expect(
+      dashboard.widgets.some((w) => w.id === "compose-bed-metric"),
+    ).toBe(true);
   });
 });

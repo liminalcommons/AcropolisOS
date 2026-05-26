@@ -102,6 +102,19 @@ export async function addOrgWidget(descriptor: WidgetDescriptor): Promise<void> 
   await writeOrgDashboard(current);
 }
 
+// ── removeOrgWidget ─────────────────────────────────────────────────────────────
+//
+// Filter out the descriptor with the matching id and write back. Returns whether
+// the id was present (idempotent — removing an absent id is not an error). Dumb
+// persistence: NO authorization here (auth lives in compose-view.ts).
+export async function removeOrgWidget(id: string): Promise<boolean> {
+  const current = await readOrgDashboardOrEmpty();
+  const next = current.widgets.filter((w) => w.id !== id);
+  const existed = next.length !== current.widgets.length;
+  await writeOrgDashboard({ widgets: next });
+  return existed;
+}
+
 // ── clearOrgDashboard ───────────────────────────────────────────────────────────
 //
 // Reset to the default (delete the file). Next readOrgDashboard returns the
