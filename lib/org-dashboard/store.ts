@@ -78,6 +78,21 @@ export const DEFAULT_ORG_DASHBOARD: OrgDashboardConfig = {
       },
     },
     {
+      // "Today" operational context, governed via the @today relative-date
+      // filter: bookings whose from_date == the current date (resolved at query
+      // time in read-api). Demonstrates relative-date composition — the first
+      // step toward /day as a generated composition.
+      id: "admin-arrivals-today",
+      kind: "data_table",
+      title: "Arrivals today",
+      config: {
+        type: "booking",
+        columns: ["label", "guest", "bed", "from_date", "to_date"],
+        filter: { field: "from_date", value: "@today" },
+        limit: 50,
+      },
+    },
+    {
       id: "admin-bed-list",
       kind: "data_table",
       title: "Bed inventory",

@@ -18,7 +18,7 @@
 
 import path from "node:path";
 import { describe, expect, it, beforeAll } from "vitest";
-import { createReadOnlyDataApi, buildCanReadType } from "./read-api";
+import { createReadOnlyDataApi, buildCanReadType, resolveFilterValue } from "./read-api";
 import { loadOntology } from "@/lib/ontology/load";
 import type { Ontology } from "@/lib/ontology/schema";
 import type { Actor } from "@/lib/ctx";
@@ -315,5 +315,19 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
       expect(can("bed")).toBe(true);
       expect(can("booking")).toBe(false);
     });
+  });
+});
+
+describe("resolveFilterValue (@today relative-date token)", () => {
+  it("resolves @today to the current date (YYYY-MM-DD)", () => {
+    const expected = new Date().toISOString().slice(0, 10);
+    expect(resolveFilterValue("@today")).toBe(expected);
+    expect(resolveFilterValue("@today")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("passes non-token values through untouched", () => {
+    expect(resolveFilterValue("open")).toBe("open");
+    expect(resolveFilterValue("2026-06-01")).toBe("2026-06-01");
+    expect(resolveFilterValue("")).toBe("");
   });
 });

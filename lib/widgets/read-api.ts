@@ -81,6 +81,18 @@ function safeColumns(type: CatalogType, requested: string[]): string[] {
   return requested.filter((c) => allowed.has(c));
 }
 
+// RELATIVE-DATE filter tokens. A widget filter value of "@today" resolves, at
+// QUERY time, to the current date (YYYY-MM-DD) — so a descriptor like
+// { field: "from_date", value: "@today" } means "arriving today" without baking
+// a fixed date into the saved view. Resolved here (server-side) just before the
+// value is bound as a SQL parameter; non-token values pass through untouched.
+// Equality against a DATE column; (range/relative-timestamp tokens are a later
+// extension — this is the minimal governed primitive that unblocks "today" views).
+export function resolveFilterValue(value: string): string {
+  if (value === "@today") return new Date().toISOString().slice(0, 10);
+  return value;
+}
+
 // ── Per-actor read permission gate ──────────────────────────────────────────────
 //
 // THE SECURITY BOUNDARY: read-api takes a raw db handle and would otherwise let
@@ -233,7 +245,7 @@ export function createReadOnlyDataApi(
         // Field name is whitelisted — safe to interpolate as SQL identifier.
         // Filter value is a bound parameter via sql template literal.
         const rows = await db.execute(
-          sql`SELECT COUNT(*)::int AS count FROM ${sql.raw(`"${resolved}"`)} WHERE ${sql.raw(`"${filter.field}"`)} = ${filter.value}`,
+          sql`SELECT COUNT(*)::int AS count FROM ${sql.raw(`"${resolved}"`)} WHERE ${sql.raw(`"${filter.field}"`)} = ${resolveFilterValue(filter.value)}`,
         ) as Array<{ count: unknown }>;
         const raw = rows[0]?.count;
         return typeof raw === "number" ? raw : Number(raw ?? 0);
@@ -268,7 +280,7 @@ export function createReadOnlyDataApi(
         // must not degrade into "show everything" if the field is wrong.)
         if (!allowed.has(filter.field)) return { columns: [], rows: [] };
         const rows = await db.execute(
-          sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(`"${resolved}"`)} WHERE ${sql.raw(`"${filter.field}"`)} = ${filter.value} LIMIT ${safeLimit}`,
+          sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(`"${resolved}"`)} WHERE ${sql.raw(`"${filter.field}"`)} = ${resolveFilterValue(filter.value)} LIMIT ${safeLimit}`,
         ) as Record<string, unknown>[];
         return { columns: validCols, rows };
       }
