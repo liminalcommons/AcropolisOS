@@ -132,47 +132,63 @@ export async function resolveRefLabels(
   const refCols = refColumnsFor(source, columns, ontology);
   if (refCols.length === 0) return rows;
 
-  // For each resolvable ref column, build an id→label map (batched: one fetch
-  // per distinct target type, deduped by target).
+  // For each resolvable ref column, build an id→label map.
   // labelMaps: column → Map<uuid, label>
   const labelMaps = new Map<string, Map<string, string>>();
 
-  // Dedup fetches across columns that point at the same target type. A type's
-  // full (id, title) set covers every column referencing it.
-  const fetchedByTarget = new Map<CatalogType, Map<string, string>>();
+  // Collect distinct referenced ids PER TARGET TYPE across ALL columns pointing
+  // at that target. This allows a single fetch per target type that covers every
+  // column referencing it, with no 500-row ceiling and no over-fetch (we request
+  // exactly the ids present in the current row set).
+  const idsByTarget = new Map<CatalogType, Set<string>>();
+  const titlePropByTarget = new Map<CatalogType, string>();
 
   for (const ref of refCols) {
-    // Collect distinct non-null UUID values for this column.
-    const ids = new Set<string>();
+    if (!idsByTarget.has(ref.targetCatalogType)) {
+      idsByTarget.set(ref.targetCatalogType, new Set<string>());
+      // title_property is a property of the TARGET type — it is the same for
+      // every column that references that target, so storing it once is correct.
+      titlePropByTarget.set(ref.targetCatalogType, ref.titleProp);
+    }
+    const idSet = idsByTarget.get(ref.targetCatalogType)!;
     for (const row of rows) {
       const v = row[ref.column];
-      if (typeof v === "string" && v.length > 0) ids.add(v);
+      if (typeof v === "string" && v.length > 0) idSet.add(v);
     }
-    if (ids.size === 0) continue;
+  }
 
-    // Fetch (id, title) for the target type once, reusing across columns.
-    let idToLabel = fetchedByTarget.get(ref.targetCatalogType);
-    if (!idToLabel) {
-      idToLabel = new Map<string, string>();
-      // PERMISSION-AWARE: api.select is gated by the viewer's canReadType.
-      // Unauthorized target → { columns: [], rows: [] } (fail-closed, pre-SQL)
-      // → empty map → labels left raw below. No fetch leak.
-      const result = await api.select(ref.targetCatalogType, {
-        columns: ["id", ref.titleProp],
-        limit: 500,
-      });
-      // If the title column was dropped (shouldn't happen — validated above) or
-      // the read was denied, result.rows is empty/sans-title → map stays sparse.
-      for (const trow of result.rows) {
-        const id = trow.id;
-        const label = trow[ref.titleProp];
-        if (typeof id === "string" && id.length > 0 && label != null) {
-          idToLabel.set(id, String(label));
-        }
-      }
-      fetchedByTarget.set(ref.targetCatalogType, idToLabel);
+  // One fetch per distinct target type with EXACTLY the referenced ids.
+  // PERMISSION-AWARE: api.selectByIds is gated by the viewer's canReadType
+  // (fail-closed, pre-SQL) — same gate as api.select. Unauthorized target →
+  // { columns: [], rows: [] } → empty map → labels left raw. No fetch leak.
+  const fetchedByTarget = new Map<CatalogType, Map<string, string>>();
+
+  for (const [targetCatalogType, idSet] of idsByTarget) {
+    if (idSet.size === 0) {
+      fetchedByTarget.set(targetCatalogType, new Map());
+      continue;
     }
-    labelMaps.set(ref.column, idToLabel);
+    const titleProp = titlePropByTarget.get(targetCatalogType)!;
+    const result = await api.selectByIds(
+      targetCatalogType,
+      [...idSet],
+      ["id", titleProp],
+    );
+    const idToLabel = new Map<string, string>();
+    // If title column was dropped or read was denied, rows is empty → map stays sparse.
+    for (const trow of result.rows) {
+      const id = trow.id;
+      const label = trow[titleProp];
+      if (typeof id === "string" && id.length > 0 && label != null) {
+        idToLabel.set(id, String(label));
+      }
+    }
+    fetchedByTarget.set(targetCatalogType, idToLabel);
+  }
+
+  for (const ref of refCols) {
+    const idToLabel = fetchedByTarget.get(ref.targetCatalogType);
+    if (idToLabel) labelMaps.set(ref.column, idToLabel);
   }
 
   if (labelMaps.size === 0) return rows;

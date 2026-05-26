@@ -196,6 +196,57 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
     });
   });
 
+  describe("selectByIds — fail-closed permission gate + parameterization", () => {
+    it("member + restricted type (booking) → {columns:[], rows:[]} and NO SQL executed", async () => {
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+      const result = await api.selectByIds("booking", ["some-uuid"], ["id", "label"]);
+      expect(result).toEqual({ columns: [], rows: [] });
+      // The permission gate must fire BEFORE any SQL — db never touched.
+      expect(db.executeCalls).toBe(0);
+      expect(db.selectCalls).toBe(0);
+    });
+
+    it("steward + restricted type (booking) → reaches SQL and returns the row", async () => {
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const result = await api.selectByIds("booking", ["some-uuid"], ["id", "label"]);
+      expect(result.columns).toContain("id");
+      expect(result.columns).toContain("label");
+      expect(result.rows.length).toBeGreaterThan(0);
+      expect(db.executeCalls).toBeGreaterThan(0);
+    });
+
+    it("unknown type → {columns:[], rows:[]} and no SQL", async () => {
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const result = await api.selectByIds("not_a_type", ["some-uuid"], ["id"]);
+      expect(result).toEqual({ columns: [], rows: [] });
+      expect(db.executeCalls).toBe(0);
+      expect(db.selectCalls).toBe(0);
+    });
+
+    it("empty ids array → {columns, rows:[]} and no SQL executed", async () => {
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const result = await api.selectByIds("booking", [], ["id", "label"]);
+      expect(result.rows).toEqual([]);
+      // No SQL should fire for an empty id list.
+      expect(db.executeCalls).toBe(0);
+      expect(db.selectCalls).toBe(0);
+    });
+
+    it("public type (bed, read:[\"*\"]) → reaches SQL for member viewer", async () => {
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+      const result = await api.selectByIds("bed", ["bed-id-1"], ["id", "code"]);
+      expect(result.columns).toContain("id");
+      expect(result.columns).toContain("code");
+      expect(result.rows.length).toBeGreaterThan(0);
+      expect(db.executeCalls).toBeGreaterThan(0);
+    });
+  });
+
   describe("buildCanReadType predicate semantics", () => {
     it("member: bed allow, booking deny, guest deny, unknown deny", () => {
       const can = buildCanReadType(member, ontology);

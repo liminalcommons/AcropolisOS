@@ -172,6 +172,19 @@ export interface ReadOnlyDataApi {
   ): Promise<{ columns: string[]; rows: Record<string, unknown>[] }>;
 
   /**
+   * SELECT the requested columns from a given ontology type WHERE id IN (ids).
+   * Fetches EXACTLY the referenced ids — no 500-row ceiling, no over-fetch.
+   * Unknown types, unknown columns, or empty ids arrays return empty.
+   * Fail-closed: unauthorized viewer → {columns:[], rows:[]} before any SQL.
+   * Large id sets are chunked to stay under parameter count ceilings.
+   */
+  selectByIds(
+    type: string,
+    ids: string[],
+    columns: string[],
+  ): Promise<{ columns: string[]; rows: Record<string, unknown>[] }>;
+
+  /**
    * SELECT all columns for a given ontology type ordered in DB order.
    * Useful for calendar widgets that bucket results by a date field in-memory.
    * Unknown types or invalid date fields return [].
@@ -260,6 +273,51 @@ export function createReadOnlyDataApi(
         sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(`"${resolved}"`)} LIMIT ${safeLimit}`,
       ) as Record<string, unknown>[];
       return { columns: validCols, rows };
+    },
+
+    // ── selectByIds ────────────────────────────────────────────────────────────
+    async selectByIds(type, ids, columns) {
+      const resolved = resolveType(type);
+      if (!resolved) return { columns: [], rows: [] };
+      // PERMISSION GATE (fail-closed): identical to select — same safe-empty
+      // value, same pre-SQL position. No second permission model.
+      if (!canReadType(resolved)) return { columns: [], rows: [] };
+
+      // Always include "id" so callers can build id→label maps; merge into
+      // requested set then apply the whitelist filter.
+      const requested = columns.includes("id") ? columns : ["id", ...columns];
+      const validCols = safeColumns(resolved, requested);
+      if (validCols.length === 0) return { columns: [], rows: [] };
+
+      // De-dup ids; empty set → nothing to fetch (no query).
+      const uniqueIds = [...new Set(ids)];
+      if (uniqueIds.length === 0) return { columns: validCols, rows: [] };
+
+      const colList = validCols.map((c) => `"${c}"`).join(", ");
+      const tableSql = sql.raw(`"${resolved}"`);
+      const colsSql = sql.raw(colList);
+
+      // Chunk into batches of 500 to stay under any per-statement parameter
+      // ceiling. Each id is BOUND AS A PARAMETER (never interpolated) using
+      // drizzle's sql template + sql.join, exactly as select/count bind filter
+      // values — the same security discipline, extended to a variable-length list.
+      const CHUNK_SIZE = 500;
+      const allRows: Record<string, unknown>[] = [];
+
+      for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+        const chunk = uniqueIds.slice(i, i + CHUNK_SIZE);
+        // Build: id IN ($1, $2, …) with every id as a bound parameter.
+        const inParams = sql.join(
+          chunk.map((id) => sql`${id}`),
+          sql`, `,
+        );
+        const rows = await db.execute(
+          sql`SELECT ${colsSql} FROM ${tableSql} WHERE "id" IN (${inParams})`,
+        ) as Record<string, unknown>[];
+        allRows.push(...rows);
+      }
+
+      return { columns: validCols, rows: allRows };
     },
 
     // ── byDate ─────────────────────────────────────────────────────────────────

@@ -15,6 +15,8 @@
 //   3. rows with no ref columns → unchanged.
 //   4. null / missing ref value → stays as-is.
 //   5. batched: one fetch per distinct target type, not per row (no N+1).
+//   6. scale: target with >500 rows — ref to row #550 RESOLVES (no 500 ceiling).
+//   7. precision: single referenced id → selectByIds called with exactly 1 id.
 
 import path from "node:path";
 import { describe, expect, it, beforeAll } from "vitest";
@@ -53,36 +55,64 @@ const GUEST_ROWS = [
 
 // ── Stub db ──────────────────────────────────────────────────────────────────
 //
-// resolveRefLabels fetches target labels via api.select(), which on the select
-// path issues `db.execute(sql)` (column-list SELECT). The stub inspects the
-// generated SQL text to decide which table is being read and returns the right
-// fixture rows projected to the requested columns. It also COUNTS execute calls
-// per table so we can assert batching (one fetch per distinct target type).
+// resolveRefLabels now fetches target labels via api.selectByIds(), which issues
+// db.execute(sql) containing a WHERE "id" IN (...) clause. The stub inspects the
+// SQL text to decide which table is being queried, records the requested ids and
+// call counts so we can assert (a) exact-id fetching and (b) batching discipline.
+//
+// LARGE_ROOM_ROWS: a fixture of 600 rooms, used to prove that selectByIds
+// resolves row #550 correctly (no 500-row ceiling exists in the new path).
+
+const LARGE_ROOM_ROWS: { id: string; code: string }[] = Array.from(
+  { length: 600 },
+  (_, i) => ({ id: `room-${i + 1}`, code: `R-${i + 1}` }),
+);
 
 interface StubDb {
   execCountByTable: Record<string, number>;
+  requestedIdsByTable: Record<string, string[][]>;
   asDatabase(): Database;
 }
 
-function makeStubDb(): StubDb {
+function makeStubDb(opts?: { largeRoomFixture?: boolean }): StubDb {
   const execCountByTable: Record<string, number> = {};
+  const requestedIdsByTable: Record<string, string[][]> = {};
+  const uselargeRooms = opts?.largeRoomFixture ?? false;
+
   const stub = {
     execCountByTable,
+    requestedIdsByTable,
     asDatabase(): Database {
       return this as unknown as Database;
     },
     async execute(query: unknown) {
-      // drizzle sql template → has a queryChunks / or we can stringify it.
-      // read-api builds: SELECT "id", "<title>" FROM "<table>" LIMIT n
+      // read-api selectByIds builds:
+      //   SELECT "id", "<title>" FROM "<table>" WHERE "id" IN ($1, $2, …)
+      // read-api select builds:
+      //   SELECT <cols> FROM "<table>" LIMIT n
+      // Both reach db.execute; we handle both shapes.
       const text = stringifySql(query);
       const table = /FROM\s+"([a-z_]+)"/i.exec(text)?.[1] ?? "";
       execCountByTable[table] = (execCountByTable[table] ?? 0) + 1;
 
-      if (table === "room") return projectRows(ROOM_ROWS, text);
+      // Extract bound parameter values for id tracking.
+      // drizzle sql template stores params as non-raw chunks; stringifySql
+      // renders them inline. We extract them from the SQL text representation
+      // when an IN clause is present (used only by selectByIds path).
+      const inMatch = /WHERE\s+"id"\s+IN\s+\(([^)]+)\)/i.exec(text);
+      if (inMatch) {
+        // params are rendered as their string value between commas
+        const paramValues = inMatch[1].split(",").map((s) => s.trim());
+        if (!requestedIdsByTable[table]) requestedIdsByTable[table] = [];
+        requestedIdsByTable[table].push(paramValues);
+      }
+
+      const roomSource = uselargeRooms ? LARGE_ROOM_ROWS : ROOM_ROWS;
+      if (table === "room") return projectRows(roomSource, text);
       if (table === "guest") return projectRows(GUEST_ROWS, text);
       return [];
     },
-    // count/byDate paths are unused by resolveRefLabels (it only calls select),
+    // count/byDate paths are unused by resolveRefLabels (it only calls selectByIds),
     // but provide a benign chain so any stray call is harmless.
     select() {
       return {
@@ -302,5 +332,36 @@ describe("batching — one fetch per distinct target type (no N+1)", () => {
     expect(out[1].room).toBe("P5");
     // Exactly ONE read of the room table for all 10 rows.
     expect(db.execCountByTable.room).toBe(1);
+  });
+});
+
+describe("scale — no 500-row ceiling (selectByIds fetches exactly referenced ids)", () => {
+  it("ref to row #550 in a 600-row fixture resolves (old limit:500 path would have missed it)", async () => {
+    // The old api.select(... limit:500) would never return row-550 because it
+    // fetched the first 500 rows of the table. selectByIds fetches ONLY the
+    // referenced id, so row #550 resolves regardless of total table size.
+    const db = makeStubDb({ largeRoomFixture: true });
+    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+    const rows = [{ id: "bed-x", code: "X", room: "room-550" }];
+    const out = await resolveRefLabels(rows, "bed", ["code", "room"], ontology, api);
+    // LARGE_ROOM_ROWS[549] → { id: "room-550", code: "R-550" }
+    expect(out[0].room).toBe("R-550");
+  });
+
+  it("single referenced id → selectByIds is called with exactly that 1 id (no over-fetch)", async () => {
+    // Proves precision: only the required ids are requested — not hundreds.
+    const db = makeStubDb();
+    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+    const rows = [{ id: "bed-1", code: "D3-A2", room: "room-1" }];
+    await resolveRefLabels(rows, "bed", ["code", "room"], ontology, api);
+
+    // The room table must have been read exactly once.
+    expect(db.execCountByTable.room).toBe(1);
+    // The IN clause must have contained exactly 1 id: "room-1".
+    const calls = db.requestedIdsByTable.room;
+    expect(calls).toBeDefined();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toHaveLength(1);
+    expect(calls[0][0]).toBe("room-1");
   });
 });
