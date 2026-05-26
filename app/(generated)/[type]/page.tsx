@@ -1,9 +1,7 @@
 import path from "node:path";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { sql } from "drizzle-orm";
 import { loadOntology } from "@/lib/ontology/load";
-import { getDb } from "@/lib/db/client";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { prettify } from "@/lib/prettify";
 
@@ -43,15 +41,8 @@ export default async function ObjectTypeListPage(
   const { type } = await params;
   if (!isValidIdent(type)) notFound();
 
-  // SECURITY: this generic per-type reader does `SELECT *` over ARBITRARY object
-  // types via raw SQL, bypassing the permission boundary. Gate to authenticated
-  // stewards (authorized for all types). notFound() so the route isn't revealed.
-  // Proper fix (logged for Via Positiva): read via ctx.objects[type].findMany()
-  // for per-type fail-closed gating instead of a blanket steward gate + raw SQL.
   const chatRuntime = await buildChatRuntime();
-  if (isAnonymous(chatRuntime.actor) || chatRuntime.actor.role !== "steward") {
-    notFound();
-  }
+  if (isAnonymous(chatRuntime.actor)) notFound();
 
   const ontology = await loadOntology(
     path.join(process.cwd(), "ontology"),
@@ -60,6 +51,9 @@ export default async function ObjectTypeListPage(
 
   const objectType = ontology.object_types[type];
   if (!objectType) notFound();
+
+  const access = (chatRuntime.ctx.objects as Record<string, { findMany: () => Promise<Record<string, unknown>[]>; findById: (id: string) => Promise<Record<string, unknown> | null> }>)[type];
+  if (!access) notFound();
 
   const tableName = snakeCase(type);
   const propertyNames = Object.keys(objectType.properties ?? {});
@@ -76,14 +70,10 @@ export default async function ObjectTypeListPage(
     return { name: p, type: t };
   });
 
-  const db = getDb();
   let rows: Array<Record<string, unknown>> = [];
   let queryError: string | null = null;
   try {
-    const result = (await db.execute(
-      sql.raw(`SELECT * FROM "${tableName}" ORDER BY 1 LIMIT 500`),
-    )) as unknown as Array<Record<string, unknown>>;
-    rows = result;
+    rows = await access.findMany();
   } catch (err) {
     queryError = err instanceof Error ? err.message : String(err);
   }

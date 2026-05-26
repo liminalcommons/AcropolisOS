@@ -1,9 +1,7 @@
 import path from "node:path";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { sql } from "drizzle-orm";
 import { loadOntology } from "@/lib/ontology/load";
-import { getDb } from "@/lib/db/client";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { prettify } from "@/lib/prettify";
 
@@ -12,13 +10,6 @@ export const runtime = "nodejs";
 
 interface PageProps {
   params: Promise<{ type: string; id: string }>;
-}
-
-function snakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[-\s]+/g, "_")
-    .toLowerCase();
 }
 
 function isValidIdent(s: string): boolean {
@@ -38,12 +29,8 @@ export default async function ObjectDetailPage(
   const { type, id } = await params;
   if (!isValidIdent(type)) notFound();
 
-  // SECURITY: gate to authenticated stewards (same as the list view). This raw
-  // per-type detail reader bypasses the permission boundary. notFound() hides it.
   const chatRuntime = await buildChatRuntime();
-  if (isAnonymous(chatRuntime.actor) || chatRuntime.actor.role !== "steward") {
-    notFound();
-  }
+  if (isAnonymous(chatRuntime.actor)) notFound();
 
   const ontology = await loadOntology(
     path.join(process.cwd(), "ontology"),
@@ -52,21 +39,11 @@ export default async function ObjectDetailPage(
   const objectType = ontology.object_types[type];
   if (!objectType) notFound();
 
-  const tableName = snakeCase(type);
-  const db = getDb();
+  const access = (chatRuntime.ctx.objects as Record<string, { findMany: () => Promise<Record<string, unknown>[]>; findById: (id: string) => Promise<Record<string, unknown> | null> }>)[type];
+  if (!access) notFound();
 
-  let row: Record<string, unknown> | null = null;
-  let queryError: string | null = null;
-  try {
-    const result = (await db.execute(
-      sql.raw(
-        `SELECT * FROM "${tableName}" WHERE id = '${id.replace(/'/g, "''")}' LIMIT 1`,
-      ),
-    )) as unknown as Array<Record<string, unknown>>;
-    row = result[0] ?? null;
-  } catch (err) {
-    queryError = err instanceof Error ? err.message : String(err);
-  }
+  const row = await access.findById(id);
+  if (!row) notFound();
 
   return (
     <main>
@@ -81,31 +58,22 @@ export default async function ObjectDetailPage(
           {prettify(type)} · <span className="font-mono text-muted-foreground">{id.slice(0, 8)}</span>
         </h1>
 
-        {queryError ? (
-          <div className="mt-6 rounded-md border border-destructive/40 bg-destructive/15 px-3 py-2 text-sm text-destructive">
-            <p className="font-medium">query failed</p>
-            <p className="mt-1 font-mono text-xs">{queryError}</p>
-          </div>
-        ) : !row ? (
-          <p className="mt-8 text-sm text-muted-foreground">no row with id {id}</p>
-        ) : (
-          <dl className="mt-8 divide-y divide-border rounded-md border border-border">
-            {Object.entries(row).map(([k, v]) => (
-              <div
-                key={k}
-                className="grid grid-cols-3 gap-4 px-4 py-3"
-                data-testid={`field-${k}`}
-              >
-                <dt className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                  {k}
-                </dt>
-                <dd className="col-span-2 font-mono text-sm leading-relaxed text-foreground">
-                  {formatValue(v)}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
+        <dl className="mt-8 divide-y divide-border rounded-md border border-border">
+          {Object.entries(row).map(([k, v]) => (
+            <div
+              key={k}
+              className="grid grid-cols-3 gap-4 px-4 py-3"
+              data-testid={`field-${k}`}
+            >
+              <dt className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                {k}
+              </dt>
+              <dd className="col-span-2 font-mono text-sm leading-relaxed text-foreground">
+                {formatValue(v)}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </main>
   );
