@@ -34,11 +34,23 @@ const ORG_DASHBOARD_PATH = path.join(UPLOADS_DIR, "org-dashboard.json");
 
 // ── DEFAULT ───────────────────────────────────────────────────────────────────
 //
-// The bed-inventory data_table that /org rendered hardcoded before step-2b.
-// Returned verbatim when the dashboard file is absent, so the page is unchanged
-// until the steward composes a view. This IS the former ADMIN_DASHBOARD_DESCRIPTORS.
+// The steward's default surface, returned verbatim when no view has been
+// composed. The "awaiting your decision" queue (OPEN AgentBlocker rows —
+// agent-to-human escalations) renders FIRST so the steward sees pending
+// decisions before inventory; the bed-inventory data_table follows. Both are
+// governed data_table descriptors resolved through ReadOnlyDataApi.
 export const DEFAULT_ORG_DASHBOARD: OrgDashboardConfig = {
   widgets: [
+    {
+      id: "admin-veto-queue",
+      kind: "data_table",
+      config: {
+        type: "agent_blocker",
+        columns: ["summary", "reason_kind", "blocked_actor_id", "resolution_mode", "created_at"],
+        filter: { field: "status", value: "open" },
+        limit: 50,
+      },
+    },
     {
       id: "admin-bed-list",
       kind: "data_table",

@@ -30,6 +30,7 @@ export const CATALOG_VALID_TYPES = [
   "room",
   "shift",
   "work_trade_agreement",
+  "agent_blocker",
 ] as const;
 
 export type CatalogType = (typeof CATALOG_VALID_TYPES)[number];
@@ -43,6 +44,7 @@ export const CATALOG_VALID_FIELDS: Record<CatalogType, string[]> = {
   room: ["id", "code", "kind", "capacity", "floor", "notes"],
   shift: ["id", "label", "kind", "starts_at", "duration_hours", "claimed_by", "status", "notes", "member_id"],
   work_trade_agreement: ["id", "label", "guest", "bed_comp", "hours_per_week", "start_date", "end_date", "status", "notes"],
+  agent_blocker: ["id", "summary", "reason_kind", "blocked_actor_id", "status", "resolution_mode", "created_at", "blocked_work_ref", "detail"],
 };
 
 // ── Widget kind names ─────────────────────────────────────────────────────────
@@ -75,6 +77,12 @@ export type MetricConfig = z.infer<typeof MetricConfigSchema>;
 export const DataTableConfigSchema = z.object({
   type: CatalogTypeSchema,
   columns: z.array(z.string()).min(1),
+  filter: z
+    .object({
+      field: z.string(),
+      value: z.string(),
+    })
+    .optional(),
   limit: z.number().int().min(1).max(500).optional().default(20),
 });
 export type DataTableConfig = z.infer<typeof DataTableConfigSchema>;
@@ -158,9 +166,11 @@ export const WIDGET_CATALOG: {
   data_table: {
     configSchema: DataTableConfigSchema,
     queryBinding: async (config, api) => {
-      // api.select() validates type + columns against whitelists internally.
+      // api.select() validates type + columns against whitelists internally,
+      // and validates+parameterizes the optional filter (field whitelist + bound value).
       return api.select(config.type, {
         columns: config.columns,
+        filter: config.filter,
         limit: config.limit ?? 20,
       });
     },
@@ -259,6 +269,17 @@ export function validateWidgetConfig(
         error: "unknown_columns",
         detail: { type: cfg.type, unknown_columns: badCols },
       };
+    }
+    // Optional filter field must reference a real ontology field (mirrors metric).
+    if (cfg.filter) {
+      const valid = CATALOG_VALID_FIELDS[cfg.type]?.includes(cfg.filter.field);
+      if (!valid) {
+        return {
+          ok: false,
+          error: "unknown_filter_field",
+          detail: { type: cfg.type, unknown_field: cfg.filter.field },
+        };
+      }
     }
   }
 

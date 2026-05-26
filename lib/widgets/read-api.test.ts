@@ -247,6 +247,51 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
     });
   });
 
+  describe("data_table filter pass-through (agent_blocker veto-queue)", () => {
+    // The /org default veto-queue is a data_table over agent_blocker filtered
+    // to status=open. agent_blocker read perms are [steward, member_self], so a
+    // steward viewer reaches SQL; the filter field is whitelisted + bound.
+    it("steward + agent_blocker with status=open filter → reaches filtered SQL", async () => {
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const result = await api.select("agent_blocker", {
+        columns: ["summary", "reason_kind", "blocked_actor_id"],
+        filter: { field: "status", value: "open" },
+        limit: 50,
+      });
+      expect(result.columns).toEqual(["summary", "reason_kind", "blocked_actor_id"]);
+      expect(result.rows.length).toBeGreaterThan(0);
+      // A filtered select goes through db.execute (raw SQL with bound value).
+      expect(db.executeCalls).toBeGreaterThan(0);
+    });
+
+    it("member + agent_blocker → empty and no SQL (read:[steward, member_self], type gate denies member)", async () => {
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+      const result = await api.select("agent_blocker", {
+        columns: ["summary"],
+        filter: { field: "status", value: "open" },
+        limit: 50,
+      });
+      expect(result).toEqual({ columns: [], rows: [] });
+      expect(db.executeCalls).toBe(0);
+      expect(db.selectCalls).toBe(0);
+    });
+
+    it("invalid filter field falls through to an unfiltered select (still gated)", async () => {
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const result = await api.select("agent_blocker", {
+        columns: ["summary"],
+        filter: { field: "not_a_real_field", value: "x" },
+        limit: 10,
+      });
+      // Unknown filter field is dropped (not interpolated); the read still runs.
+      expect(result.columns).toEqual(["summary"]);
+      expect(db.executeCalls).toBeGreaterThan(0);
+    });
+  });
+
   describe("buildCanReadType predicate semantics", () => {
     it("member: bed allow, booking deny, guest deny, unknown deny", () => {
       const can = buildCanReadType(member, ontology);

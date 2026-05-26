@@ -34,6 +34,7 @@ import {
   room as roomTable,
   shift as shiftTable,
   work_trade_agreement as wtaTable,
+  agent_blocker as agentBlockerTable,
 } from "@/lib/db/schema.generated";
 import {
   CATALOG_VALID_TYPES,
@@ -53,6 +54,7 @@ const TABLE_MAP: Record<CatalogType, typeof guestTable> = {
   room: roomTable as unknown as typeof guestTable,
   shift: shiftTable as unknown as typeof guestTable,
   work_trade_agreement: wtaTable as unknown as typeof guestTable,
+  agent_blocker: agentBlockerTable as unknown as typeof guestTable,
 };
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -110,6 +112,7 @@ const CATALOG_TYPE_TO_OBJECT_TYPE: Record<CatalogType, string> = {
   room: "Room",
   shift: "Shift",
   work_trade_agreement: "WorkTradeAgreement",
+  agent_blocker: "AgentBlocker",
 };
 
 /**
