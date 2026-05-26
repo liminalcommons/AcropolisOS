@@ -31,6 +31,10 @@ import {
 } from "./catalog";
 import { createReadOnlyDataApi, type CanReadType } from "./read-api";
 import { compose_dashboard, type ResolvedWidget } from "./compose";
+import { resolveRefLabels } from "./resolve-refs";
+import { loadOntology } from "@/lib/ontology/load";
+import { getRuntimeOntologyDir } from "@/lib/setup/paths";
+import type { Ontology } from "@/lib/ontology/schema";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -219,6 +223,12 @@ async function runDescriptors(
   // A widget bound to a restricted type (e.g. booking) returns safe-empty for
   // a viewer not permitted to read it — fail-closed, before any SQL.
   const api = createReadOnlyDataApi(db, canReadType);
+  // Ontology drives REF-LABEL resolution (which columns are FKs, target's
+  // title_property). Loaded once per call (cached across calls — disk reads are
+  // non-trivial and the ontology only changes on /apply, which restarts the
+  // process). REUSES the same `api` (same canReadType) for fetching target
+  // labels, so resolution is fail-closed on the TARGET type's read permission.
+  const ontology = await getRenderOntologyCached();
   const resolved: ResolvedWidget[] = [];
 
   for (let i = 0; i < descriptors.length; i++) {
@@ -244,11 +254,22 @@ async function runDescriptors(
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = await entry.queryBinding(validation.config as any, api);
+      // REF-LABEL resolution: rewrite FK-UUID columns to the target's label.
+      // Only column-based widgets (data_table/roster) carry ref columns; the
+      // resolver reuses `api` (fail-closed on the TARGET type's read permission)
+      // so an unreadable target leaves the raw UUID in place — no leak.
+      const resolvedData = await applyRefResolution(
+        kind,
+        validation.config,
+        data,
+        ontology,
+        api,
+      );
       resolved.push({
         id: d.id ?? `role-default-${i}`,
         kind,
         config,
-        data: data as MetricData | DataTableData | RosterData | CalendarData,
+        data: resolvedData as MetricData | DataTableData | RosterData | CalendarData,
       });
     } catch {
       // Skip widgets whose binding throws — don't crash the dashboard
@@ -256,6 +277,52 @@ async function runDescriptors(
   }
 
   return resolved;
+}
+
+// ── REF-LABEL resolution wiring ──────────────────────────────────────────────
+//
+// data_table → resolve over config.columns, rewrite data.rows.
+// roster      → resolve over config.fields,  rewrite data.entries.
+// metric/calendar → no column-based ref values; returned unchanged.
+
+async function applyRefResolution(
+  kind: CatalogKind,
+  config: unknown,
+  data: unknown,
+  ontology: Ontology,
+  api: ReturnType<typeof createReadOnlyDataApi>,
+): Promise<unknown> {
+  if (kind === "data_table") {
+    const cfg = config as { type: string; columns: string[] };
+    const d = data as DataTableData;
+    const rows = await resolveRefLabels(d.rows, cfg.type, cfg.columns, ontology, api);
+    return { ...d, rows } satisfies DataTableData;
+  }
+  if (kind === "roster") {
+    const cfg = config as { type: string; fields: string[] };
+    const d = data as RosterData;
+    const entries = await resolveRefLabels(d.entries, cfg.type, cfg.fields, ontology, api);
+    return { ...d, entries } satisfies RosterData;
+  }
+  return data;
+}
+
+// Lazily-cached ontology for the render path. Mirrors chat-runtime's cache:
+// disk reads are non-trivial and the ontology only changes on /apply (which
+// restarts the process). Keyed by dir so a changed ACROPOLISOS_ONTOLOGY_DIR
+// (tests) reloads rather than serving a stale cache.
+let cachedRenderOntology: Ontology | null = null;
+let cachedRenderOntologyDir: string | null = null;
+
+async function getRenderOntologyCached(): Promise<Ontology> {
+  const dir = getRuntimeOntologyDir();
+  if (cachedRenderOntology && cachedRenderOntologyDir === dir) {
+    return cachedRenderOntology;
+  }
+  const ontology = await loadOntology(dir);
+  cachedRenderOntology = ontology;
+  cachedRenderOntologyDir = dir;
+  return ontology;
 }
 
 // ── composeTierRoleDefault ────────────────────────────────────────────────────
