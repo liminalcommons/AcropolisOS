@@ -43,9 +43,23 @@ const ORG_DASHBOARD_PATH = path.join(UPLOADS_DIR, "org-dashboard.json");
 export const DEFAULT_ORG_DASHBOARD: OrgDashboardConfig = {
   widgets: [
     {
+      // The headline "M awaiting you" count — the at-a-glance number of
+      // agent→human escalations the steward still owes a decision on. Governed
+      // metric (api.count over agent_blocker, filtered status=open); the detail
+      // list follows below.
+      id: "admin-escalation-count",
+      kind: "metric",
+      title: "Awaiting your decision",
+      config: {
+        type: "agent_blocker",
+        agg: "count",
+        filter: { field: "status", value: "open" },
+      },
+    },
+    {
       id: "admin-veto-queue",
       kind: "data_table",
-      title: "Awaiting your decision",
+      title: "Open escalations",
       config: {
         // "id" is FIRST so the renderer has the action target; it is filtered
         // out of the VISIBLE columns and used only as the row key + objectId.
