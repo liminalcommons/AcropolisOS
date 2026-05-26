@@ -24,16 +24,21 @@ export interface RowAction {
   refParam: string;
 }
 
-// SECURITY SAFELIST (interim). The structural "single required ref param" rule
-// is necessary but NOT sufficient: it also admits privileged always_confirm
-// actions like `promote_to_steward` (member ref) and `check_in`/`check_out`
-// (booking ref). A one-click row affordance invokes with bypassConfirmation=true,
-// so exposing those would silently defeat their always_confirm contract (e.g.
-// minting a steward with no confirmation). Until action_types carry an explicit
-// ontology opt-in (e.g. `row_action: true`) — the proper governed fix — only
-// these vetted actions may surface as one-click row affordances. Both the render
-// helper and the server-side invocation gate consult this set.
-export const ROW_ACTION_SAFELIST: ReadonlySet<string> = new Set(["dismiss_blocker"]);
+// SECURITY GATE (governed by the ontology). The structural "single required ref
+// param" rule is necessary but NOT sufficient: it also admits privileged
+// always_confirm actions like `promote_to_steward` (member ref) and
+// `check_in`/`check_out` (booking ref). A one-click row affordance invokes with
+// bypassConfirmation=true, so exposing those would silently defeat their
+// always_confirm contract (e.g. minting a steward with no confirmation). An
+// action must therefore OPT IN via `row_action: true` in its action_type YAML to
+// surface as a one-click affordance — the safe set lives in the ontology, not a
+// hand-maintained code list. Both the render helper and the server-side
+// invocation gate (row-action.server.ts) enforce this flag.
+export function isRowActionEnabled(
+  actionDef: Ontology["action_types"][string],
+): boolean {
+  return actionDef.row_action === true;
+}
 
 // Catalog snake_case type → ontology PascalCase object-type name.
 // Same forward mapping read-api.ts's CATALOG_TYPE_TO_OBJECT_TYPE encodes and
@@ -103,10 +108,11 @@ export function oneClickRowActionsForType(
 
   const out: RowAction[] = [];
   for (const [actionName, def] of Object.entries(ontology.action_types)) {
-    // SECURITY: structural qualification AND the explicit safelist. The rule
-    // alone admits privileged actions (promote_to_steward, check_in/out); the
-    // safelist keeps the confirmation-bypassing one-click surface to vetted ones.
-    if (!ROW_ACTION_SAFELIST.has(actionName)) continue;
+    // SECURITY: ontology opt-in (`row_action: true`) AND structural qualification.
+    // The structural rule alone admits privileged actions (promote_to_steward,
+    // check_in/out); the opt-in keeps the confirmation-bypassing one-click surface
+    // to actions the ontology explicitly declares safe.
+    if (!isRowActionEnabled(def)) continue;
     const refParam = qualifyingRefParam(def, objectTypeName);
     if (refParam) {
       out.push({ action: actionName, refParam });

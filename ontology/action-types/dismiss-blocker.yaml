@@ -13,3 +13,6 @@ dismiss_blocker:
   permissions: [member_self]
   agent_policy: always_confirm
   side_effects: [audit, notify_member]
+  # Safe to surface as a one-click row affordance (steward veto-queue Dismiss).
+  # Dropping an escalation is low-stakes + reversible (the agent can re-flag).
+  row_action: true

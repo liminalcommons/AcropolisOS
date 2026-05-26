@@ -9,7 +9,7 @@
 
 import path from "node:path";
 import { describe, expect, it, beforeAll } from "vitest";
-import { oneClickRowActionsForType, ROW_ACTION_SAFELIST } from "./row-actions";
+import { oneClickRowActionsForType, isRowActionEnabled } from "./row-actions";
 import { loadOntology } from "@/lib/ontology/load";
 import type { Ontology } from "@/lib/ontology/schema";
 
@@ -41,15 +41,21 @@ describe("oneClickRowActionsForType", () => {
     expect(oneClickRowActionsForType("room", ontology)).toEqual([]);
   });
 
-  it("SECURITY: does NOT expose promote_to_steward for member (safelisted out)", () => {
+  it("SECURITY: does NOT expose promote_to_steward for member (no ontology opt-in)", () => {
     // promote_to_steward STRUCTURALLY qualifies (single required ref<Member>),
     // but it is a privileged always_confirm action — exposing it as a
     // confirmation-bypassing one-click affordance would let a steward silently
-    // mint stewards. The safelist must exclude it.
+    // mint stewards. It lacks `row_action: true`, so it must be excluded.
     const actions = oneClickRowActionsForType("member", ontology).map((a) => a.action);
     expect(actions).not.toContain("promote_to_steward");
-    expect(ROW_ACTION_SAFELIST.has("promote_to_steward")).toBe(false);
-    // Only dismiss_blocker is currently safelisted.
-    expect([...ROW_ACTION_SAFELIST]).toEqual(["dismiss_blocker"]);
+    expect(isRowActionEnabled(ontology.action_types.promote_to_steward)).toBe(false);
+  });
+
+  it("SECURITY: the safe set is governed by the ontology opt-in, not code", () => {
+    // dismiss_blocker opts in (`row_action: true`); the privileged single-ref
+    // actions do not. The gate is the ontology flag, enforced at render + invoke.
+    expect(isRowActionEnabled(ontology.action_types.dismiss_blocker)).toBe(true);
+    expect(isRowActionEnabled(ontology.action_types.check_in)).toBe(false);
+    expect(isRowActionEnabled(ontology.action_types.check_out)).toBe(false);
   });
 });

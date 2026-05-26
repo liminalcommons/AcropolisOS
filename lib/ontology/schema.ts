@@ -159,6 +159,14 @@ export const ActionType = z
     agent_policy: AgentPolicy.default("always_confirm"),
     side_effects: z.array(SideEffectChannel).optional(),
     side_effects_config: SideEffectsConfig.optional(),
+    // Opt-in: may this action surface as a ONE-CLICK row affordance on a
+    // data_table (e.g. the steward's veto-queue "Dismiss")? Such affordances
+    // invoke with bypassConfirmation=true, so this is a SECURITY declaration —
+    // only actions explicitly marked here may be one-click-invoked. The
+    // structural single-required-ref rule (lib/widgets/row-actions.ts) is
+    // necessary but not sufficient; this flag gates which qualifying actions
+    // are actually safe (excludes e.g. promote_to_steward, check_in/out).
+    row_action: z.boolean().optional(),
   })
   .strict();
 export type ActionType = z.infer<typeof ActionType>;
