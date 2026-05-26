@@ -21,35 +21,20 @@ import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { getDb } from "@/lib/db/client";
 import { resolveDescriptors } from "@/lib/widgets/per-user";
 import { buildCanReadType } from "@/lib/widgets/read-api";
+import { readOrgDashboard } from "@/lib/org-dashboard/store";
 import { ResolvedWidgetCard } from "@/components/dashboard/ResolvedWidgetCard";
 import type { ResolvedWidget } from "@/lib/widgets/compose";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// ── Fixed admin dashboard config ──────────────────────────────────────────────
+// ── Org dashboard config ──────────────────────────────────────────────────────
 //
-// ONE data_table widget over Bed. Columns are every human-useful field in
-// CATALOG_VALID_FIELDS["bed"]: code, room, is_bottom_bunk, out_of_service, notes.
-// (There is no "status" field on bed — see CATALOG_VALID_FIELDS in catalog.ts.)
-// Config shape matches DataTableConfigSchema exactly (type, columns, limit).
+// Step-2b: the dashboard descriptors now come from the persisted org-dashboard
+// config (readOrgDashboard). When the steward has composed nothing the store
+// returns its DEFAULT — the bed-inventory data_table — so this page looks
+// identical until a view is composed via the compose_view chat tool.
 //
-// This is the "fixed default admin dashboard config" — no persistence layer.
-// When agent-driven composition is wired up later, these descriptors will be
-// replaced by whatever the steward pins to their member_context.
-
-const ADMIN_DASHBOARD_DESCRIPTORS = [
-  {
-    id: "admin-bed-list",
-    kind: "data_table" as const,
-    config: {
-      type: "bed" as const,
-      columns: ["code", "room", "is_bottom_bunk", "out_of_service", "notes"],
-      limit: 100,
-    },
-  },
-];
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function OrgPage(): Promise<React.ReactElement> {
@@ -88,7 +73,8 @@ export default async function OrgPage(): Promise<React.ReactElement> {
   const canReadType = buildCanReadType(chatRuntime.actor, chatRuntime.ontology);
   let widgets: ResolvedWidget[] = [];
   try {
-    widgets = await resolveDescriptors(db, ADMIN_DASHBOARD_DESCRIPTORS, canReadType);
+    const dashboard = await readOrgDashboard();
+    widgets = await resolveDescriptors(db, dashboard.widgets, canReadType);
   } catch {
     // Non-fatal — renders empty state if resolution fails
   }
@@ -103,20 +89,22 @@ export default async function OrgPage(): Promise<React.ReactElement> {
             Org dashboard
           </h1>
           <p className="text-sm text-muted-foreground">
-            Steward view — all beds, rooms, and service status.
+            Steward view — composed via chat. Ask to add a table, list, or metric
+            of any type.
           </p>
         </div>
 
         {/* Section label */}
         <div className="text-xs uppercase tracking-widest text-muted-foreground border-b border-border pb-2">
-          Bed inventory
+          Composed view
         </div>
 
         {/* Widget grid — governed catalog widgets via resolveDescriptors */}
         {widgets.length === 0 ? (
           <div className="rounded-lg border border-border bg-card/20 p-8 text-center">
             <p className="text-sm text-muted-foreground">
-              No data available. Seed bed records to populate this view.
+              No data available. Compose a view in chat or seed records to
+              populate this dashboard.
             </p>
           </div>
         ) : (
@@ -129,10 +117,9 @@ export default async function OrgPage(): Promise<React.ReactElement> {
 
         {/* Footer */}
         <p className="text-xs text-muted-foreground pt-4 border-t border-border">
-          Read-only view. Data flows through the governed widget catalog (
-          <span className="font-mono">data_table</span> over{" "}
-          <span className="font-mono">bed</span>
-          ) via <span className="font-mono">ReadOnlyDataApi</span>.
+          Read-only view. Data flows through the governed widget catalog via{" "}
+          <span className="font-mono">ReadOnlyDataApi</span> — composed from the
+          ontology, fail-closed per-type read permission.
         </p>
       </div>
     </main>

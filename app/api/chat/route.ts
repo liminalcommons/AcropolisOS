@@ -33,6 +33,9 @@ import { buildMeReadTools } from "@/lib/agent/read-tools-me";
 import { buildN8nReadTools } from "@/lib/agent/n8n-tools";
 import { designTheme } from "@/lib/theme/design";
 import { getOrCreateMemberContext } from "@/lib/me/fetchers/member-context";
+import { buildCanReadType } from "@/lib/widgets/read-api";
+import { composeOrgView } from "@/lib/org-dashboard/compose-view";
+import { CATALOG_KINDS, CATALOG_VALID_TYPES } from "@/lib/widgets/catalog";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -59,6 +62,7 @@ const APPLY_ACTION_INSTRUCTIONS = [
   "  - apply_action: invoke a typed action to mutate LIVE state immediately (e.g., change_tier on an existing Member, record_attendance). These commit when called.",
   "  - n8n (list_workflows, create_workflow): inspect and create automation workflows in n8n. Use list_workflows when the user asks what automations exist or what's connected. Use create_workflow when the user asks to set up an automation or materialize an action path as a workflow. If either tool returns 'n8n not connected', inform the user the API key needs to be configured.",
   "  - design_theme: when the user asks to re-skin / re-color the app ('make the theme oceanic', 'give me a warm earthy palette', 'I want a high-contrast theme'), call design_theme with their described look. It designs a structurally + accessibility-validated palette and applies it for the current member. Tell the user it's applied (or report the reason if it returns ok:false).",
+  "  - compose_view: when the steward asks to show/add a table, list, metric, or calendar of some type on the org dashboard ('show me a table of guests on the dashboard', 'add a count of open shifts', 'put the bookings on /org'), call compose_view with the widget kind (data_table | roster | metric | calendar), the ontology type, and the columns/fields they want. The view appears on /org immediately — no approval step. Calling compose_view again for the same type+kind REPLACES that widget. If it returns ok:false, tell the user the reason (e.g. you are not authorized to read that type).",
   "Rules: never propose a new object type the ontology already has — call describe_<type> or query_<type> first to verify. Use apply_action only when the user asks to do something on the live data and the action_type already exists. If they ask for new behavior, propose first.",
   "Some actions have a confirmation policy. If apply_action returns confirmation_required, present the requested change in your text reply and let the user click the Confirm button — do NOT attempt to re-call apply_action yourself.",
 ].join(" ");
@@ -162,6 +166,54 @@ export async function POST(req: Request): Promise<Response> {
     },
   });
 
+  // Step-2b KEYSTONE: compose_view — the agent composes a GOVERNED widget view
+  // onto the steward /org dashboard. The view is a catalog widget descriptor
+  // (NOT free-form code); composeOrgView validates kind/type/columns against the
+  // catalog schemas AND gates on the actor's per-type read permission
+  // (buildCanReadType, fail-closed — same fence the render path uses) before
+  // persisting. The composed view appears immediately (no approval gate).
+  const composeActor = runtime.actor;
+  const composeOntology = runtime.ontology;
+  const compose_view = tool({
+    description:
+      "Compose a governed widget view onto the steward org dashboard (/org). A view is a catalog widget (data_table, roster, metric, or calendar) over an ontology type — not free-form code. The widget appears immediately. Re-composing the same type+kind replaces that widget.",
+    inputSchema: z.object({
+      kind: z
+        .enum(CATALOG_KINDS)
+        .describe("The widget kind: data_table | roster | metric | calendar."),
+      type: z
+        .enum(CATALOG_VALID_TYPES)
+        .describe("The ontology type to display, e.g. guest, shift, booking, event."),
+      columns: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "For data_table/roster: the columns/fields to show. For calendar: the date field as the single element. Ignored for metric.",
+        ),
+      filter: z
+        .object({ field: z.string(), value: z.string() })
+        .optional()
+        .describe("Optional field=value filter (metric only)."),
+      limit: z.number().int().optional().describe("Max rows (optional)."),
+    }),
+    execute: async ({ kind, type, columns, filter, limit }) => {
+      // Build the read fence from THIS request's actor + ontology — the same
+      // predicate the /org render path gates every read with. Fail-closed:
+      // an actor who cannot read the type cannot compose a widget over it.
+      const canReadType = buildCanReadType(composeActor, composeOntology);
+      const r = await composeOrgView(
+        { kind, type, columns, filter, limit },
+        canReadType,
+      );
+      if (!r.ok) return { ok: false, reason: r.reason };
+      return {
+        ok: true,
+        applied: true,
+        summary: `Added a ${kind} of ${type} to the org dashboard.`,
+      };
+    },
+  });
+
   const tools = {
     ...readTools,
     ...proposalTools,
@@ -169,6 +221,7 @@ export async function POST(req: Request): Promise<Response> {
     ...meReadTools,
     ...n8nTools,
     design_theme,
+    compose_view,
   };
 
   const result = streamText({
