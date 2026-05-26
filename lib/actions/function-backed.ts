@@ -29,6 +29,7 @@ import {
   type AnyZodSchema,
   isActionDescriptor,
 } from "../sdk";
+import { FUNCTION_REGISTRY } from "./function-registry";
 
 export class FunctionBackedActionError extends Error {
   constructor(
@@ -57,6 +58,23 @@ export interface LoadFunctionBackedActionInput {
 
 const DEFAULT_EXTENSIONS = [".ts", ".mts", ".js", ".mjs"] as const;
 
+// The canonical `functions/` directory the static FUNCTION_REGISTRY mirrors.
+// Computed IDENTICALLY to chat-runtime's functionsDir (process.cwd() based) so
+// the production call matches: under Turbopack `__dirname` is rewritten to a
+// bundled-chunk path, so a __dirname-relative comparison never matched and the
+// registry was silently skipped — falling through to the dynamic import that
+// Turbopack cannot bundle ("expression is too dynamic"). process.cwd() is stable
+// at runtime. Test fixtures use temp dirs (≠ this), so they still hit the dynamic
+// path and the file on disk stays the source of truth for them.
+const CANONICAL_FUNCTIONS_DIR = path.resolve(
+  process.env.ACROPOLISOS_PKG_ROOT ?? process.cwd(),
+  "functions",
+);
+
+function isCanonicalFunctionsDir(functionsDir: string): boolean {
+  return path.resolve(functionsDir) === CANONICAL_FUNCTIONS_DIR;
+}
+
 async function resolveFunctionFile(
   input: LoadFunctionBackedActionInput,
 ): Promise<string> {
@@ -81,6 +99,31 @@ async function resolveFunctionFile(
 export async function loadFunctionBackedAction(
   input: LoadFunctionBackedActionInput,
 ): Promise<ActionDescriptor<AnyZodSchema, unknown>> {
+  // Registry-first (for the canonical functions dir): the common path is a
+  // STATIC import so Turbopack can bundle it. A fully runtime-computed dynamic
+  // import (the fallback below) throws "Cannot find module as expression is
+  // too dynamic" in the Next.js server runtime. The registry returns the SAME
+  // descriptor the file's default export does, so behavior is identical to the
+  // dynamic path. We only consult the registry when the call targets the
+  // canonical functions dir the registry mirrors — calls against a fixture
+  // functionsDir must read that fixture's file, not the registered descriptor.
+  if (isCanonicalFunctionsDir(input.functionsDir)) {
+    const registered = FUNCTION_REGISTRY[input.functionName];
+    if (registered !== undefined) {
+      if (!isActionDescriptor(registered)) {
+        throw new FunctionBackedActionError(
+          `registry entry for "${input.functionName}" is not a defineAction descriptor`,
+          input.functionName,
+          "shape",
+        );
+      }
+      return registered as ActionDescriptor<AnyZodSchema, unknown>;
+    }
+  }
+
+  // Fallback for unregistered functions (e.g. test fixtures pointing at a
+  // custom functionsDir, or a function with no static registry entry):
+  // resolve the file on disk and dynamic-import it.
   const filePath = await resolveFunctionFile(input);
   const fileUrl = pathToFileURL(filePath).href;
 
