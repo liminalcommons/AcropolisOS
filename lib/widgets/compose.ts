@@ -28,7 +28,7 @@ import {
   type RosterData,
   type CalendarData,
 } from "./catalog";
-import { createReadOnlyDataApi } from "./read-api";
+import { createReadOnlyDataApi, type CanReadType } from "./read-api";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -154,6 +154,7 @@ export async function compose_dashboard(
 export async function resolveDashboard(
   db: Database,
   memberId: string,
+  canReadType: CanReadType,
 ): Promise<ResolvedWidget[]> {
   // Fetch the member_context row
   const rows = await db
@@ -176,7 +177,9 @@ export async function resolveDashboard(
 
   // Build the read-only api once — passed to ALL bindings.
   // Bindings receive this api, NOT db, so they physically cannot write.
-  const api = createReadOnlyDataApi(db);
+  // SECURITY: the api is gated by the VIEWER's per-type read permission
+  // (canReadType) — restricted types are safe-empty for unauthorized viewers.
+  const api = createReadOnlyDataApi(db, canReadType);
 
   // Resolve each descriptor — run READ-ONLY queryBinding
   const resolved: ResolvedWidget[] = [];

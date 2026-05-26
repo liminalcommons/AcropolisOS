@@ -150,7 +150,12 @@ function rowOwnedBy(
   return false;
 }
 
-function actorMatchesTokens(
+// Exported so the widget read path (lib/widgets/read-api.ts) gates by the
+// SAME permission semantics as ctx.objects — one permission model, not two.
+// Type-level gates (no per-row context) pass `row = null`: `member_self`
+// cannot match without a row, which is correct (the catalog gate is a coarse
+// type-level read fence; per-row ownership is enforced by ctx.objects).
+export function actorMatchesTokens(
   actor: Actor | null,
   tokens: string[] | undefined,
   row: Record<string, unknown> | null,

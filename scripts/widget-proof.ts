@@ -22,6 +22,7 @@ import { eq, sql } from "drizzle-orm";
 import { createDb } from "../lib/db/client";
 import { member_context, member } from "../lib/db/schema.generated";
 import { compose_dashboard, resolveDashboard } from "../lib/widgets/compose";
+import { CAN_READ_ALL } from "../lib/widgets/read-api";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -148,7 +149,7 @@ async function main() {
 
   console.log("\n=== TEST 2: resolveDashboard (live data) ===");
 
-  const resolved = await resolveDashboard(db, stewardMemberId);
+  const resolved = await resolveDashboard(db, stewardMemberId, CAN_READ_ALL);
   console.log("\n  Resolved bundle:");
   console.log(JSON.stringify(resolved, null, 2));
 
@@ -212,7 +213,7 @@ async function main() {
     `re-compose status ok (got: ${recomposeResult.status})`,
   );
 
-  const resolved2 = await resolveDashboard(db, stewardMemberId);
+  const resolved2 = await resolveDashboard(db, stewardMemberId, CAN_READ_ALL);
   const metricWidget2 = resolved2.find((w) => w.kind === "metric");
   const metricData2 = metricWidget2?.data as
     | { value: number; label: string }

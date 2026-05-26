@@ -10,16 +10,17 @@
 //
 // AUTH GATE: buildChatRuntime() + isAnonymous(), THEN steward-only.
 // The org dashboard is the admin surface (decision: one admin view = steward).
-// Role gating matters because the widget read path (ReadOnlyDataApi) is
-// permission-blind — it applies only a structural type/field whitelist, NOT the
-// viewer's per-type read permissions. Restricting this page to stewards (who are
-// authorized for all types) contains that gap until the read path is made
-// actor-permission-aware. See the HIGH fix-request in the opponent log.
+// The widget read path is now actor-permission-aware: resolveDescriptors gates
+// every read by the session actor's per-type read permission (buildCanReadType,
+// fail-closed, same model as ctx.objects). Steward authorization for all types
+// still scopes this page, but the read path no longer trusts the page gate
+// alone — a restricted type returns safe-empty for any unauthorized viewer.
 
 import Link from "next/link";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { getDb } from "@/lib/db/client";
 import { resolveDescriptors } from "@/lib/widgets/per-user";
+import { buildCanReadType } from "@/lib/widgets/read-api";
 import { ResolvedWidgetCard } from "@/components/dashboard/ResolvedWidgetCard";
 import type { ResolvedWidget } from "@/lib/widgets/compose";
 
@@ -82,9 +83,12 @@ export default async function OrgPage(): Promise<React.ReactElement> {
   // resolveDescriptors validates configs against WIDGET_CATALOG schemas,
   // then calls queryBinding(config, ReadOnlyDataApi) — no raw SQL, no db handle.
   const db = getDb();
+  // SECURITY: gate the widget read path by the steward actor's per-type read
+  // permission (fail-closed). bed is read:["*"] so it resolves for the steward.
+  const canReadType = buildCanReadType(chatRuntime.actor, chatRuntime.ontology);
   let widgets: ResolvedWidget[] = [];
   try {
-    widgets = await resolveDescriptors(db, ADMIN_DASHBOARD_DESCRIPTORS);
+    widgets = await resolveDescriptors(db, ADMIN_DASHBOARD_DESCRIPTORS, canReadType);
   } catch {
     // Non-fatal — renders empty state if resolution fails
   }

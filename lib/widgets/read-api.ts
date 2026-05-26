@@ -11,12 +11,20 @@
 // Safety rules (enforced here, not by callers):
 //   (a) type validated against CATALOG_VALID_TYPES whitelist → out-of-whitelist
 //       returns safe empty, never reaches SQL.
-//   (b) columns/fields validated against CATALOG_VALID_FIELDS → unknowns dropped.
-//   (c) limit / filter values bound as parameters, never interpolated.
-//   (d) SELECT-only — no insert/update/delete anywhere in this file.
+//   (b) per-actor read permission gate — the VIEWER must be permitted to read
+//       the catalog type (per the loaded ontology's object_type read tokens).
+//       FAIL CLOSED: a viewer not permitted gets the SAME safe-empty value the
+//       unknown-type branch returns, BEFORE any SQL runs. This reuses the exact
+//       permission semantics of ctx.objects (actorMatchesTokens) — one model.
+//   (c) columns/fields validated against CATALOG_VALID_FIELDS → unknowns dropped.
+//   (d) limit / filter values bound as parameters, never interpolated.
+//   (e) SELECT-only — no insert/update/delete anywhere in this file.
 
 import { sql } from "drizzle-orm";
 import type { Database } from "@/lib/db/client";
+import type { Actor } from "@/lib/ctx";
+import { actorMatchesTokens, buildObjectPermissionsMap } from "@/lib/ontology/ctx";
+import type { Ontology } from "@/lib/ontology/schema";
 import {
   guest as guestTable,
   member as memberTable,
@@ -71,6 +79,74 @@ function safeColumns(type: CatalogType, requested: string[]): string[] {
   return requested.filter((c) => allowed.has(c));
 }
 
+// ── Per-actor read permission gate ──────────────────────────────────────────────
+//
+// THE SECURITY BOUNDARY: read-api takes a raw db handle and would otherwise let
+// any caller read ANY whitelisted type's rows regardless of the viewer's role.
+// The structural whitelist (CATALOG_VALID_TYPES/FIELDS) says only WHAT is
+// queryable at all — it says nothing about WHO may read it. This predicate
+// closes that hole by gating each read on the viewer's per-type read permission,
+// reusing the SAME permission semantics as ctx.objects.
+
+/**
+ * Predicate: may the current viewer read this catalog type at all?
+ * Built once per request via buildCanReadType (or CAN_READ_ALL for trusted
+ * seeder/proof contexts). FAIL CLOSED: when in doubt, deny.
+ */
+export type CanReadType = (catalogType: string) => boolean;
+
+// Maps the read-api's lowercase/snake catalog type to the PascalCase ontology
+// object_type name used in the permissions map (buildObjectPermissionsMap keys).
+// CASING IS LOAD-BEARING: catalog uses `bed`/`work_trade_agreement`; the perms
+// map uses `Bed`/`WorkTradeAgreement`. A mismatch here would silently mean
+// "no permissions entry" → deny-all (fail-closed) for valid types, OR worse if
+// inverted. Keep this exhaustive over CatalogType.
+const CATALOG_TYPE_TO_OBJECT_TYPE: Record<CatalogType, string> = {
+  guest: "Guest",
+  member: "Member",
+  booking: "Booking",
+  event: "Event",
+  bed: "Bed",
+  room: "Room",
+  shift: "Shift",
+  work_trade_agreement: "WorkTradeAgreement",
+};
+
+/**
+ * Trusted-context predicate: allow all reads. ONLY for seeder / proof / migration
+ * scripts that run with full authority and no actor. Never use on a request path —
+ * request paths must build a real per-actor predicate via buildCanReadType.
+ */
+export const CAN_READ_ALL: CanReadType = () => true;
+
+/**
+ * Builds a per-actor read predicate from the SAME source as ctx.objects:
+ * buildObjectPermissionsMap(ontology) + actorMatchesTokens, with identical
+ * fail-closed semantics:
+ *   - missing perms entry for the type        → deny
+ *   - empty/absent read token list            → deny
+ *   - ["*"] wildcard                          → allow
+ *   - token matches actor.role / customRoles  → allow
+ * The type-level gate passes row = null, so `member_self` cannot match here —
+ * that is intentional: per-row ownership lives in ctx.objects, not the coarse
+ * catalog read fence.
+ */
+export function buildCanReadType(
+  actor: Actor | null,
+  ontology: Ontology,
+): CanReadType {
+  const permissions = buildObjectPermissionsMap(ontology);
+  return (catalogType: string): boolean => {
+    const resolved = resolveType(catalogType);
+    if (!resolved) return false; // not even a whitelisted type → deny
+    const objectTypeName = CATALOG_TYPE_TO_OBJECT_TYPE[resolved];
+    const perms = permissions[objectTypeName];
+    // FAIL CLOSED: no permissions entry → deny (mirrors wrapObjectAccess(!perms)).
+    if (!perms) return false;
+    return actorMatchesTokens(actor, perms.read, null, objectTypeName);
+  };
+}
+
 // ── ReadOnlyDataApi interface ─────────────────────────────────────────────────
 //
 // THE TYPE CONTRACT: this interface has NO insert / update / delete / create /
@@ -110,16 +186,28 @@ export interface ReadOnlyDataApi {
 // ── Factory ───────────────────────────────────────────────────────────────────
 
 /**
- * Creates a ReadOnlyDataApi bound to the given db handle.
- * The returned object exposes ONLY read methods — no insert/update/delete/create
- * method exists on it or its type.
+ * Creates a ReadOnlyDataApi bound to the given db handle, gated by the viewer's
+ * per-type read permission. The returned object exposes ONLY read methods — no
+ * insert/update/delete/create method exists on it or its type.
+ *
+ * `canReadType` is REQUIRED and is the security boundary: every read method
+ * checks it (after the structural whitelist, BEFORE any SQL) and returns the
+ * safe-empty value if the viewer may not read the type. Build it per request via
+ * buildCanReadType(actor, ontology); use CAN_READ_ALL only in trusted seeder/proof
+ * contexts. There is no default — fail-closed requires an explicit decision.
  */
-export function createReadOnlyDataApi(db: Database): ReadOnlyDataApi {
+export function createReadOnlyDataApi(
+  db: Database,
+  canReadType: CanReadType,
+): ReadOnlyDataApi {
   return {
     // ── count ──────────────────────────────────────────────────────────────────
     async count(type, filter) {
       const resolved = resolveType(type);
       if (!resolved) return 0;
+      // PERMISSION GATE (fail-closed): viewer must be permitted to read this
+      // type. Same safe-empty as the unknown-type branch; runs BEFORE any SQL.
+      if (!canReadType(resolved)) return 0;
 
       if (filter) {
         // Validate filter field against whitelist
@@ -148,6 +236,8 @@ export function createReadOnlyDataApi(db: Database): ReadOnlyDataApi {
     async select(type, { columns, filter, limit = 20 }) {
       const resolved = resolveType(type);
       if (!resolved) return { columns: [], rows: [] };
+      // PERMISSION GATE (fail-closed): same safe-empty as unknown type; pre-SQL.
+      if (!canReadType(resolved)) return { columns: [], rows: [] };
 
       const validCols = safeColumns(resolved, columns);
       if (validCols.length === 0) return { columns: [], rows: [] };
@@ -176,6 +266,8 @@ export function createReadOnlyDataApi(db: Database): ReadOnlyDataApi {
     async byDate(type, dateField, limit = 50) {
       const resolved = resolveType(type);
       if (!resolved) return [];
+      // PERMISSION GATE (fail-closed): same safe-empty as unknown type; pre-SQL.
+      if (!canReadType(resolved)) return [];
 
       // Validate dateField against whitelist
       const allowed = new Set(CATALOG_VALID_FIELDS[resolved]);

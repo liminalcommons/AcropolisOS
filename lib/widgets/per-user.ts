@@ -29,7 +29,7 @@ import {
   type RosterData,
   type CalendarData,
 } from "./catalog";
-import { createReadOnlyDataApi } from "./read-api";
+import { createReadOnlyDataApi, type CanReadType } from "./read-api";
 import { compose_dashboard, type ResolvedWidget } from "./compose";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -159,6 +159,7 @@ export const SLICE_SPEC: Record<TierRole, SliceDescriptor[]> = {
 export async function resolvePerUserDashboard(
   db: Database,
   member: { id: string; tier_role: string },
+  canReadType: CanReadType,
 ): Promise<ResolvedWidget[]> {
   // 1. Check for explicit pinned_widgets in member_context
   const rows = await db
@@ -183,7 +184,7 @@ export async function resolvePerUserDashboard(
     if (stored && stored.length > 0) {
       // Explicit pinned_widgets exist — run them through the read-only api.
       // This mirrors resolveDashboard's logic exactly (same machinery, reuse path).
-      const pinned = await runDescriptors(db, stored);
+      const pinned = await runDescriptors(db, stored, canReadType);
       if (pinned.length > 0) {
         // At least one valid widget → return the valid set (partial-invalid is fine).
         return pinned;
@@ -200,7 +201,7 @@ export async function resolvePerUserDashboard(
     : "staff"; // unknown role falls back to staff slice
 
   const spec = SLICE_SPEC[role];
-  return runDescriptors(db, spec);
+  return runDescriptors(db, spec, canReadType);
 }
 
 // ── Internal: run a list of descriptors through the read-only api ─────────────
@@ -212,8 +213,12 @@ export async function resolvePerUserDashboard(
 async function runDescriptors(
   db: Database,
   descriptors: unknown[],
+  canReadType: CanReadType,
 ): Promise<ResolvedWidget[]> {
-  const api = createReadOnlyDataApi(db);
+  // SECURITY: the api is gated by the VIEWER's per-type read permission.
+  // A widget bound to a restricted type (e.g. booking) returns safe-empty for
+  // a viewer not permitted to read it — fail-closed, before any SQL.
+  const api = createReadOnlyDataApi(db, canReadType);
   const resolved: ResolvedWidget[] = [];
 
   for (let i = 0; i < descriptors.length; i++) {

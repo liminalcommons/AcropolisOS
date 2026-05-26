@@ -33,7 +33,7 @@ import {
 } from "@/lib/db/schema.generated";
 import { commitProposalCore } from "@/lib/organize/commit";
 import { resolvePerUserDashboard } from "@/lib/widgets/per-user";
-import { createReadOnlyDataApi } from "@/lib/widgets/read-api";
+import { createReadOnlyDataApi, CAN_READ_ALL } from "@/lib/widgets/read-api";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -118,7 +118,7 @@ async function main() {
   const baselineWidgets = await resolvePerUserDashboard(db, {
     id: managerMember.id,
     tier_role: managerMember.tier_role,
-  });
+  }, CAN_READ_ALL);
 
   const baselineGuestMetric = baselineWidgets.find(
     (w) => w.kind === "metric" && (w.config as { type: string }).type === "guest",
@@ -397,7 +397,7 @@ async function main() {
   const afterWidgets = await resolvePerUserDashboard(db, {
     id: managerMember.id,
     tier_role: managerMember.tier_role,
-  });
+  }, CAN_READ_ALL);
 
   const afterGuestMetric = afterWidgets.find(
     (w) => w.kind === "metric" && (w.config as { type: string }).type === "guest",
@@ -417,7 +417,7 @@ async function main() {
   pass(`★ The committed row flowed to the per-user dashboard (resolvePerUserDashboard guest metric ${V0}→${V1})`);
 
   // 6b: createReadOnlyDataApi — the new row must be visible through the read-only view path
-  const api = createReadOnlyDataApi(db);
+  const api = createReadOnlyDataApi(db, CAN_READ_ALL);
   const selectResult = await api.select("guest", {
     columns: ["full_name", "email"],
     filter: { field: "full_name", value: DISPOSABLE_NAME },

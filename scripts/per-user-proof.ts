@@ -9,6 +9,7 @@
 
 import { getDb } from "@/lib/db/client";
 import { resolvePerUserDashboard, SLICE_SPEC } from "@/lib/widgets/per-user";
+import { CAN_READ_ALL } from "@/lib/widgets/read-api";
 import { compose_dashboard } from "@/lib/widgets/compose";
 import {
   member as memberTable,
@@ -99,12 +100,12 @@ async function main() {
   const managerWidgets = await resolvePerUserDashboard(db, {
     id: managerMember.id,
     tier_role: managerMember.tier_role,
-  });
+  }, CAN_READ_ALL);
 
   const workTraderWidgets = await resolvePerUserDashboard(db, {
     id: workTraderMember.id,
     tier_role: workTraderMember.tier_role,
-  });
+  }, CAN_READ_ALL);
 
   console.log(`\nManager (${managerMember.tier_role}) widgets:`);
   console.log(" ", widgetSummary(managerWidgets));
@@ -189,7 +190,7 @@ async function main() {
   const managerWithOverride = await resolvePerUserDashboard(db, {
     id: managerMember.id,
     tier_role: managerMember.tier_role,
-  });
+  }, CAN_READ_ALL);
 
   const overrideResult = widgetSummary(managerWithOverride);
   console.log(`\nManager with pinned override (supervisor spec): ${overrideResult}`);
@@ -222,7 +223,7 @@ async function main() {
   // Then:
   .where(eq(memberTable.id, actor.userId))        // ← actor.userId from session, never a param
   // Then passed to:
-  widgets = await resolvePerUserDashboard(db, { id: me.id, tier_role: me.tier_role });
+  widgets = await resolvePerUserDashboard(db, { id: me.id, tier_role: me.tier_role }, CAN_READ_ALL);
   // resolvePerUserDashboard signature: (db, member: { id: string; tier_role: string })
   // — no role/memberId params passed in from request body or URL.
   `;
@@ -265,7 +266,7 @@ async function main() {
   const managerAllInvalidWidgets = await resolvePerUserDashboard(db, {
     id: managerMember.id,
     tier_role: managerMember.tier_role,
-  });
+  }, CAN_READ_ALL);
 
   console.log(`\nManager with all-invalid pinned_widgets:`);
   console.log("  resolved:", widgetSummary(managerAllInvalidWidgets));
@@ -305,7 +306,7 @@ async function main() {
   const managerPartialWidgets = await resolvePerUserDashboard(db, {
     id: managerMember.id,
     tier_role: managerMember.tier_role,
-  });
+  }, CAN_READ_ALL);
 
   console.log(`\nManager with partial-invalid pinned_widgets (1 valid + 1 invalid):`);
   console.log("  resolved:", widgetSummary(managerPartialWidgets));

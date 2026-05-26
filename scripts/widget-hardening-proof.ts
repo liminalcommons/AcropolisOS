@@ -19,7 +19,7 @@ import { eq, sql } from "drizzle-orm";
 import { createDb } from "../lib/db/client";
 import { member_context, member } from "../lib/db/schema.generated";
 import { WIDGET_CATALOG } from "../lib/widgets/catalog";
-import { createReadOnlyDataApi } from "../lib/widgets/read-api";
+import { createReadOnlyDataApi, CAN_READ_ALL } from "../lib/widgets/read-api";
 import { CATALOG_WIDGET_KINDS } from "../lib/me/widgets";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -44,7 +44,7 @@ function assert(condition: boolean, message: string): void {
 async function main() {
   const db = createDb(DATABASE_URL!);
   // V2: build the ReadOnlyDataApi once — bindings receive api, not db
-  const api = createReadOnlyDataApi(db);
+  const api = createReadOnlyDataApi(db, CAN_READ_ALL);
 
   // ── Find steward member ──────────────────────────────────────────────────────
   console.log("\n=== SETUP: Find steward/manager member ===");

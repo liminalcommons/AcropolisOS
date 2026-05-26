@@ -4,6 +4,7 @@ import type { Database } from "@/lib/db/client";
 import type { CatalogKind } from "./catalog";
 import { type WidgetSelection } from "./compose";
 import { resolvePerUserDashboard, SLICE_SPEC, type TierRole } from "./per-user";
+import { type CanReadType } from "./read-api";
 
 export interface ArrangeItem {
   id: string;
@@ -47,7 +48,8 @@ export function addableForRole(role: string): WidgetSelection[] {
 export async function currentArrangement(
   db: Database,
   member: { id: string; tier_role: string },
+  canReadType: CanReadType,
 ): Promise<ArrangeItem[]> {
-  const resolved = await resolvePerUserDashboard(db, member);
+  const resolved = await resolvePerUserDashboard(db, member, canReadType);
   return resolved.map((w) => ({ id: w.id, kind: w.kind, config: w.config }));
 }

@@ -22,6 +22,7 @@ import { member as memberTable } from "@/lib/db/schema.generated";
 import { eq } from "drizzle-orm";
 import { TODAY_LABEL } from "@/lib/me/today";
 import { resolvePerUserDashboard } from "@/lib/widgets/per-user";
+import { buildCanReadType } from "@/lib/widgets/read-api";
 import { addableForRole } from "@/lib/widgets/arrange";
 import { WidgetControls } from "@/components/dashboard/widget-controls";
 import { ResolvedWidgetCard } from "@/components/dashboard/ResolvedWidgetCard";
@@ -89,12 +90,15 @@ export default async function Home(): Promise<React.ReactElement> {
   // resolvePerUserDashboard uses SLICE_SPEC[me.tier_role] (role default)
   // unless explicit pinned_widgets are set — in which case those take precedence.
   // FENCE: read-only via V2 ReadOnlyDataApi — no writes.
+  // SECURITY: gate the widget read path by the session actor's per-type read
+  // permission (fail-closed). Built from the SAME source as ctx.objects.
+  const canReadType = buildCanReadType(actor, chatRuntime.ontology);
   let widgets: ResolvedWidget[] = [];
   try {
     widgets = await resolvePerUserDashboard(db, {
       id: me.id,
       tier_role: me.tier_role,
-    });
+    }, canReadType);
   } catch {
     // Non-fatal — renders empty dashboard if resolution fails
   }
