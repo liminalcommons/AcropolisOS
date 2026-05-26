@@ -12,9 +12,18 @@ import type { NotificationStore } from "../notifications/store";
 import type { Ontology, PermissionsBlock } from "./schema";
 import type {
   AgentBlocker,
+  Bed,
+  Booking,
   Event,
+  Guest,
+  IncidentLog,
+  MeetingMinute,
   Member,
   MemberContext,
+  Notification,
+  Room,
+  Shift,
+  WorkTradeAgreement,
 } from "./types.generated";
 
 // === Access surface ===
@@ -43,11 +52,24 @@ export interface LinkAccess<L> {
 
 export interface OntologyStore {
   objects: {
+    // Core member/community types (original 4 — semantics and permission wiring
+    // are unchanged; these are listed first for call-site stability).
     Member: ObjectAccess<Member>;
     Event: ObjectAccess<Event>;
-    // M4.3: per-member context + agent escalation blockers
     MemberContext: ObjectAccess<MemberContext>;
     AgentBlocker: ObjectAccess<AgentBlocker>;
+    // Hostel-domain types — all exposed through the same permission-checked
+    // ObjectAccess surface as the 4 above; permissions are derived from the
+    // loaded ontology's object_type.permissions.read/write per type.
+    Bed: ObjectAccess<Bed>;
+    Booking: ObjectAccess<Booking>;
+    Guest: ObjectAccess<Guest>;
+    IncidentLog: ObjectAccess<IncidentLog>;
+    MeetingMinute: ObjectAccess<MeetingMinute>;
+    Notification: ObjectAccess<Notification>;
+    Room: ObjectAccess<Room>;
+    Shift: ObjectAccess<Shift>;
+    WorkTradeAgreement: ObjectAccess<WorkTradeAgreement>;
   };
   // 0c-pre2: links typed as open record — attended/authored removed with community schema.
   // Hostel-domain link types will be added here as they are defined.
@@ -134,8 +156,10 @@ function actorMatchesTokens(
   row: Record<string, unknown> | null,
   objectTypeName: string,
 ): boolean {
-  // No tokens declared => unrestricted at this level.
-  if (!tokens || tokens.length === 0) return true;
+  // No tokens declared, or empty array => DENY (no one matches).
+  // An empty/missing list is not "public" — it means "no one is permitted".
+  // The only allow-all shorthand is the explicit ["*"] wildcard.
+  if (!tokens || tokens.length === 0) return false;
   if (tokens.includes("*")) return true;
   if (!actor) return false;
   for (const token of tokens) {
@@ -187,7 +211,20 @@ function wrapObjectAccess<T extends { id: string }>(
   actor: Actor | null,
   objectTypeName: string,
 ): ObjectAccess<T> {
-  if (!perms) return base;
+  // FAIL CLOSED: when no permissions entry exists for a type, return a
+  // deny-all wrapper. This prevents world-readable/writable access on any
+  // type that is exposed via ctx.objects but not yet defined in the loaded
+  // ontology's permissions map. Mirrors the null/[]/throw semantics of the
+  // wrapper below: reads return null/[], writes throw PermissionError.
+  if (!perms) {
+    return {
+      async findById(_id) { return null; },
+      async findMany(_filter) { return []; },
+      async create(_input) { denyWrite(actor, objectTypeName, "create"); },
+      async update(_id, _patch) { denyWrite(actor, objectTypeName, "update"); },
+      async delete(_id) { denyWrite(actor, objectTypeName, "delete"); },
+    };
+  }
   return {
     async findById(id) {
       const row = await base.findById(id);
@@ -327,17 +364,40 @@ export function createCtx({
   const wrap = <T extends { id: string }>(
     access: ObjectAccess<T>,
     typeName: string,
-  ): ObjectAccess<T> =>
-    permissions ? wrapObjectAccess(access, permissions[typeName], actor, typeName) : access;
+  ): ObjectAccess<T> => {
+    if (!permissions) return access;
+    // Defense-in-depth: warn when an exposed type has no permissions entry.
+    // wrapObjectAccess already fails closed (deny-all) for this case, so it
+    // is safe — but a missing entry almost certainly means a misconfigured
+    // ontology, and silent denial is hard to debug. The warn makes it visible.
+    if (permissions[typeName] === undefined) {
+      console.warn(
+        `[acropolisOS] createCtx: no permissions entry for type "${typeName}" — ` +
+        `access will be denied for all actors. Check the loaded ontology's object_types.`,
+      );
+    }
+    return wrapObjectAccess(access, permissions[typeName], actor, typeName);
+  };
 
   return {
     actor,
     objects: {
+      // Original 4 — permission wiring unchanged.
       Member: wrap(db.objects.Member, "Member"),
       Event: wrap(db.objects.Event, "Event"),
-      // M4.3: member context + agent escalation blockers
       MemberContext: wrap(db.objects.MemberContext, "MemberContext"),
       AgentBlocker: wrap(db.objects.AgentBlocker, "AgentBlocker"),
+      // Hostel-domain types — same wrapObjectAccess decorator, permissions from
+      // the loaded ontology map passed as `permissions` to createCtx.
+      Bed: wrap(db.objects.Bed, "Bed"),
+      Booking: wrap(db.objects.Booking, "Booking"),
+      Guest: wrap(db.objects.Guest, "Guest"),
+      IncidentLog: wrap(db.objects.IncidentLog, "IncidentLog"),
+      MeetingMinute: wrap(db.objects.MeetingMinute, "MeetingMinute"),
+      Notification: wrap(db.objects.Notification, "Notification"),
+      Room: wrap(db.objects.Room, "Room"),
+      Shift: wrap(db.objects.Shift, "Shift"),
+      WorkTradeAgreement: wrap(db.objects.WorkTradeAgreement, "WorkTradeAgreement"),
     },
     links: db.links,
     actions: {},
@@ -437,11 +497,21 @@ class InMemoryLinkAccess<L> implements LinkAccess<L> {
 export function createInMemoryStore(): OntologyStore {
   return {
     objects: {
+      // Original 4 — unchanged.
       Member: new InMemoryObjectAccess<Member>(),
       Event: new InMemoryObjectAccess<Event>(),
-      // M4.3: member context + agent escalation blockers
       MemberContext: new InMemoryObjectAccess<MemberContext>(),
       AgentBlocker: new InMemoryObjectAccess<AgentBlocker>(),
+      // Hostel-domain types — same InMemoryObjectAccess, no special logic.
+      Bed: new InMemoryObjectAccess<Bed>(),
+      Booking: new InMemoryObjectAccess<Booking>(),
+      Guest: new InMemoryObjectAccess<Guest>(),
+      IncidentLog: new InMemoryObjectAccess<IncidentLog>(),
+      MeetingMinute: new InMemoryObjectAccess<MeetingMinute>(),
+      Notification: new InMemoryObjectAccess<Notification>(),
+      Room: new InMemoryObjectAccess<Room>(),
+      Shift: new InMemoryObjectAccess<Shift>(),
+      WorkTradeAgreement: new InMemoryObjectAccess<WorkTradeAgreement>(),
     },
     links: {},
   };

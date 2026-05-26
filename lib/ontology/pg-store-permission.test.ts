@@ -32,10 +32,11 @@ import {
   PermissionError,
 } from "./ctx";
 import { loadOntology } from "./load";
-import type { Member } from "./types.generated";
+import type { Booking, Member } from "./types.generated";
 
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
 const SMALL_COMMUNITY = path.join(PKG_ROOT, "seed", "small-community");
+const HOSTEL_SEED = path.join(PKG_ROOT, "seed", "hostel");
 
 // Real v4 UUIDs (gotcha_acropolisos_zod4_uuid_strict).
 const MEMBER_A_ID = "11111111-1111-4111-8111-111111111111";
@@ -219,5 +220,205 @@ describe("M3.1 / US-031 — actor scope is not elevated by composition", () => {
     const verifyCtx = createCtx({ db, actor: stewardActor, permissions });
     const bob = await verifyCtx.objects.Member.findById(MEMBER_B_ID);
     expect(bob?.tier_role).toBe("staff");
+  });
+});
+
+// === M5: permission gating for newly-exposed hostel-domain types ===
+//
+// Booking.permissions.read = [steward, manager] in the hostel seed.
+// A plain `member` actor must be denied read access (findById returns null,
+// findMany returns []). A `steward` actor must be granted read access.
+// This proves that the new types get the SAME wrapObjectAccess treatment as
+// the original 4, sourced from the ontology YAML — no weaker gating.
+
+const BOOKING_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+
+const stewardForHostel: Actor = {
+  userId: "00000000-0000-4000-8000-000000000002",
+  email: "steward2@example.com",
+  role: "steward",
+  customRoles: [],
+};
+
+const memberForHostel: Actor = {
+  userId: "11111111-1111-4111-8111-111111111112",
+  email: "m2@example.com",
+  role: "member",
+  customRoles: [],
+};
+
+function bookingRow(id: string, overrides: Partial<Booking> = {}): Booking {
+  return {
+    id,
+    label: "Test booking",
+    guest: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    bed: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    from_date: "2026-06-01",
+    to_date: "2026-06-05",
+    rate_per_night: 25,
+    currency: "EUR",
+    source: "direct",
+    status: "confirmed",
+    ...overrides,
+  };
+}
+
+describe("M5 — Booking permission gating (hostel seed)", () => {
+  it("steward can read Booking rows (read: [steward, manager])", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Booking.create(bookingRow(BOOKING_ID));
+    const ontology = await loadOntology(HOSTEL_SEED);
+    const permissions = buildObjectPermissionsMap(ontology);
+    const ctx = createCtx({ db, actor: stewardForHostel, permissions });
+
+    const byId = await ctx.objects.Booking.findById(BOOKING_ID);
+    expect(byId).not.toBeNull();
+    expect(byId?.id).toBe(BOOKING_ID);
+
+    const many = await ctx.objects.Booking.findMany();
+    expect(many).toHaveLength(1);
+    expect(many[0].id).toBe(BOOKING_ID);
+  });
+
+  it("plain member cannot read Booking rows (findById returns null, findMany returns [])", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Booking.create(bookingRow(BOOKING_ID));
+    const ontology = await loadOntology(HOSTEL_SEED);
+    const permissions = buildObjectPermissionsMap(ontology);
+    const ctx = createCtx({ db, actor: memberForHostel, permissions });
+
+    expect(await ctx.objects.Booking.findById(BOOKING_ID)).toBeNull();
+    expect(await ctx.objects.Booking.findMany()).toEqual([]);
+  });
+
+  it("plain member update of Booking throws PermissionError", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Booking.create(bookingRow(BOOKING_ID));
+    const ontology = await loadOntology(HOSTEL_SEED);
+    const permissions = buildObjectPermissionsMap(ontology);
+    const ctx = createCtx({ db, actor: memberForHostel, permissions });
+
+    await expect(
+      ctx.objects.Booking.update(BOOKING_ID, { status: "cancelled" }),
+    ).rejects.toBeInstanceOf(PermissionError);
+
+    // The row was NOT mutated.
+    const verifyCtx = createCtx({ db, actor: stewardForHostel, permissions });
+    const row = await verifyCtx.objects.Booking.findById(BOOKING_ID);
+    expect(row?.status).toBe("confirmed");
+  });
+});
+
+// === Security: fail-closed on missing permissions entry ===
+//
+// When a type is exposed via ctx.objects but has NO entry in the loaded
+// permissions map (e.g. an ontology that does not define Booking), every
+// actor — including a steward — must be fully denied. The deny-all wrapper
+// in wrapObjectAccess (introduced in the security hardening) must fire here,
+// NOT the original `return base` path that gave world read/write access.
+//
+// Covers the two failure modes identified in the security review:
+//   1. Missing perms entry → raw accessor returned (world read/write) — FIXED
+//   2. Empty token array → allow-all — FIXED (empty [] now means deny)
+
+const UNMAPPED_BOOKING_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+describe("Security — fail-closed on unmapped type (no permissions entry)", () => {
+  // Build a permissions map that intentionally omits the Booking type,
+  // simulating a loaded ontology where the type is exposed but not defined.
+  const permissionsWithoutBooking: import("./ctx").ObjectPermissionsMap = {
+    Member: { read: ["steward", "member_self"], write: ["steward", "member_self"] },
+    Event: { read: ["*"], write: ["steward"] },
+    MemberContext: { read: ["steward", "member_self"], write: ["steward", "member_self"] },
+    AgentBlocker: { read: ["steward", "member_self"], write: ["steward", "member_self"] },
+    // Booking intentionally omitted — this is the type under test
+    Bed: { read: ["*"], write: ["manager"] },
+    Guest: { read: ["steward", "manager"], write: ["steward", "manager"] },
+    IncidentLog: { read: ["steward", "manager"], write: ["steward", "manager"] },
+    MeetingMinute: { read: ["*"], write: ["steward"] },
+    Notification: { read: ["steward", "member_self"], write: ["steward", "member_self"] },
+    Room: { read: ["*"], write: ["manager"] },
+    Shift: { read: ["*"], write: ["steward", "manager"] },
+    WorkTradeAgreement: { read: ["steward", "manager"], write: ["manager"] },
+  };
+
+  it("steward: findById returns null for an unmapped type", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Booking.create(bookingRow(UNMAPPED_BOOKING_ID));
+    const ctx = createCtx({ db, actor: stewardForHostel, permissions: permissionsWithoutBooking });
+    expect(await ctx.objects.Booking.findById(UNMAPPED_BOOKING_ID)).toBeNull();
+  });
+
+  it("member: findById returns null for an unmapped type", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Booking.create(bookingRow(UNMAPPED_BOOKING_ID));
+    const ctx = createCtx({ db, actor: memberForHostel, permissions: permissionsWithoutBooking });
+    expect(await ctx.objects.Booking.findById(UNMAPPED_BOOKING_ID)).toBeNull();
+  });
+
+  it("steward: findMany returns [] for an unmapped type", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Booking.create(bookingRow(UNMAPPED_BOOKING_ID));
+    const ctx = createCtx({ db, actor: stewardForHostel, permissions: permissionsWithoutBooking });
+    expect(await ctx.objects.Booking.findMany()).toEqual([]);
+  });
+
+  it("member: findMany returns [] for an unmapped type", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Booking.create(bookingRow(UNMAPPED_BOOKING_ID));
+    const ctx = createCtx({ db, actor: memberForHostel, permissions: permissionsWithoutBooking });
+    expect(await ctx.objects.Booking.findMany()).toEqual([]);
+  });
+
+  it("steward: update throws PermissionError for an unmapped type", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Booking.create(bookingRow(UNMAPPED_BOOKING_ID));
+    const ctx = createCtx({ db, actor: stewardForHostel, permissions: permissionsWithoutBooking });
+    await expect(
+      ctx.objects.Booking.update(UNMAPPED_BOOKING_ID, { status: "cancelled" }),
+    ).rejects.toBeInstanceOf(PermissionError);
+  });
+
+  it("member: update throws PermissionError for an unmapped type", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Booking.create(bookingRow(UNMAPPED_BOOKING_ID));
+    const ctx = createCtx({ db, actor: memberForHostel, permissions: permissionsWithoutBooking });
+    await expect(
+      ctx.objects.Booking.update(UNMAPPED_BOOKING_ID, { status: "cancelled" }),
+    ).rejects.toBeInstanceOf(PermissionError);
+  });
+
+  it("steward: create throws PermissionError for an unmapped type", async () => {
+    const db = createInMemoryStore();
+    const ctx = createCtx({ db, actor: stewardForHostel, permissions: permissionsWithoutBooking });
+    await expect(
+      ctx.objects.Booking.create(bookingRow(UNMAPPED_BOOKING_ID)),
+    ).rejects.toBeInstanceOf(PermissionError);
+  });
+
+  it("member: create throws PermissionError for an unmapped type", async () => {
+    const db = createInMemoryStore();
+    const ctx = createCtx({ db, actor: memberForHostel, permissions: permissionsWithoutBooking });
+    await expect(
+      ctx.objects.Booking.create(bookingRow(UNMAPPED_BOOKING_ID)),
+    ).rejects.toBeInstanceOf(PermissionError);
+  });
+
+  it("steward: delete throws PermissionError for an unmapped type", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Booking.create(bookingRow(UNMAPPED_BOOKING_ID));
+    const ctx = createCtx({ db, actor: stewardForHostel, permissions: permissionsWithoutBooking });
+    await expect(
+      ctx.objects.Booking.delete(UNMAPPED_BOOKING_ID),
+    ).rejects.toBeInstanceOf(PermissionError);
+  });
+
+  it("member: delete throws PermissionError for an unmapped type", async () => {
+    const db = createInMemoryStore();
+    await db.objects.Booking.create(bookingRow(UNMAPPED_BOOKING_ID));
+    const ctx = createCtx({ db, actor: memberForHostel, permissions: permissionsWithoutBooking });
+    await expect(
+      ctx.objects.Booking.delete(UNMAPPED_BOOKING_ID),
+    ).rejects.toBeInstanceOf(PermissionError);
   });
 });

@@ -1,10 +1,15 @@
-// M2.2 step-2: PgOntologyStore unit test.
+// M2.2 step-2 + M5 registry expansion: PgOntologyStore unit test.
 //
 // Verifies that `createPgOntologyStore(db)` returns an OntologyStore whose
 // Member/Event/MeetingMinute object-accessors invoke the expected drizzle
 // operations against the right tables. The test stubs the drizzle Database
 // surface so it runs hermetically — full SQL semantics are covered by the
 // existing audit-store + drizzle integration tests.
+//
+// M5 additions: asserts all 13 ontology object types are present on the store
+// and that newly-exposed hostel-domain types (e.g. Booking) target the
+// correct drizzle table. Permission enforcement for the new types is proven in
+// pg-store-permission.test.ts (same wrapObjectAccess path as the original 4).
 //
 // Why this layer: change-tier.ts:27 calls `ctx.objects.Member.update(...)`
 // which currently throws in production because no Pg-backed implementation
@@ -15,6 +20,15 @@ import { describe, expect, it } from "vitest";
 import {
   member as memberTable,
   event as eventTable,
+  booking as bookingTable,
+  bed as bedTable,
+  guest as guestTable,
+  incident_log as incidentLogTable,
+  meeting_minute as meetingMinuteTable,
+  notification as notificationTable,
+  room as roomTable,
+  shift as shiftTable,
+  work_trade_agreement as workTradeAgreementTable,
 } from "../db/schema.generated";
 import type { Database } from "../db/client";
 import { createPgOntologyStore } from "./pg-store";
@@ -199,5 +213,102 @@ describe("createPgOntologyStore — M2.2 step 2", () => {
     const store = createPgOntologyStore(db);
     expect(store.links.attended).toBeDefined();
     expect(typeof store.links.attended.create).toBe("function");
+  });
+});
+
+// === M5: all-13-types registry expansion ===
+
+describe("createPgOntologyStore — M5 registry expansion", () => {
+  const ALL_OBJECT_TYPES = [
+    "AgentBlocker",
+    "Bed",
+    "Booking",
+    "Event",
+    "Guest",
+    "IncidentLog",
+    "MeetingMinute",
+    "Member",
+    "MemberContext",
+    "Notification",
+    "Room",
+    "Shift",
+    "WorkTradeAgreement",
+  ] as const;
+
+  it("exposes all 13 object types on ctx.objects", () => {
+    const { db } = buildStubDb();
+    const store = createPgOntologyStore(db);
+    for (const typeName of ALL_OBJECT_TYPES) {
+      const access = store.objects[typeName];
+      expect(access, `${typeName} should be defined on store.objects`).toBeDefined();
+      expect(typeof access.findById, `${typeName}.findById`).toBe("function");
+      expect(typeof access.findMany, `${typeName}.findMany`).toBe("function");
+      expect(typeof access.create, `${typeName}.create`).toBe("function");
+      expect(typeof access.update, `${typeName}.update`).toBe("function");
+      expect(typeof access.delete, `${typeName}.delete`).toBe("function");
+    }
+  });
+
+  it("Booking accessor targets the `booking` table", async () => {
+    const { db, capture } = buildStubDb({ returningRows: [] });
+    const store = createPgOntologyStore(db);
+    await store.objects.Booking.update("b-1", { status: "confirmed" });
+    expect(capture.table).toBe(bookingTable);
+  });
+
+  it("Bed accessor targets the `bed` table", async () => {
+    const { db, capture } = buildStubDb({ returningRows: [] });
+    const store = createPgOntologyStore(db);
+    await store.objects.Bed.update("b-1", { out_of_service: true });
+    expect(capture.table).toBe(bedTable);
+  });
+
+  it("Guest accessor targets the `guest` table", async () => {
+    const { db, capture } = buildStubDb({ returningRows: [] });
+    const store = createPgOntologyStore(db);
+    await store.objects.Guest.update("g-1", { current_status: "checked_in" });
+    expect(capture.table).toBe(guestTable);
+  });
+
+  it("IncidentLog accessor targets the `incident_log` table", async () => {
+    const { db, capture } = buildStubDb({ returningRows: [] });
+    const store = createPgOntologyStore(db);
+    await store.objects.IncidentLog.update("i-1", { resolved: true });
+    expect(capture.table).toBe(incidentLogTable);
+  });
+
+  it("MeetingMinute accessor targets the `meeting_minute` table", async () => {
+    const { db, capture } = buildStubDb({ returningRows: [] });
+    const store = createPgOntologyStore(db);
+    await store.objects.MeetingMinute.update("m-1", { title: "x" });
+    expect(capture.table).toBe(meetingMinuteTable);
+  });
+
+  it("Notification accessor targets the `notification` table", async () => {
+    const { db, capture } = buildStubDb({ returningRows: [] });
+    const store = createPgOntologyStore(db);
+    await store.objects.Notification.update("n-1", { kind: "info" });
+    expect(capture.table).toBe(notificationTable);
+  });
+
+  it("Room accessor targets the `room` table", async () => {
+    const { db, capture } = buildStubDb({ returningRows: [] });
+    const store = createPgOntologyStore(db);
+    await store.objects.Room.update("r-1", { capacity: 4 });
+    expect(capture.table).toBe(roomTable);
+  });
+
+  it("Shift accessor targets the `shift` table", async () => {
+    const { db, capture } = buildStubDb({ returningRows: [] });
+    const store = createPgOntologyStore(db);
+    await store.objects.Shift.update("s-1", { status: "done" });
+    expect(capture.table).toBe(shiftTable);
+  });
+
+  it("WorkTradeAgreement accessor targets the `work_trade_agreement` table", async () => {
+    const { db, capture } = buildStubDb({ returningRows: [] });
+    const store = createPgOntologyStore(db);
+    await store.objects.WorkTradeAgreement.update("w-1", { status: "active" });
+    expect(capture.table).toBe(workTradeAgreementTable);
   });
 });

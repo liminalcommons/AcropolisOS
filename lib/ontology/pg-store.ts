@@ -1,34 +1,50 @@
 // M2.2 step-2: Postgres-backed OntologyStore.
 //
-// Implements the OntologyStore interface declared in lib/ontology/ctx.ts:47-56
-// against the live drizzle tables in lib/db/schema.generated.ts. This is what
-// makes function-backed actions like change-tier.ts:17-37 work end-to-end:
-// change-tier calls `ctx.objects.Member.update(...)`, which until now had no
-// production-grade implementation (only the in-memory test fixture).
+// Implements the OntologyStore interface declared in lib/ontology/ctx.ts against
+// the live drizzle tables in lib/db/schema.generated.ts. This is what makes
+// function-backed actions like change-tier.ts work end-to-end.
 //
 // Design notes:
 //   - The accessor layer is intentionally thin. Permission filtering happens
-//     one level up in `createCtx` (lib/ontology/ctx.ts:299) via the
+//     one level up in `createCtx` (lib/ontology/ctx.ts) via the
 //     `wrapObjectAccess` decorator — this store carries no auth surface.
+//   - All 13 ontology object types are wired via the same generic
+//     `buildObjectAccess` factory — no type-specific logic at this layer.
+//     The permission rules for each type come from the ontology YAML and are
+//     applied uniformly by wrapObjectAccess in createCtx.
 //   - Links table (`member_attended_event`) is exposed via LinkAccess<L>.
-//     `traverse` filters in SQL when from/to are bound, returns all otherwise.
-//   - Codegen exposes one table per object type, so the dispatch is by name
-//     (a small dictionary keyed by ontology type name → drizzle table).
 
 import { and, eq } from "drizzle-orm";
-// 0c-pre2: meeting_minute + member_attended_event removed (absent from schema.generated)
 import type { Database } from "../db/client";
 import {
+  agent_blocker as agentBlockerTable,
+  bed as bedTable,
+  booking as bookingTable,
   event as eventTable,
+  guest as guestTable,
+  incident_log as incidentLogTable,
+  meeting_minute as meetingMinuteTable,
   member as memberTable,
   member_context as memberContextTable,
-  agent_blocker as agentBlockerTable,
+  notification as notificationTable,
+  room as roomTable,
+  shift as shiftTable,
+  work_trade_agreement as workTradeAgreementTable,
 } from "../db/schema.generated";
 import type {
   AgentBlocker,
+  Bed,
+  Booking,
   Event,
+  Guest,
+  IncidentLog,
+  MeetingMinute,
   Member,
   MemberContext,
+  Notification,
+  Room,
+  Shift,
+  WorkTradeAgreement,
 } from "./types.generated";
 import type {
   ObjectAccess,
@@ -100,9 +116,9 @@ function buildObjectAccess<T extends { id: string }>(
 export function createPgOntologyStore(db: Database): OntologyStore {
   return {
     objects: {
+      // Original 4 — table bindings and semantics unchanged.
       Member: buildObjectAccess<Member>(db, memberTable as unknown as TableWithId),
       Event: buildObjectAccess<Event>(db, eventTable as unknown as TableWithId),
-      // M4.3: member context + agent escalation blockers
       MemberContext: buildObjectAccess<MemberContext>(
         db,
         memberContextTable as unknown as TableWithId,
@@ -110,6 +126,30 @@ export function createPgOntologyStore(db: Database): OntologyStore {
       AgentBlocker: buildObjectAccess<AgentBlocker>(
         db,
         agentBlockerTable as unknown as TableWithId,
+      ),
+      // Hostel-domain types — same buildObjectAccess factory, one drizzle table
+      // each. Permission enforcement is entirely handled upstream by
+      // wrapObjectAccess in createCtx; this layer is auth-free.
+      Bed: buildObjectAccess<Bed>(db, bedTable as unknown as TableWithId),
+      Booking: buildObjectAccess<Booking>(db, bookingTable as unknown as TableWithId),
+      Guest: buildObjectAccess<Guest>(db, guestTable as unknown as TableWithId),
+      IncidentLog: buildObjectAccess<IncidentLog>(
+        db,
+        incidentLogTable as unknown as TableWithId,
+      ),
+      MeetingMinute: buildObjectAccess<MeetingMinute>(
+        db,
+        meetingMinuteTable as unknown as TableWithId,
+      ),
+      Notification: buildObjectAccess<Notification>(
+        db,
+        notificationTable as unknown as TableWithId,
+      ),
+      Room: buildObjectAccess<Room>(db, roomTable as unknown as TableWithId),
+      Shift: buildObjectAccess<Shift>(db, shiftTable as unknown as TableWithId),
+      WorkTradeAgreement: buildObjectAccess<WorkTradeAgreement>(
+        db,
+        workTradeAgreementTable as unknown as TableWithId,
       ),
     },
     links: {},
