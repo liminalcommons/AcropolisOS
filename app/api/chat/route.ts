@@ -202,6 +202,7 @@ export async function POST(req: Request): Promise<Response> {
       limit: z.number().int().optional().describe("Max rows (optional)."),
       title: z
         .string()
+        .max(120)
         .optional()
         .describe(
           "Optional human-readable label for the widget card header (e.g. 'Open shifts'). If omitted, defaults to the prettified type name.",
