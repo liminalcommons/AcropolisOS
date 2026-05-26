@@ -278,7 +278,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
       expect(db.selectCalls).toBe(0);
     });
 
-    it("invalid filter field falls through to an unfiltered select (still gated)", async () => {
+    it("invalid filter field returns empty (fail-closed, matches count) — no SQL", async () => {
       const db = makeStubDb();
       const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
       const result = await api.select("agent_blocker", {
@@ -286,9 +286,10 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
         filter: { field: "not_a_real_field", value: "x" },
         limit: 10,
       });
-      // Unknown filter field is dropped (not interpolated); the read still runs.
-      expect(result.columns).toEqual(["summary"]);
-      expect(db.executeCalls).toBeGreaterThan(0);
+      // Fail-closed: an unrecognized filter field returns empty, never a silent
+      // unfiltered superset. count() returns 0 for the same condition.
+      expect(result).toEqual({ columns: [], rows: [] });
+      expect(db.executeCalls).toBe(0);
     });
   });
 

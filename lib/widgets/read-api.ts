@@ -263,13 +263,14 @@ export function createReadOnlyDataApi(
 
       if (filter) {
         const allowed = new Set(CATALOG_VALID_FIELDS[resolved]);
-        if (allowed.has(filter.field)) {
-          const rows = await db.execute(
-            sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(`"${resolved}"`)} WHERE ${sql.raw(`"${filter.field}"`)} = ${filter.value} LIMIT ${safeLimit}`,
-          ) as Record<string, unknown>[];
-          return { columns: validCols, rows };
-        }
-        // Invalid filter field — fall through to unfiltered
+        // Fail-closed, matching count(): an unrecognized filter field returns
+        // empty — never a silent unfiltered superset. (A "status=open" queue
+        // must not degrade into "show everything" if the field is wrong.)
+        if (!allowed.has(filter.field)) return { columns: [], rows: [] };
+        const rows = await db.execute(
+          sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(`"${resolved}"`)} WHERE ${sql.raw(`"${filter.field}"`)} = ${filter.value} LIMIT ${safeLimit}`,
+        ) as Record<string, unknown>[];
+        return { columns: validCols, rows };
       }
 
       const rows = await db.execute(
