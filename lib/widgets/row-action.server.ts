@@ -26,7 +26,7 @@ import type { Ontology } from "@/lib/ontology/schema";
 import type { OntologyCtx } from "@/lib/ontology/ctx";
 import { rowActionRefParamFor } from "./row-actions";
 import { rowResolverFor, isChoiceMember } from "./row-resolver";
-import { rowConfirmFor, parseConfirmAction } from "./row-confirm";
+import { rowConfirmFor, parseConfirmAction, toActionInvocation } from "./row-confirm";
 
 export interface RowActionResult {
   ok: boolean;
@@ -317,7 +317,10 @@ export async function invokeRowConfirm(
     action,
     params: {
       [confirm.refParam]: objectId,
-      [confirm.invocationParam]: JSON.stringify(parsed.action),
+      // BRIDGE confirm_action.action ({type,params}) → action_invocation
+      // ({action_type,params}) — see toActionInvocation. Verbatim binding would
+      // hit missing_action_type for the documented (real-agent) {type} shape.
+      [confirm.invocationParam]: JSON.stringify(toActionInvocation(parsed.action)),
     },
     policy: { ontology: rt.ontology, ctx: rt.ctx },
     bypassConfirmation: true,

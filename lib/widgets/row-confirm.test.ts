@@ -11,7 +11,12 @@
 
 import path from "node:path";
 import { describe, expect, it, beforeAll } from "vitest";
-import { confirmsForType, rowConfirmFor, parseConfirmAction } from "./row-confirm";
+import {
+  confirmsForType,
+  rowConfirmFor,
+  parseConfirmAction,
+  toActionInvocation,
+} from "./row-confirm";
 import { loadOntology } from "@/lib/ontology/load";
 import type { Ontology } from "@/lib/ontology/schema";
 
@@ -107,5 +112,37 @@ describe("parseConfirmAction (the shared {label, action} parse)", () => {
 
   it("REJECTS a missing action", () => {
     expect(parseConfirmAction(JSON.stringify({ label: "no action here" }))).toBeNull();
+  });
+});
+
+// toActionInvocation bridges confirm_action.action ({type,params}, what the agent
+// writes per agent-blocker.yaml) → the action_invocation contract
+// ({action_type,params}, what resolve_blocker_with_custom reads). Without it, a
+// real {type}-shaped confirm_action hits missing_action_type and never resolves.
+describe("toActionInvocation (confirm_action.action → action_invocation bridge)", () => {
+  it("maps the documented {type, params} shape → {action_type, params}", () => {
+    expect(toActionInvocation({ type: "log_incident", params: { summary: "x" } })).toEqual({
+      action_type: "log_incident",
+      params: { summary: "x" },
+    });
+  });
+
+  it("passes through an already-{action_type} shape unchanged", () => {
+    expect(toActionInvocation({ action_type: "check_in", params: { booking: "b1" } })).toEqual({
+      action_type: "check_in",
+      params: { booking: "b1" },
+    });
+  });
+
+  it("prefers an explicit action_type over type if both present", () => {
+    expect(toActionInvocation({ action_type: "a", type: "b", params: {} })).toEqual({
+      action_type: "a",
+      params: {},
+    });
+  });
+
+  it("yields action_type undefined for a non-object action (fail-closed)", () => {
+    expect(toActionInvocation(null)).toEqual({ action_type: undefined, params: undefined });
+    expect(toActionInvocation("nope")).toEqual({ action_type: undefined, params: undefined });
   });
 });

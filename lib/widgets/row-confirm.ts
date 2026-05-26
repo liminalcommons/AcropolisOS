@@ -172,3 +172,27 @@ export function parseConfirmAction(
   if (obj.action === undefined) return null;
   return { label: obj.label, action: obj.action };
 }
+
+/**
+ * BRIDGE: confirm_action.action → the `action_invocation` contract.
+ *
+ * Two field-name conventions coexist in the ontology: a blocker's
+ * `confirm_action.action` is documented `{ type, params }` (agent-blocker.yaml,
+ * what flag_blocker / the agent writes), but `resolve_blocker_with_custom`'s
+ * `action_invocation` param is `{ action_type, params }` (the handler reads
+ * `invocation.action_type`). Binding `confirm_action.action` verbatim therefore
+ * yields `missing_action_type` and the blocker never resolves. This maps
+ * `type → action_type` (preferring an explicit `action_type` if already present),
+ * so a real agent-written `{ type, params }` confirm_action resolves correctly.
+ * Defensive: a non-object action yields `action_type: undefined` (the handler
+ * then fails closed with missing_action_type rather than throwing).
+ */
+export function toActionInvocation(
+  action: unknown,
+): { action_type: unknown; params: unknown } {
+  const a =
+    action != null && typeof action === "object"
+      ? (action as { type?: unknown; action_type?: unknown; params?: unknown })
+      : {};
+  return { action_type: a.action_type ?? a.type, params: a.params };
+}
