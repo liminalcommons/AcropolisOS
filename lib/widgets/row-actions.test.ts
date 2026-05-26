@@ -9,7 +9,7 @@
 
 import path from "node:path";
 import { describe, expect, it, beforeAll } from "vitest";
-import { oneClickRowActionsForType } from "./row-actions";
+import { oneClickRowActionsForType, ROW_ACTION_SAFELIST } from "./row-actions";
 import { loadOntology } from "@/lib/ontology/load";
 import type { Ontology } from "@/lib/ontology/schema";
 
@@ -39,5 +39,17 @@ describe("oneClickRowActionsForType", () => {
   it("returns [] for a type with no qualifying one-click action (room)", () => {
     // Room has no action whose single required ref param targets Room.
     expect(oneClickRowActionsForType("room", ontology)).toEqual([]);
+  });
+
+  it("SECURITY: does NOT expose promote_to_steward for member (safelisted out)", () => {
+    // promote_to_steward STRUCTURALLY qualifies (single required ref<Member>),
+    // but it is a privileged always_confirm action — exposing it as a
+    // confirmation-bypassing one-click affordance would let a steward silently
+    // mint stewards. The safelist must exclude it.
+    const actions = oneClickRowActionsForType("member", ontology).map((a) => a.action);
+    expect(actions).not.toContain("promote_to_steward");
+    expect(ROW_ACTION_SAFELIST.has("promote_to_steward")).toBe(false);
+    // Only dismiss_blocker is currently safelisted.
+    expect([...ROW_ACTION_SAFELIST]).toEqual(["dismiss_blocker"]);
   });
 });

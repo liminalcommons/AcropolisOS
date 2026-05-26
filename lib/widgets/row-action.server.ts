@@ -23,6 +23,7 @@ import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { createInProcessDispatcher } from "@/lib/actions/dispatcher";
 import { runApplyActionTool } from "@/lib/agent/tool-gating";
 import type { Ontology } from "@/lib/ontology/schema";
+import { ROW_ACTION_SAFELIST } from "./row-actions";
 
 export interface RowActionResult {
   ok: boolean;
@@ -38,6 +39,11 @@ function resolveRowActionRefParam(
   ontology: Ontology,
   action: string,
 ): string | null {
+  // SECURITY: the structural rule alone admits privileged always_confirm actions
+  // (promote_to_steward, check_in/out). Gate on the explicit safelist FIRST so
+  // this bypassConfirmation endpoint can only ever invoke vetted row actions.
+  if (!ROW_ACTION_SAFELIST.has(action)) return null;
+
   const def = ontology.action_types[action];
   if (!def?.parameters) return null;
 

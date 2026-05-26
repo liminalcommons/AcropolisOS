@@ -24,6 +24,17 @@ export interface RowAction {
   refParam: string;
 }
 
+// SECURITY SAFELIST (interim). The structural "single required ref param" rule
+// is necessary but NOT sufficient: it also admits privileged always_confirm
+// actions like `promote_to_steward` (member ref) and `check_in`/`check_out`
+// (booking ref). A one-click row affordance invokes with bypassConfirmation=true,
+// so exposing those would silently defeat their always_confirm contract (e.g.
+// minting a steward with no confirmation). Until action_types carry an explicit
+// ontology opt-in (e.g. `row_action: true`) — the proper governed fix — only
+// these vetted actions may surface as one-click row affordances. Both the render
+// helper and the server-side invocation gate consult this set.
+export const ROW_ACTION_SAFELIST: ReadonlySet<string> = new Set(["dismiss_blocker"]);
+
 // Catalog snake_case type → ontology PascalCase object-type name.
 // Same forward mapping read-api.ts's CATALOG_TYPE_TO_OBJECT_TYPE encodes and
 // resolve-refs.ts derives via snakeToPascal — kept derivational so it stays in
@@ -92,6 +103,10 @@ export function oneClickRowActionsForType(
 
   const out: RowAction[] = [];
   for (const [actionName, def] of Object.entries(ontology.action_types)) {
+    // SECURITY: structural qualification AND the explicit safelist. The rule
+    // alone admits privileged actions (promote_to_steward, check_in/out); the
+    // safelist keeps the confirmation-bypassing one-click surface to vetted ones.
+    if (!ROW_ACTION_SAFELIST.has(actionName)) continue;
     const refParam = qualifyingRefParam(def, objectTypeName);
     if (refParam) {
       out.push({ action: actionName, refParam });
