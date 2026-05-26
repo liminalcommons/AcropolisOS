@@ -52,21 +52,23 @@ export function catalogTypeToObjectType(catalogType: CatalogType): string {
 }
 
 /**
- * THE DERIVATION RULE (single source of truth — also enforced server-side).
+ * THE STRUCTURAL RULE (single source of truth, shared by render + server gate).
  *
- * Given an action_type definition and the object-type name a row belongs to,
- * returns the single ref parameter name iff the action qualifies as a one-click
- * row action FOR that object type, else null. Qualifies iff:
- *   - it has exactly one REQUIRED parameter, AND
- *   - that required parameter is an inline `ref` whose `target` === objectTypeName.
- * (Every non-required parameter is irrelevant — it can be omitted at the click.)
+ * Returns the name of the action's single required parameter iff that parameter
+ * is an inline `ref` and it is the ONLY required parameter — else null. This is
+ * the "drivable from one row click" shape: the click supplies exactly that one
+ * ref (the row's id); every other parameter must be optional.
+ *
+ * Type-AGNOSTIC: it does not check the ref's target. Callers that care about a
+ * specific object type (the render helper) layer the target check on top; the
+ * server invocation gate does not (it binds the clicked row's id to the ref and
+ * lets the handler's findById no-op on a type mismatch).
  *
  * PropertyReference params ({ ref: "..." }) carry no `type`/`target`, so they
  * can never be the qualifying ref — the `"type" in prop` guard excludes them.
  */
-function qualifyingRefParam(
+export function requiredRefParam(
   actionDef: Ontology["action_types"][string],
-  objectTypeName: string,
 ): string | null {
   const params = actionDef.parameters;
   if (!params) return null;
@@ -78,10 +80,41 @@ function qualifyingRefParam(
 
   const refParam = requiredNames[0];
   const prop = params[refParam];
-  // Must be an INLINE ref whose target is this object type.
+  if (!("type" in prop) || prop.type !== "ref") return null;
+
+  return refParam;
+}
+
+/**
+ * THE INVOCATION GATE (single source of truth for the server endpoint).
+ *
+ * Returns the ref param to bind the clicked row's id to, iff the action both
+ * OPTS IN (`row_action: true`) and matches the structural one-click rule, else
+ * null. This is EXACTLY the check row-action.server.ts's invokeRowAction needs:
+ * one impl, used by both the server gate and tested directly — no inline
+ * re-derivation that could drift from the render path's rule.
+ */
+export function rowActionRefParamFor(
+  actionDef: Ontology["action_types"][string],
+): string | null {
+  if (!isRowActionEnabled(actionDef)) return null;
+  return requiredRefParam(actionDef);
+}
+
+// Render-side qualification: the structural rule PLUS the ref must target the
+// specific object type whose rows we're decorating. Reuses requiredRefParam so
+// the structural logic lives in exactly one place.
+function qualifyingRefParam(
+  actionDef: Ontology["action_types"][string],
+  objectTypeName: string,
+): string | null {
+  const refParam = requiredRefParam(actionDef);
+  if (!refParam) return null;
+  // The required ref must target THIS object type. (requiredRefParam already
+  // confirmed it's an inline ref, so `target` is present.)
+  const prop = actionDef.parameters![refParam];
   if (!("type" in prop) || prop.type !== "ref") return null;
   if (prop.target !== objectTypeName) return null;
-
   return refParam;
 }
 

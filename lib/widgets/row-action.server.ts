@@ -23,45 +23,26 @@ import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { createInProcessDispatcher } from "@/lib/actions/dispatcher";
 import { runApplyActionTool } from "@/lib/agent/tool-gating";
 import type { Ontology } from "@/lib/ontology/schema";
-import { isRowActionEnabled } from "./row-actions";
+import { rowActionRefParamFor } from "./row-actions";
 
 export interface RowActionResult {
   ok: boolean;
   error?: string;
 }
 
-// SERVER-SIDE re-derivation of the one-click rule. Independent of the helper's
-// catalog-type entry point: here we already know the action name, so we read
-// its definition and confirm it qualifies, returning the single ref param name
-// (and its target object-type) or null. Same structural rule as
-// oneClickRowActionsForType — one rule, enforced again at the invocation gate.
+// The invocation gate: confirm `action` opts in (`row_action: true`) AND matches
+// the one-click structural rule, returning the ref param to bind the row id to.
+// Uses the SHARED rowActionRefParamFor — the SAME impl the render helper builds
+// on — so the security boundary (server) cannot drift from what renders. The
+// opt-in excludes privileged always_confirm actions (promote_to_steward,
+// check_in/out) from this bypassConfirmation endpoint.
 function resolveRowActionRefParam(
   ontology: Ontology,
   action: string,
 ): string | null {
   const def = ontology.action_types[action];
   if (!def) return null;
-  // SECURITY: the structural rule alone admits privileged always_confirm actions
-  // (promote_to_steward, check_in/out). Require the ontology opt-in FIRST so this
-  // bypassConfirmation endpoint can only ever invoke actions the ontology
-  // explicitly declares safe as one-click row affordances.
-  if (!isRowActionEnabled(def)) return null;
-
-  if (!def.parameters) return null;
-
-  const params = def.parameters;
-  const requiredNames = Object.keys(params).filter(
-    (name) => params[name].required === true,
-  );
-  if (requiredNames.length !== 1) return null;
-
-  const refParam = requiredNames[0];
-  const prop = params[refParam];
-  // Must be an INLINE ref (carries `type`/`target`); PropertyReference params
-  // ({ ref }) never qualify.
-  if (!("type" in prop) || prop.type !== "ref") return null;
-
-  return refParam;
+  return rowActionRefParamFor(def);
 }
 
 export async function invokeRowAction(

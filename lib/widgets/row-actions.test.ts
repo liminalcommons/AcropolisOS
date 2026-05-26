@@ -9,7 +9,11 @@
 
 import path from "node:path";
 import { describe, expect, it, beforeAll } from "vitest";
-import { oneClickRowActionsForType, isRowActionEnabled } from "./row-actions";
+import {
+  oneClickRowActionsForType,
+  isRowActionEnabled,
+  rowActionRefParamFor,
+} from "./row-actions";
 import { loadOntology } from "@/lib/ontology/load";
 import type { Ontology } from "@/lib/ontology/schema";
 
@@ -57,5 +61,33 @@ describe("oneClickRowActionsForType", () => {
     expect(isRowActionEnabled(ontology.action_types.dismiss_blocker)).toBe(true);
     expect(isRowActionEnabled(ontology.action_types.check_in)).toBe(false);
     expect(isRowActionEnabled(ontology.action_types.check_out)).toBe(false);
+  });
+});
+
+// rowActionRefParamFor is the SERVER invocation gate's exact check (used by
+// row-action.server.ts's invokeRowAction). Testing it directly covers the
+// security boundary — not just the render helper — so the two cannot drift.
+describe("rowActionRefParamFor (server invocation gate)", () => {
+  it("returns the ref param for an opted-in one-click action", () => {
+    expect(rowActionRefParamFor(ontology.action_types.dismiss_blocker)).toBe(
+      "blocker_id",
+    );
+  });
+
+  it("returns null for a privileged single-ref action that did NOT opt in", () => {
+    // check_in (booking ref) and promote_to_steward (member ref) are structurally
+    // single-ref but lack row_action:true → the gate must reject them, so
+    // invokeRowAction returns not_a_row_action for them.
+    expect(rowActionRefParamFor(ontology.action_types.check_in)).toBeNull();
+    expect(rowActionRefParamFor(ontology.action_types.check_out)).toBeNull();
+    expect(rowActionRefParamFor(ontology.action_types.promote_to_steward)).toBeNull();
+  });
+
+  it("returns null for a multi-required-param action even if opted in elsewhere", () => {
+    // resolve_blocker_with_pathway has a 2nd required param → not one-click,
+    // independent of any opt-in.
+    expect(
+      rowActionRefParamFor(ontology.action_types.resolve_blocker_with_pathway),
+    ).toBeNull();
   });
 });
