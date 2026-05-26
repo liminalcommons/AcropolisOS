@@ -197,6 +197,14 @@ export async function POST(req: Request): Promise<Response> {
       limit: z.number().int().optional().describe("Max rows (optional)."),
     }),
     execute: async ({ kind, type, columns, filter, limit }) => {
+      // WRITE-AUTHORIZATION: the org dashboard is a single shared admin surface
+      // (one steward view). Composing MUTATES it, so restrict the write to
+      // stewards — a non-steward can't view /org and must not reshape it.
+      // (The per-type read fence below is necessary but not sufficient: public
+      // types like bed/shift would otherwise let any member mutate the board.)
+      if (composeActor.role !== "steward") {
+        return { ok: false, reason: "Only a steward can compose the org dashboard." };
+      }
       // Build the read fence from THIS request's actor + ontology — the same
       // predicate the /org render path gates every read with. Fail-closed:
       // an actor who cannot read the type cannot compose a widget over it.
