@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Home, Inbox, Plug, Network, Users, Bell,
+  Home, CalendarDays, Inbox, Plug, Network, Users, Bell,
   PanelLeftClose, PanelLeftOpen, Workflow,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ import { ThemeSwitcher } from "./theme-switcher";
 
 const ITEMS = [
   { href: "/", label: "Home", icon: Home },
+  { href: "/day", label: "Today", icon: CalendarDays },
   { href: "/organize", label: "Organize", icon: Inbox },
   { href: "/connect", label: "Connect", icon: Plug },
   { href: "/ontology", label: "Ontology", icon: Network },
