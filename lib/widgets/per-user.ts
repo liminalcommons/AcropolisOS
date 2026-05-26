@@ -33,6 +33,7 @@ import { createReadOnlyDataApi, type CanReadType } from "./read-api";
 import { compose_dashboard, type ResolvedWidget } from "./compose";
 import { resolveRefLabels } from "./resolve-refs";
 import { oneClickRowActionsForType } from "./row-actions";
+import { resolversForType, type RowResolver } from "./row-resolver";
 import type { CatalogType } from "./catalog";
 import { loadOntology } from "@/lib/ontology/load";
 import { getRuntimeOntologyDir } from "@/lib/setup/paths";
@@ -272,6 +273,7 @@ async function runDescriptors(
       // (oneClickRowActionsForType), never a per-type literal. Empty/undefined
       // for every other widget → the card renders exactly as before.
       let rowActions: ResolvedWidget["rowActions"];
+      let rowResolvers: RowResolver[] | undefined;
       if (kind === "data_table") {
         const cfg = validation.config as {
           type: CatalogType;
@@ -280,6 +282,11 @@ async function runDescriptors(
         if (cfg.row_actions === true) {
           const derived = oneClickRowActionsForType(cfg.type, ontology);
           if (derived.length > 0) rowActions = derived;
+          // A resolver is just another affordance gated by the SAME opt-in:
+          // the per-row CHOICE picker (e.g. resolve_blocker_with_pathway). The
+          // choices themselves come from each row's choicesFrom column at render.
+          const derivedResolvers = resolversForType(cfg.type, ontology);
+          if (derivedResolvers.length > 0) rowResolvers = derivedResolvers;
         }
       }
       resolved.push({
@@ -289,6 +296,7 @@ async function runDescriptors(
         data: resolvedData as MetricData | DataTableData | RosterData | CalendarData,
         title: (d as { title?: string }).title,
         ...(rowActions ? { rowActions } : {}),
+        ...(rowResolvers ? { rowResolvers } : {}),
       });
     } catch {
       // Skip widgets whose binding throws — don't crash the dashboard

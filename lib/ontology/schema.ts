@@ -167,6 +167,19 @@ export const ActionType = z
     // necessary but not sufficient; this flag gates which qualifying actions
     // are actually safe (excludes e.g. promote_to_steward, check_in/out).
     row_action: z.boolean().optional(),
+    // Opt-in: may this action surface as a per-row CHOICE picker (a
+    // "row_resolver") on a data_table — N buttons, one per curated option,
+    // each binding a SECOND param to the chosen option's id? Unlike row_action
+    // (a single-required-ref one-click), a resolver is choice-driven: the row
+    // carries a JSON array of {id,label} in `choices_from`, and the chosen
+    // option's id binds to `choice_param`. This declares the mapping in the
+    // ONTOLOGY (governed, generalizable across any future choice-driven
+    // action), not in code. SECURITY: like row_action this is an opt-in, and
+    // the server gate additionally validates the chosen id is a MEMBER of the
+    // row's curated choices before invoking.
+    row_resolver: z
+      .object({ choices_from: z.string(), choice_param: z.string() })
+      .optional(),
   })
   .strict();
 export type ActionType = z.infer<typeof ActionType>;

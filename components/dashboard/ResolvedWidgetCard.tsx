@@ -15,7 +15,10 @@ import type {
   CalendarData,
 } from "@/lib/widgets/catalog";
 import { prettify } from "@/lib/prettify";
-import { invokeRowActionForm } from "@/lib/widgets/row-action.server";
+import {
+  invokeRowActionForm,
+  invokeRowResolverForm,
+} from "@/lib/widgets/row-action.server";
 
 // ── MetricWidget ──────────────────────────────────────────────────────────────
 
@@ -49,13 +52,21 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
   // DERIVED row actions (e.g. Dismiss Blocker) attached at resolve time from
   // the ontology — undefined/empty for generic tables (rendered unchanged).
   const rowActions = widget.rowActions ?? [];
-  const hasRowActions = rowActions.length > 0;
+  // DERIVED per-row CHOICE pickers (e.g. resolve_blocker_with_pathway): the
+  // resolver DEFINITIONS for this type; the choices come from each row's
+  // choicesFrom column at render time.
+  const rowResolvers = widget.rowResolvers ?? [];
+  const hasRowActions = rowActions.length > 0 || rowResolvers.length > 0;
 
-  // "id" is the action target, not a display column: hide it from the visible
-  // columns when row actions are present; use row["id"] as the React key +
-  // action objectId. (When no row actions, id is shown as a normal column.)
+  // "id" is the action target, not a display column. The resolvers' choicesFrom
+  // columns (e.g. "pathways") carry raw JSON consumed for buttons, not display.
+  // Both are hidden from the visible columns when affordances are present;
+  // row["id"] remains the React key + action objectId. (When no affordances, id
+  // is shown as a normal column.)
+  const hiddenColumns = new Set<string>(["id"]);
+  for (const r of rowResolvers) hiddenColumns.add(r.choicesFrom);
   const visibleColumns = hasRowActions
-    ? data.columns.filter((c) => c !== "id")
+    ? data.columns.filter((c) => !hiddenColumns.has(c))
     : data.columns;
 
   if (data.rows.length === 0) {
@@ -117,6 +128,46 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
                             </button>
                           </form>
                         ))}
+                        {rowResolvers.map((resolver) => {
+                          // Each row's choicesFrom column holds a JSON array of
+                          // {id,label}. Parse defensively — skip on invalid/empty.
+                          const raw = row[resolver.choicesFrom];
+                          let choices: Array<{ id: string; label: string }> = [];
+                          if (typeof raw === "string") {
+                            try {
+                              const parsed = JSON.parse(raw) as unknown;
+                              if (Array.isArray(parsed)) {
+                                choices = parsed.filter(
+                                  (c): c is { id: string; label: string } =>
+                                    c != null &&
+                                    typeof c === "object" &&
+                                    typeof (c as { id?: unknown }).id === "string" &&
+                                    typeof (c as { label?: unknown }).label === "string",
+                                );
+                              }
+                            } catch {
+                              // corrupt JSON — render no choices for this resolver
+                            }
+                          }
+                          return choices.map((choice) => (
+                            <form
+                              key={`${resolver.action}:${choice.id}`}
+                              action={invokeRowResolverForm.bind(
+                                null,
+                                resolver.action,
+                                rowId,
+                                choice.id,
+                              )}
+                            >
+                              <button
+                                type="submit"
+                                className="text-xs rounded border border-border px-2 py-1 text-foreground hover:bg-muted"
+                              >
+                                {choice.label}
+                              </button>
+                            </form>
+                          ));
+                        })}
                       </div>
                     </td>
                   ) : null}

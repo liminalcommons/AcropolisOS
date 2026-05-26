@@ -29,6 +29,7 @@ import {
   type CalendarData,
 } from "./catalog";
 import { createReadOnlyDataApi, type CanReadType } from "./read-api";
+import type { RowResolver } from "./row-resolver";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,12 @@ export interface ResolvedWidget {
   // card renders as a per-row Actions cell. Computed at resolve time where the
   // ontology is already loaded (runDescriptors), so the card stays data-only.
   rowActions?: Array<{ action: string; refParam: string }>;
+  // Populated alongside rowActions (same opt-in): the ontology-derived per-row
+  // CHOICE pickers (row_resolver). Each carries the action + the choicesFrom
+  // column whose per-row JSON {id,label} array supplies the choice buttons.
+  // The CHOICES themselves come from each row's choicesFrom column at render
+  // time — only the resolver DEFINITIONS for the widget's type live here.
+  rowResolvers?: RowResolver[];
 }
 
 // The shape stored in member_context.pinned_widgets (JSON array).
