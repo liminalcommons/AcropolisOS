@@ -77,7 +77,12 @@ function buildConfig(input: ComposeOrgViewInput): unknown {
   const { kind, type, columns, filter, limit } = input;
   switch (kind) {
     case "data_table":
-      return { type, columns: columns ?? [], ...(limit !== undefined ? { limit } : {}) };
+      return {
+        type,
+        columns: columns ?? [],
+        ...(filter ? { filter } : {}),
+        ...(limit !== undefined ? { limit } : {}),
+      };
     case "roster":
       return { type, fields: columns ?? [], ...(limit !== undefined ? { limit } : {}) };
     case "metric":

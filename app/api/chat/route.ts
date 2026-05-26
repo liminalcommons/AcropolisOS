@@ -198,7 +198,11 @@ export async function POST(req: Request): Promise<Response> {
       filter: z
         .object({ field: z.string(), value: z.string() })
         .optional()
-        .describe("Optional field=value filter (metric only)."),
+        .describe(
+          "Optional field=value filter for data_table or metric (e.g. {field:'status', value:'open'}). " +
+            "Use the relative token value '@today' to filter a date field to the current date " +
+            "(e.g. {field:'from_date', value:'@today'} = arriving today).",
+        ),
       limit: z.number().int().optional().describe("Max rows (optional)."),
       title: z
         .string()

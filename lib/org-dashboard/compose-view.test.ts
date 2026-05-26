@@ -287,4 +287,37 @@ describe("multiple widgets coexist (append, not replace)", () => {
       dashboard.widgets.some((w) => w.id === "compose-bed-metric"),
     ).toBe(true);
   });
+
+  it("threads a FILTER into a data_table config (incl. @today) — the agent can compose filtered lists", async () => {
+    // Regression for the VN-35 gap: buildConfig dropped `filter` for data_table,
+    // so the agent could compose filtered COUNTS but not filtered LISTS (could
+    // not reproduce the veto-queue / arrivals-today views). booking is
+    // read:[steward,manager] → steward + canWriteDashboard.
+    const canReadType = buildCanReadType(steward, ontology);
+    const result = await composeOrgView(
+      {
+        kind: "data_table",
+        type: "booking",
+        columns: ["label", "from_date"],
+        filter: { field: "from_date", value: "@today" },
+      },
+      { canReadType, canWriteDashboard: true },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const cfg = result.descriptor.config as {
+      filter?: { field: string; value: string };
+    };
+    expect(cfg.filter).toEqual({ field: "from_date", value: "@today" });
+
+    const dashboard = await readOrgDashboard();
+    const persisted = dashboard.widgets.find(
+      (w) => w.id === "compose-booking-data_table",
+    );
+    const persistedCfg = persisted?.config as {
+      filter?: { field: string; value: string };
+    };
+    expect(persistedCfg?.filter).toEqual({ field: "from_date", value: "@today" });
+  });
 });
