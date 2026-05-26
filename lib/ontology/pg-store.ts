@@ -14,7 +14,7 @@
 //     applied uniformly by wrapObjectAccess in createCtx.
 //   - Links table (`member_attended_event`) is exposed via LinkAccess<L>.
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, getTableColumns } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
   agent_blocker as agentBlockerTable,
@@ -57,6 +57,32 @@ import type {
 // keep the rest as `any` for query builder fluency.
 type TableWithId = { id: { name: string } } & Record<string, unknown>;
 
+// TIMESTAMP COERCION (single write boundary). The codegen types timestamp
+// properties as ISO strings (types.generated.ts → z.iso.datetime), but emits
+// drizzle timestamp columns in the default `date` mode, which expects Date
+// objects on write (drizzle calls value.toISOString() — an ISO STRING throws
+// "value.toISOString is not a function"). Handlers correctly pass strings
+// (matching the TS type), so we convert string → Date for date-typed columns
+// here, once, so EVERY function-backed handler that writes a timestamp works
+// against the PG store. (Until the codegen emits these columns as mode:'string'
+// — blocked on the ontology-source bifurcation — this is the right seam.)
+function coerceTimestamps(
+  table: TableWithId,
+  values: Record<string, unknown>,
+): Record<string, unknown> {
+  const cols = getTableColumns(table as never) as Record<
+    string,
+    { dataType?: string } | undefined
+  >;
+  const out: Record<string, unknown> = { ...values };
+  for (const [key, val] of Object.entries(out)) {
+    if (typeof val === "string" && cols[key]?.dataType === "date") {
+      out[key] = new Date(val);
+    }
+  }
+  return out;
+}
+
 function buildObjectAccess<T extends { id: string }>(
   db: Database,
   table: TableWithId,
@@ -87,7 +113,7 @@ function buildObjectAccess<T extends { id: string }>(
     async create(input: T): Promise<T> {
       const [row] = (await db
         .insert(table as never)
-        .values(input as never)
+        .values(coerceTimestamps(table, input as Record<string, unknown>) as never)
         .returning()) as unknown as T[];
       return row;
     },
@@ -98,7 +124,7 @@ function buildObjectAccess<T extends { id: string }>(
       void _ignore;
       const [row] = (await db
         .update(table as never)
-        .set(rest as never)
+        .set(coerceTimestamps(table, rest as Record<string, unknown>) as never)
         .where(eq((table as never as { id: unknown }).id as never, id))
         .returning()) as unknown as T[];
       return row ?? null;
