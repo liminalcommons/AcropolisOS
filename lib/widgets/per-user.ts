@@ -270,3 +270,11 @@ export async function composeTierRoleDefault(
   const selections = spec.map((d) => ({ kind: d.kind, config: d.config }));
   await compose_dashboard(db, memberId, selections);
 }
+
+// ── resolveDescriptors (public alias) ─────────────────────────────────────────
+//
+// Promotes the internal runDescriptors to a named export.
+// Steward/admin surfaces (e.g. /org) call this with a fixed in-code descriptor
+// list to resolve widgets without needing a member_context row — same
+// read-only api path as resolvePerUserDashboard, no persistence involved.
+export { runDescriptors as resolveDescriptors };
