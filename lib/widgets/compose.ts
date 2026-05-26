@@ -47,6 +47,11 @@ export interface ResolvedWidget {
   config: unknown;
   data: MetricData | DataTableData | RosterData | CalendarData;
   title?: string;
+  // Populated only for data_table widgets opted into row_actions: the
+  // ontology-derived one-click actions (e.g. dismiss_blocker → blocker_id) the
+  // card renders as a per-row Actions cell. Computed at resolve time where the
+  // ontology is already loaded (runDescriptors), so the card stays data-only.
+  rowActions?: Array<{ action: string; refParam: string }>;
 }
 
 // The shape stored in member_context.pinned_widgets (JSON array).

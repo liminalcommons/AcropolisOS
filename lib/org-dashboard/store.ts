@@ -47,10 +47,14 @@ export const DEFAULT_ORG_DASHBOARD: OrgDashboardConfig = {
       kind: "data_table",
       title: "Awaiting your decision",
       config: {
+        // "id" is FIRST so the renderer has the action target; it is filtered
+        // out of the VISIBLE columns and used only as the row key + objectId.
         type: "agent_blocker",
-        columns: ["summary", "reason_kind", "blocked_actor_id", "resolution_mode", "created_at"],
+        columns: ["id", "summary", "reason_kind", "blocked_actor_id", "resolution_mode", "created_at"],
         filter: { field: "status", value: "open" },
         limit: 50,
+        // Derive one-click row actions (→ Dismiss Blocker) from the ontology.
+        row_actions: true,
       },
     },
     {

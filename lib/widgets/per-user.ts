@@ -32,6 +32,8 @@ import {
 import { createReadOnlyDataApi, type CanReadType } from "./read-api";
 import { compose_dashboard, type ResolvedWidget } from "./compose";
 import { resolveRefLabels } from "./resolve-refs";
+import { oneClickRowActionsForType } from "./row-actions";
+import type { CatalogType } from "./catalog";
 import { loadOntology } from "@/lib/ontology/load";
 import { getRuntimeOntologyDir } from "@/lib/setup/paths";
 import type { Ontology } from "@/lib/ontology/schema";
@@ -265,12 +267,28 @@ async function runDescriptors(
         ontology,
         api,
       );
+      // DERIVED row actions: only for data_table descriptors opted in via
+      // config.row_actions. The actions come from the ontology shape
+      // (oneClickRowActionsForType), never a per-type literal. Empty/undefined
+      // for every other widget → the card renders exactly as before.
+      let rowActions: ResolvedWidget["rowActions"];
+      if (kind === "data_table") {
+        const cfg = validation.config as {
+          type: CatalogType;
+          row_actions?: boolean;
+        };
+        if (cfg.row_actions === true) {
+          const derived = oneClickRowActionsForType(cfg.type, ontology);
+          if (derived.length > 0) rowActions = derived;
+        }
+      }
       resolved.push({
         id: d.id ?? `role-default-${i}`,
         kind,
         config,
         data: resolvedData as MetricData | DataTableData | RosterData | CalendarData,
         title: (d as { title?: string }).title,
+        ...(rowActions ? { rowActions } : {}),
       });
     } catch {
       // Skip widgets whose binding throws — don't crash the dashboard

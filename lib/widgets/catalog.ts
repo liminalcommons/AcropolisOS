@@ -84,6 +84,10 @@ export const DataTableConfigSchema = z.object({
     })
     .optional(),
   limit: z.number().int().min(1).max(500).optional().default(20),
+  // Opt-in: when true, the renderer derives one-click row actions for this
+  // type from the ontology (oneClickRowActionsForType) and shows an Actions
+  // cell per row. Generic data_tables omit it → unchanged (no Actions column).
+  row_actions: z.boolean().optional(),
 });
 export type DataTableConfig = z.infer<typeof DataTableConfigSchema>;
 

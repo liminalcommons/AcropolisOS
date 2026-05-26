@@ -15,6 +15,7 @@ import type {
   CalendarData,
 } from "@/lib/widgets/catalog";
 import { prettify } from "@/lib/prettify";
+import { invokeRowActionForm } from "@/lib/widgets/row-action.server";
 
 // ── MetricWidget ──────────────────────────────────────────────────────────────
 
@@ -45,6 +46,18 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
   const config = widget.config as { type: string; columns: string[]; limit?: number };
   const label = widget.title ?? prettify(config.type);
 
+  // DERIVED row actions (e.g. Dismiss Blocker) attached at resolve time from
+  // the ontology — undefined/empty for generic tables (rendered unchanged).
+  const rowActions = widget.rowActions ?? [];
+  const hasRowActions = rowActions.length > 0;
+
+  // "id" is the action target, not a display column: hide it from the visible
+  // columns when row actions are present; use row["id"] as the React key +
+  // action objectId. (When no row actions, id is shown as a normal column.)
+  const visibleColumns = hasRowActions
+    ? data.columns.filter((c) => c !== "id")
+    : data.columns;
+
   if (data.rows.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card p-5">
@@ -65,26 +78,51 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
         <table className="w-full text-xs">
           <thead>
             <tr className="text-muted-foreground text-left">
-              {data.columns.map((col) => (
+              {visibleColumns.map((col) => (
                 <th key={col} className="font-normal pb-2 pr-4">
                   {col}
                 </th>
               ))}
+              {hasRowActions ? (
+                <th className="font-normal pb-2 pr-4">Actions</th>
+              ) : null}
             </tr>
           </thead>
           <tbody className="text-foreground">
-            {data.rows.map((row, i) => (
-              <tr
-                key={i}
-                className={i > 0 ? "border-t border-border/60" : ""}
-              >
-                {data.columns.map((col) => (
-                  <td key={col} className="py-1 pr-4 align-top">
-                    {row[col] != null ? String(row[col]) : "—"}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {data.rows.map((row, i) => {
+              const rowId = String(row["id"] ?? i);
+              return (
+                <tr
+                  key={hasRowActions ? rowId : i}
+                  className={i > 0 ? "border-t border-border/60" : ""}
+                >
+                  {visibleColumns.map((col) => (
+                    <td key={col} className="py-1 pr-4 align-top">
+                      {row[col] != null ? String(row[col]) : "—"}
+                    </td>
+                  ))}
+                  {hasRowActions ? (
+                    <td className="py-1 pr-4 align-top">
+                      <div className="flex flex-wrap gap-1.5">
+                        {rowActions.map(({ action }) => (
+                          <form
+                            key={action}
+                            action={invokeRowActionForm.bind(null, action, rowId)}
+                          >
+                            <button
+                              type="submit"
+                              className="text-xs rounded border border-border px-2 py-1 text-muted-foreground hover:text-foreground hover:bg-muted"
+                            >
+                              {prettify(action)}
+                            </button>
+                          </form>
+                        ))}
+                      </div>
+                    </td>
+                  ) : null}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
