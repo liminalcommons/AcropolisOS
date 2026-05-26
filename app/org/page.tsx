@@ -8,9 +8,13 @@
 // FENCE: read-only. resolveDescriptors passes a ReadOnlyDataApi (no mutation
 // methods) to every queryBinding. This page never writes to the world-model.
 //
-// AUTH GATE: mirrors /day and /me — buildChatRuntime() + isAnonymous().
-// Any non-anonymous user can reach this page; role-scoping is left to a future
-// gate when multi-tenant isolation is needed (bed ontology read is ["*"]).
+// AUTH GATE: buildChatRuntime() + isAnonymous(), THEN steward-only.
+// The org dashboard is the admin surface (decision: one admin view = steward).
+// Role gating matters because the widget read path (ReadOnlyDataApi) is
+// permission-blind — it applies only a structural type/field whitelist, NOT the
+// viewer's per-type read permissions. Restricting this page to stewards (who are
+// authorized for all types) contains that gap until the read path is made
+// actor-permission-aware. See the HIGH fix-request in the opponent log.
 
 import Link from "next/link";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
@@ -58,6 +62,17 @@ export default async function OrgPage(): Promise<React.ReactElement> {
           <Link href="/signin" className="underline text-foreground">
             Sign in
           </Link>
+        </p>
+      </main>
+    );
+  }
+  // Steward-only: the admin surface. Contains the permission-blind read path
+  // (see AUTH GATE note above) by restricting to actors authorized for all types.
+  if (chatRuntime.actor.role !== "steward") {
+    return (
+      <main className="flex items-center justify-center min-h-screen">
+        <p className="text-sm text-muted-foreground">
+          The org dashboard is available to stewards only.
         </p>
       </main>
     );
