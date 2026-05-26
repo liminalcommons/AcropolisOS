@@ -86,6 +86,21 @@ export default async function DayPage({
       </main>
     );
   }
+  // Steward-only. This page reads booking/guest/incident_log via raw drizzle
+  // (predates the widget read path) and therefore BYPASSES the per-type
+  // permission gate. guest/booking/incident_log are read:[steward,manager], so
+  // gate the surface to stewards until /day is migrated to the permission-aware
+  // widget path (Step 3). Without this, any authenticated member would see
+  // guest PII / bookings / incidents.
+  if (chatRuntime.actor.role !== "steward") {
+    return (
+      <main className="flex items-center justify-center min-h-screen">
+        <p className="text-sm text-muted-foreground">
+          The day view is available to stewards only.
+        </p>
+      </main>
+    );
+  }
 
   // Resolve date from searchParams (default 2026-06-05)
   const DEFAULT_DATE = "2026-06-05";

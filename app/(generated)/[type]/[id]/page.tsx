@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { sql } from "drizzle-orm";
 import { loadOntology } from "@/lib/ontology/load";
 import { getDb } from "@/lib/db/client";
+import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { prettify } from "@/lib/prettify";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +37,13 @@ export default async function ObjectDetailPage(
 ): Promise<React.ReactElement> {
   const { type, id } = await params;
   if (!isValidIdent(type)) notFound();
+
+  // SECURITY: gate to authenticated stewards (same as the list view). This raw
+  // per-type detail reader bypasses the permission boundary. notFound() hides it.
+  const chatRuntime = await buildChatRuntime();
+  if (isAnonymous(chatRuntime.actor) || chatRuntime.actor.role !== "steward") {
+    notFound();
+  }
 
   const ontology = await loadOntology(
     path.join(process.cwd(), "ontology"),
