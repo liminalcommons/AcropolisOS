@@ -20,9 +20,11 @@ export default defineAction({
     await ctx.objects.AgentBlocker.update(params.blocker_id, {
       status: "dismissed",
     });
-    if (ctx.notifications && ctx.actor?.userId) {
+    // Notify the blocked principal (not the dismisser) so the agent working on
+    // their behalf learns it was cleared — correct under steward-override too.
+    if (ctx.notifications && row.blocked_actor_id) {
       await ctx.notifications.create({
-        recipient_member_id: ctx.actor.userId,
+        recipient_member_id: row.blocked_actor_id,
         kind: "agent_unblocked",
         title: `Dismissed: ${row.summary}`,
         body: params.reason ? `Dismissed: ${params.reason}` : `Blocker ${row.id} dismissed`,

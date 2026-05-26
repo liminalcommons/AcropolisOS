@@ -43,10 +43,11 @@ export default defineAction({
       resolved_at: resolvedAt,
     });
 
-    // Notify actor so the agent can pick up the thread.
-    if (ctx.notifications && ctx.actor?.userId) {
+    // Notify the blocked principal so the agent can pick up the thread —
+    // correct under steward-override too (recipient is the member, not the actor).
+    if (ctx.notifications && row.blocked_actor_id) {
       await ctx.notifications.create({
-        recipient_member_id: ctx.actor.userId,
+        recipient_member_id: row.blocked_actor_id,
         kind: "agent_unblocked",
         title: `Resolved: ${row.summary}`,
         body: `Custom action '${invocation.action_type}' selected for blocker ${row.id}`,

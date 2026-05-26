@@ -264,4 +264,33 @@ describe("dismiss_blocker", () => {
 
     expect(result).toMatchObject({ ok: true });
   });
+
+  it("steward-override notifies the BLOCKED member (principal), NOT the dismisser", async () => {
+    // The agent is blocked on behalf of memberA; the "unblocked" signal must
+    // reach memberA (and the agent watching memberA's inbox), not the steward
+    // who happened to dismiss it. Otherwise the agent stalls / re-prompts blind.
+    const blocker = makeBlocker("00000000-0000-4000-8001-000000000008", memberA.userId);
+    await db.objects.AgentBlocker.create(blocker);
+
+    await invokeAction({
+      actionName: "dismiss_blocker",
+      params: { blocker_id: blocker.id, reason: "Steward override" },
+      ctx: stewardCtx,
+      ontology,
+      functionsDir: FUNCTIONS_DIR,
+      sideEffectAdapters: adapters,
+    });
+
+    // The agent_unblocked SIGNAL (the handler's domain notification) reaches
+    // memberA — the principal the agent is blocked on. (The notify_member
+    // side-effect separately sends the steward a generic "completed" receipt;
+    // that is fine — what matters is the agent_unblocked signal's recipient.)
+    const forMemberA = await notifications.listForRecipient(steward, memberA.userId);
+    expect(forMemberA.some((n) => n.kind === "agent_unblocked")).toBe(true);
+
+    // The steward (dismisser) must NOT receive the agent_unblocked signal —
+    // before the fix it landed here, leaving memberA's agent unaware.
+    const forSteward = await notifications.listForRecipient(steward, steward.userId);
+    expect(forSteward.some((n) => n.kind === "agent_unblocked")).toBe(false);
+  });
 });
