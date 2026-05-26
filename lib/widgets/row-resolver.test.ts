@@ -10,7 +10,7 @@
 
 import path from "node:path";
 import { describe, expect, it, beforeAll } from "vitest";
-import { resolversForType, rowResolverFor } from "./row-resolver";
+import { resolversForType, rowResolverFor, isChoiceMember } from "./row-resolver";
 import { loadOntology } from "@/lib/ontology/load";
 import type { Ontology } from "@/lib/ontology/schema";
 
@@ -62,5 +62,43 @@ describe("rowResolverFor (server invocation gate)", () => {
 
   it("returns null for an unknown action", () => {
     expect(rowResolverFor(undefined)).toBeNull();
+  });
+});
+
+// isChoiceMember is the MEMBERSHIP control behind invokeRowResolver — it stops an
+// arbitrary choiceId from reaching the always_confirm action. The live UI only
+// renders valid choices, so the REJECT paths are never exercised in a browser;
+// these tests cover them directly.
+describe("isChoiceMember (membership security control)", () => {
+  const choices = JSON.stringify([
+    { id: "11111111-1111-4111-8111-111111111111", label: "Extend stay" },
+    { id: "22222222-2222-4222-8222-222222222222", label: "Charge fee" },
+  ]);
+
+  it("ACCEPTS an id that is one of the curated choices", () => {
+    expect(isChoiceMember(choices, "22222222-2222-4222-8222-222222222222")).toBe(true);
+  });
+
+  it("REJECTS an arbitrary id not in the choices (the core attack)", () => {
+    expect(isChoiceMember(choices, "99999999-9999-4999-8999-999999999999")).toBe(false);
+  });
+
+  it("REJECTS corrupt / non-JSON choices (fail-closed)", () => {
+    expect(isChoiceMember("{not valid json", "11111111-1111-4111-8111-111111111111")).toBe(false);
+  });
+
+  it("REJECTS a non-array JSON value (fail-closed)", () => {
+    expect(isChoiceMember('{"id":"11111111-1111-4111-8111-111111111111"}', "11111111-1111-4111-8111-111111111111")).toBe(false);
+  });
+
+  it("REJECTS when choices is not a string (null/undefined/object)", () => {
+    expect(isChoiceMember(null, "x")).toBe(false);
+    expect(isChoiceMember(undefined, "x")).toBe(false);
+    expect(isChoiceMember(42, "x")).toBe(false);
+  });
+
+  it("REJECTS an element with no matching id, and an empty array", () => {
+    expect(isChoiceMember('[{"label":"no id here"}]', "x")).toBe(false);
+    expect(isChoiceMember("[]", "x")).toBe(false);
   });
 });

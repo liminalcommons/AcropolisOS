@@ -25,7 +25,7 @@ import { runApplyActionTool } from "@/lib/agent/tool-gating";
 import type { Ontology } from "@/lib/ontology/schema";
 import type { OntologyCtx } from "@/lib/ontology/ctx";
 import { rowActionRefParamFor } from "./row-actions";
-import { rowResolverFor } from "./row-resolver";
+import { rowResolverFor, isChoiceMember } from "./row-resolver";
 
 export interface RowActionResult {
   ok: boolean;
@@ -182,28 +182,11 @@ export async function invokeRowResolver(
   }
 
   // MEMBERSHIP VALIDATION — the chosen id must be one of the row's curated
-  // choices (obj[choicesFrom] is a JSON string of [{id,label}]). Parsed
-  // defensively: anything that isn't an array of objects with a matching `id`
-  // is an invalid_choice. This is the control that prevents an arbitrary
-  // choiceId from reaching the always_confirm action.
-  const rawChoices = obj[resolver.choicesFrom];
-  let isMember = false;
-  if (typeof rawChoices === "string") {
-    try {
-      const parsed = JSON.parse(rawChoices) as unknown;
-      if (Array.isArray(parsed)) {
-        isMember = parsed.some(
-          (c) =>
-            c != null &&
-            typeof c === "object" &&
-            (c as { id?: unknown }).id === choiceId,
-        );
-      }
-    } catch {
-      // non-JSON / corrupt → not a member (fail-closed)
-    }
-  }
-  if (!isMember) {
+  // choices. isChoiceMember (pure, unit-tested in row-resolver.test.ts) parses
+  // obj[choicesFrom] fail-closed: a non-string / corrupt / non-array / no-match
+  // is invalid_choice. This is the control that prevents an arbitrary choiceId
+  // from reaching the always_confirm action.
+  if (!isChoiceMember(obj[resolver.choicesFrom], choiceId)) {
     return { ok: false, error: "invalid_choice" };
   }
 

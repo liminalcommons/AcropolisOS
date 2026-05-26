@@ -135,3 +135,33 @@ export function resolversForType(
   }
   return out;
 }
+
+/**
+ * MEMBERSHIP CHECK — the security control behind the resolver invocation gate
+ * (row-action.server.ts invokeRowResolver). Returns true iff `choiceId` is the
+ * `id` of one element of `rawChoices` — the row's curated choices column (a JSON
+ * string of `[{ id, label }]`). This is what stops an ARBITRARY choiceId from
+ * reaching the always_confirm action: the steward may only pick a real curated
+ * option the agent put on the row.
+ *
+ * FAIL-CLOSED: a non-string input, non-JSON / corrupt string, non-array, or an
+ * array with no element whose `id` === choiceId ALL return false. Pure (no I/O),
+ * so it is unit-tested directly — covering the reject path the live UI never
+ * exercises (the UI only renders valid choices).
+ */
+export function isChoiceMember(rawChoices: unknown, choiceId: string): boolean {
+  if (typeof rawChoices !== "string") return false;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawChoices);
+  } catch {
+    return false;
+  }
+  if (!Array.isArray(parsed)) return false;
+  return parsed.some(
+    (c) =>
+      c != null &&
+      typeof c === "object" &&
+      (c as { id?: unknown }).id === choiceId,
+  );
+}
