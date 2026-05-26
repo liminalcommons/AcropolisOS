@@ -14,15 +14,16 @@ import type {
   RosterData,
   CalendarData,
 } from "@/lib/widgets/catalog";
+import { prettify } from "@/lib/prettify";
 
 // ── MetricWidget ──────────────────────────────────────────────────────────────
 
 function MetricWidget({ widget }: { widget: ResolvedWidget }) {
   const data = widget.data as MetricData;
   const config = widget.config as { type: string; agg: string; filter?: { field: string; value: string } };
-  const label = config.filter
-    ? `${config.type} (${config.filter.field}=${config.filter.value})`
-    : config.type;
+  const label = widget.title ?? (config.filter
+    ? `${prettify(config.type)} (${config.filter.field}=${config.filter.value})`
+    : prettify(config.type));
 
   return (
     <div className="rounded-lg border border-border bg-card p-5">
@@ -42,12 +43,13 @@ function MetricWidget({ widget }: { widget: ResolvedWidget }) {
 function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
   const data = widget.data as DataTableData;
   const config = widget.config as { type: string; columns: string[]; limit?: number };
+  const label = widget.title ?? prettify(config.type);
 
   if (data.rows.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card p-5">
         <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-          {config.type}
+          {label}
         </p>
         <p className="text-xs text-muted-foreground">No rows.</p>
       </div>
@@ -57,7 +59,7 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
   return (
     <div className="rounded-lg border border-border bg-card p-5">
       <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
-        {config.type}
+        {label}
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
@@ -95,12 +97,13 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
 function RosterWidget({ widget }: { widget: ResolvedWidget }) {
   const data = widget.data as RosterData;
   const config = widget.config as { type: string; fields: string[]; limit?: number };
+  const label = widget.title ?? `${prettify(config.type)} roster`;
 
   if (data.entries.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card p-5">
         <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-          {config.type} roster
+          {label}
         </p>
         <p className="text-xs text-muted-foreground">No entries.</p>
       </div>
@@ -110,7 +113,7 @@ function RosterWidget({ widget }: { widget: ResolvedWidget }) {
   return (
     <div className="rounded-lg border border-border bg-card p-5">
       <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
-        {config.type} roster
+        {label}
       </p>
       <ul className="space-y-2">
         {data.entries.map((entry, i) => (
@@ -142,12 +145,14 @@ function CalendarWidget({ widget }: { widget: ResolvedWidget }) {
   const config = widget.config as { type: string; date_field: string };
 
   const bucketKeys = Object.keys(data.buckets).sort();
+  const emptyLabel = widget.title ?? `${prettify(config.type)} calendar`;
+  const populatedLabel = widget.title ?? `${prettify(config.type)} calendar (${config.date_field})`;
 
   if (bucketKeys.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card p-5">
         <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-          {config.type} calendar
+          {emptyLabel}
         </p>
         <p className="text-xs text-muted-foreground">No events.</p>
       </div>
@@ -157,7 +162,7 @@ function CalendarWidget({ widget }: { widget: ResolvedWidget }) {
   return (
     <div className="rounded-lg border border-border bg-card p-5">
       <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
-        {config.type} calendar ({config.date_field})
+        {populatedLabel}
       </p>
       <ul className="space-y-2">
         {bucketKeys.slice(0, 10).map((date) => (

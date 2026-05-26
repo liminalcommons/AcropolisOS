@@ -39,6 +39,7 @@ export interface ComposeOrgViewInput {
   columns?: string[];
   filter?: { field: string; value: string };
   limit?: number;
+  title?: string;
 }
 
 // STRUCTURAL WRITE-AUTHORIZATION (Axiom 2): every dashboard MUTATION requires
@@ -139,6 +140,7 @@ export async function composeOrgView(
     id: composedId(input.type, input.kind),
     kind: input.kind,
     config: validation.config,
+    title: input.title,
   };
   await addOrgWidget(descriptor);
 

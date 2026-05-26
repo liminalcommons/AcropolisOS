@@ -46,6 +46,7 @@ export interface ResolvedWidget {
   kind: CatalogKind;
   config: unknown;
   data: MetricData | DataTableData | RosterData | CalendarData;
+  title?: string;
 }
 
 // The shape stored in member_context.pinned_widgets (JSON array).
@@ -53,6 +54,7 @@ interface StoredDescriptor {
   id: string;
   kind: CatalogKind;
   config: unknown;
+  title?: string;
 }
 
 // ── compose_dashboard ────────────────────────────────────────────────────────
@@ -202,6 +204,7 @@ export async function resolveDashboard(
         kind,
         config: descriptor.config,
         data,
+        title: descriptor.title,
       });
     } catch {
       // Skip widgets whose queryBinding throws — don't crash the whole dashboard

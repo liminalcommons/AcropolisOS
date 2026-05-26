@@ -66,7 +66,7 @@ const APPLY_ACTION_INSTRUCTIONS = [
   "  - apply_action: invoke a typed action to mutate LIVE state immediately (e.g., change_tier on an existing Member, record_attendance). These commit when called.",
   "  - n8n (list_workflows, create_workflow): inspect and create automation workflows in n8n. Use list_workflows when the user asks what automations exist or what's connected. Use create_workflow when the user asks to set up an automation or materialize an action path as a workflow. If either tool returns 'n8n not connected', inform the user the API key needs to be configured.",
   "  - design_theme: when the user asks to re-skin / re-color the app ('make the theme oceanic', 'give me a warm earthy palette', 'I want a high-contrast theme'), call design_theme with their described look. It designs a structurally + accessibility-validated palette and applies it for the current member. Tell the user it's applied (or report the reason if it returns ok:false).",
-  "  - compose_view: when the steward asks to show/add a table, list, metric, or calendar of some type on the org dashboard ('show me a table of guests on the dashboard', 'add a count of open shifts', 'put the bookings on /org'), call compose_view with the widget kind (data_table | roster | metric | calendar), the ontology type, and the columns/fields they want. The view appears on /org immediately — no approval step. Calling compose_view again for the same type+kind REPLACES that widget. If it returns ok:false, tell the user the reason (e.g. you are not authorized to read that type).",
+  "  - compose_view: when the steward asks to show/add a table, list, metric, or calendar of some type on the org dashboard ('show me a table of guests on the dashboard', 'add a count of open shifts', 'put the bookings on /org'), call compose_view with the widget kind (data_table | roster | metric | calendar), the ontology type, and the columns/fields they want. You may also pass an optional `title` to label the widget (e.g. 'Open shifts'); if omitted it defaults to the prettified type name. The view appears on /org immediately — no approval step. Calling compose_view again for the same type+kind REPLACES that widget. If it returns ok:false, tell the user the reason (e.g. you are not authorized to read that type).",
     "  - remove_widget / clear_dashboard: when the steward asks to remove or take off a specific widget from the org dashboard, call remove_widget with the same kind+type used to compose it; when they ask to reset, empty, or clear the whole dashboard, call clear_dashboard. Both apply immediately and are steward-only (they return ok:false otherwise).",
   "Rules: never propose a new object type the ontology already has — call describe_<type> or query_<type> first to verify. Use apply_action only when the user asks to do something on the live data and the action_type already exists. If they ask for new behavior, propose first.",
   "Some actions have a confirmation policy. If apply_action returns confirmation_required, present the requested change in your text reply and let the user click the Confirm button — do NOT attempt to re-call apply_action yourself.",
@@ -200,15 +200,21 @@ export async function POST(req: Request): Promise<Response> {
         .optional()
         .describe("Optional field=value filter (metric only)."),
       limit: z.number().int().optional().describe("Max rows (optional)."),
+      title: z
+        .string()
+        .optional()
+        .describe(
+          "Optional human-readable label for the widget card header (e.g. 'Open shifts'). If omitted, defaults to the prettified type name.",
+        ),
     }),
-    execute: async ({ kind, type, columns, filter, limit }) => {
+    execute: async ({ kind, type, columns, filter, limit, title }) => {
       // Write-auth is now STRUCTURAL: composeOrgView REQUIRES canWriteDashboard
       // and gates on it FIRST (fail-closed), before the per-type read fence. The
       // steward-only role check lives in the core — there is no separate gate
       // here that could be forgotten on a future call site.
       const canWriteDashboard = composeActor.role === "steward";
       const r = await composeOrgView(
-        { kind, type, columns, filter, limit },
+        { kind, type, columns, filter, limit, title },
         {
           canReadType: buildCanReadType(composeActor, composeOntology),
           canWriteDashboard,

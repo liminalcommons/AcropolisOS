@@ -270,6 +270,7 @@ async function runDescriptors(
         kind,
         config,
         data: resolvedData as MetricData | DataTableData | RosterData | CalendarData,
+        title: (d as { title?: string }).title,
       });
     } catch {
       // Skip widgets whose binding throws — don't crash the dashboard

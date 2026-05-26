@@ -21,6 +21,7 @@ export interface WidgetDescriptor {
   id: string;
   kind: CatalogKind;
   config: unknown;
+  title?: string;
 }
 
 export interface OrgDashboardConfig {
@@ -44,6 +45,7 @@ export const DEFAULT_ORG_DASHBOARD: OrgDashboardConfig = {
     {
       id: "admin-veto-queue",
       kind: "data_table",
+      title: "Awaiting your decision",
       config: {
         type: "agent_blocker",
         columns: ["summary", "reason_kind", "blocked_actor_id", "resolution_mode", "created_at"],
@@ -54,6 +56,7 @@ export const DEFAULT_ORG_DASHBOARD: OrgDashboardConfig = {
     {
       id: "admin-bed-list",
       kind: "data_table",
+      title: "Bed inventory",
       config: {
         type: "bed",
         columns: ["code", "room", "is_bottom_bunk", "out_of_service", "notes"],
