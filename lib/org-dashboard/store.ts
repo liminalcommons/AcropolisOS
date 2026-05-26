@@ -65,9 +65,11 @@ export const DEFAULT_ORG_DASHBOARD: OrgDashboardConfig = {
         // out of the VISIBLE columns and used only as the row key + objectId.
         // "id" is FIRST so the renderer has the action target; "pathways" is
         // fetched so the per-row CHOICE picker (row_resolver) can read each
-        // blocker's curated options — both are hidden from the VISIBLE columns.
+        // blocker's curated options, and "confirm_action" so the per-row BINARY
+        // CONFIRM (row_confirm) can read each blocker's single proposed action —
+        // all three are hidden from the VISIBLE columns.
         type: "agent_blocker",
-        columns: ["id", "summary", "reason_kind", "blocked_actor_id", "resolution_mode", "created_at", "pathways"],
+        columns: ["id", "summary", "reason_kind", "blocked_actor_id", "resolution_mode", "created_at", "pathways", "confirm_action"],
         filter: { field: "status", value: "open" },
         limit: 50,
         // Derive row affordances from the ontology: the one-click Dismiss

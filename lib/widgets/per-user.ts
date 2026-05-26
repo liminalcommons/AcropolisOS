@@ -34,6 +34,7 @@ import { compose_dashboard, type ResolvedWidget } from "./compose";
 import { resolveRefLabels } from "./resolve-refs";
 import { oneClickRowActionsForType } from "./row-actions";
 import { resolversForType, type RowResolver } from "./row-resolver";
+import { confirmsForType, type RowConfirm } from "./row-confirm";
 import type { CatalogType } from "./catalog";
 import { loadOntology } from "@/lib/ontology/load";
 import { getRuntimeOntologyDir } from "@/lib/setup/paths";
@@ -274,6 +275,7 @@ async function runDescriptors(
       // for every other widget → the card renders exactly as before.
       let rowActions: ResolvedWidget["rowActions"];
       let rowResolvers: RowResolver[] | undefined;
+      let rowConfirms: RowConfirm[] | undefined;
       if (kind === "data_table") {
         const cfg = validation.config as {
           type: CatalogType;
@@ -287,6 +289,11 @@ async function runDescriptors(
           // choices themselves come from each row's choicesFrom column at render.
           const derivedResolvers = resolversForType(cfg.type, ontology);
           if (derivedResolvers.length > 0) rowResolvers = derivedResolvers;
+          // The THIRD affordance, SAME opt-in: the per-row BINARY CONFIRM
+          // (e.g. resolve_blocker_with_custom). The label/action come from each
+          // row's `source` column at render; the invocation is server-derived.
+          const derivedConfirms = confirmsForType(cfg.type, ontology);
+          if (derivedConfirms.length > 0) rowConfirms = derivedConfirms;
         }
       }
       resolved.push({
@@ -297,6 +304,7 @@ async function runDescriptors(
         title: (d as { title?: string }).title,
         ...(rowActions ? { rowActions } : {}),
         ...(rowResolvers ? { rowResolvers } : {}),
+        ...(rowConfirms ? { rowConfirms } : {}),
       });
     } catch {
       // Skip widgets whose binding throws — don't crash the dashboard

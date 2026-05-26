@@ -44,7 +44,7 @@ export const CATALOG_VALID_FIELDS: Record<CatalogType, string[]> = {
   room: ["id", "code", "kind", "capacity", "floor", "notes"],
   shift: ["id", "label", "kind", "starts_at", "duration_hours", "claimed_by", "status", "notes", "member_id"],
   work_trade_agreement: ["id", "label", "guest", "bed_comp", "hours_per_week", "start_date", "end_date", "status", "notes"],
-  agent_blocker: ["id", "summary", "reason_kind", "blocked_actor_id", "status", "resolution_mode", "created_at", "blocked_work_ref", "detail", "pathways"],
+  agent_blocker: ["id", "summary", "reason_kind", "blocked_actor_id", "status", "resolution_mode", "created_at", "blocked_work_ref", "detail", "pathways", "confirm_action"],
 };
 
 // ── Widget kind names ─────────────────────────────────────────────────────────

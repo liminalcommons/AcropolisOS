@@ -14,3 +14,6 @@ resolve_blocker_with_custom:
   permissions: [member_self]
   agent_policy: always_confirm
   side_effects: [audit, notify_member]
+  row_confirm:
+    source: confirm_action
+    invocation_param: action_invocation

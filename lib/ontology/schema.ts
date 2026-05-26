@@ -180,6 +180,21 @@ export const ActionType = z
     row_resolver: z
       .object({ choices_from: z.string(), choice_param: z.string() })
       .optional(),
+    // Opt-in: may this action surface as a per-row BINARY CONFIRM (a
+    // "row_confirm") on a data_table — a SINGLE "Confirm: <label>" button whose
+    // invocation is DERIVED SERVER-SIDE from the row's own `source` column (a
+    // JSON `{ label, action }`), the client supplying ONLY the row id? Unlike
+    // row_resolver (N curated choices, client picks one of several), a confirm
+    // is the agent's SINGLE proposed action: the steward says yes (Confirm) or
+    // no (the existing Dismiss row_action). `source` names the row column
+    // holding `{ label, action }`; `invocation_param` is the action param the
+    // JSON-stringified `source.action` binds to. SECURITY: like the other
+    // affordances this is an ontology opt-in, AND because the invocation is
+    // server-derived from the row (never client-supplied) there is no injection
+    // surface — the client cannot smuggle an arbitrary action.
+    row_confirm: z
+      .object({ source: z.string(), invocation_param: z.string() })
+      .optional(),
   })
   .strict();
 export type ActionType = z.infer<typeof ActionType>;

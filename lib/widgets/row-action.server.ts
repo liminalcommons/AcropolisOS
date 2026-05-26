@@ -26,6 +26,7 @@ import type { Ontology } from "@/lib/ontology/schema";
 import type { OntologyCtx } from "@/lib/ontology/ctx";
 import { rowActionRefParamFor } from "./row-actions";
 import { rowResolverFor, isChoiceMember } from "./row-resolver";
+import { rowConfirmFor, parseConfirmAction } from "./row-confirm";
 
 export interface RowActionResult {
   ok: boolean;
@@ -229,4 +230,115 @@ export async function invokeRowResolverForm(
   choiceId: string,
 ): Promise<void> {
   await invokeRowResolver(action, objectId, choiceId);
+}
+
+// ── Row CONFIRM (the binary "yes": a per-row single-action confirm) ────────────
+//
+// Server action behind a data_table row's binary-confirm affordance (e.g. the
+// steward clicking "Confirm: <label>" on a confirm_binary blocker, the agent's
+// SINGLE proposed action). Dismiss (invokeRowAction) remains the "no".
+//
+// SECURITY (mirrors invokeRowResolver, with the key SIMPLIFICATION — the
+// invocation is SERVER-DERIVED, not client-supplied):
+//   1. Identity resolved SERVER-SIDE via buildChatRuntime(). Anonymous →
+//      unauthorized; non-steward → forbidden.
+//   2. The `action` MUST declare a `row_confirm` AND match the structural rule
+//      (single required ref + the required invocation_param) — the SAME rule the
+//      render helper uses (rowConfirmFor). Only such actions are invocable here.
+//   3. NO INJECTION SURFACE (the key control): the client supplies ONLY the row
+//      id. The action_invocation is DERIVED server-side from the row's OWN
+//      `source` column (parseConfirmAction(obj[source]).action) — the client can
+//      never smuggle an arbitrary action. parseConfirmAction is fail-closed.
+//   4. bypassConfirmation=true is correct: the steward clicking Confirm on the
+//      agent's single proposed action IS the human confirmation for this
+//      always_confirm action. The dispatcher's enforceActionPermission still runs.
+export async function invokeRowConfirm(
+  action: string,
+  objectId: string,
+): Promise<RowActionResult> {
+  const rt = await buildChatRuntime();
+
+  // Fail-closed identity gate — identical to invokeRowResolver.
+  if (isAnonymous(rt.actor)) {
+    return { ok: false, error: "unauthorized" };
+  }
+  if (rt.actor?.role !== "steward") {
+    return { ok: false, error: "forbidden" };
+  }
+
+  // Only ontology-declared row confirms are invocable here (opt-in + structural).
+  const def = rt.ontology.action_types[action];
+  const confirm = rowConfirmFor(def);
+  if (!confirm) {
+    return { ok: false, error: "not_a_confirm" };
+  }
+
+  // LOAD the object generically: the confirm's ref param target type. The
+  // findById is permission-checked (ctx.objects) — a row the steward cannot read
+  // returns null and we fail not_found, no leak.
+  const refProp = def!.parameters![confirm.refParam];
+  if (!("type" in refProp) || refProp.type !== "ref") {
+    return { ok: false, error: "not_a_confirm" };
+  }
+  const access = objectAccessFor(rt.ctx, refProp.target);
+  if (!access) {
+    return { ok: false, error: "not_found" };
+  }
+  const obj = await access.findById(objectId);
+  if (!obj) {
+    return { ok: false, error: "not_found" };
+  }
+
+  // SERVER-DERIVE the invocation from the row's OWN `source` column. The client
+  // supplied only objectId — parseConfirmAction (pure, unit-tested in
+  // row-confirm.test.ts) parses obj[source] fail-closed: a non-string / corrupt
+  // / non-object / missing label or action is no_confirm_action. This is the
+  // control that makes the derivation injection-safe.
+  const parsed = parseConfirmAction(obj[confirm.source]);
+  if (!parsed) {
+    return { ok: false, error: "no_confirm_action" };
+  }
+
+  const dispatcher = createInProcessDispatcher({
+    ctx: rt.ctx,
+    ontology: rt.ontology,
+    functionsDir: rt.functionsDir,
+    sideEffectAdapters: rt.sideEffectAdapters,
+  });
+
+  // Params CONSTRAINED to {refParam: objectId, invocationParam:
+  // JSON.stringify(parsed.action)} — the action_invocation is SERVER-DERIVED from
+  // the blocker's own confirm_action, so there is no injection surface (the
+  // client supplied only objectId). bypassConfirmation=true: the steward's
+  // Confirm click IS the confirmation; enforceActionPermission still gates.
+  const result = await runApplyActionTool({
+    actor: rt.actor,
+    dispatcher,
+    action,
+    params: {
+      [confirm.refParam]: objectId,
+      [confirm.invocationParam]: JSON.stringify(parsed.action),
+    },
+    policy: { ontology: rt.ontology, ctx: rt.ctx },
+    bypassConfirmation: true,
+  });
+
+  if (result.ok !== true) {
+    return { ok: false, error: result.error?.type ?? "failed" };
+  }
+
+  // Resolved blocker's status flips to "resolved" → leaves the open-filtered
+  // queue on next render.
+  revalidatePath("/org");
+  return { ok: true };
+}
+
+// Form-action adapter (mirrors invokeRowResolverForm): discards the structured
+// result + trailing FormData so it satisfies the <form action={...}> prop's
+// void|Promise<void> contract. Same gates run inside.
+export async function invokeRowConfirmForm(
+  action: string,
+  objectId: string,
+): Promise<void> {
+  await invokeRowConfirm(action, objectId);
 }

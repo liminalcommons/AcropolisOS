@@ -18,7 +18,9 @@ import { prettify } from "@/lib/prettify";
 import {
   invokeRowActionForm,
   invokeRowResolverForm,
+  invokeRowConfirmForm,
 } from "@/lib/widgets/row-action.server";
+import { parseConfirmAction } from "@/lib/widgets/row-confirm";
 
 // ── MetricWidget ──────────────────────────────────────────────────────────────
 
@@ -56,15 +58,22 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
   // resolver DEFINITIONS for this type; the choices come from each row's
   // choicesFrom column at render time.
   const rowResolvers = widget.rowResolvers ?? [];
-  const hasRowActions = rowActions.length > 0 || rowResolvers.length > 0;
+  // DERIVED per-row BINARY CONFIRMs (e.g. resolve_blocker_with_custom): the
+  // confirm DEFINITIONS for this type; the label + action come from each row's
+  // `source` column at render time (invocation derived server-side).
+  const rowConfirms = widget.rowConfirms ?? [];
+  const hasRowActions =
+    rowActions.length > 0 || rowResolvers.length > 0 || rowConfirms.length > 0;
 
   // "id" is the action target, not a display column. The resolvers' choicesFrom
-  // columns (e.g. "pathways") carry raw JSON consumed for buttons, not display.
-  // Both are hidden from the visible columns when affordances are present;
-  // row["id"] remains the React key + action objectId. (When no affordances, id
-  // is shown as a normal column.)
+  // columns (e.g. "pathways") and the confirms' source columns (e.g.
+  // "confirm_action") carry raw JSON consumed for buttons, not display. All are
+  // hidden from the visible columns when affordances are present; row["id"]
+  // remains the React key + action objectId. (When no affordances, id is shown
+  // as a normal column.)
   const hiddenColumns = new Set<string>(["id"]);
   for (const r of rowResolvers) hiddenColumns.add(r.choicesFrom);
+  for (const c of rowConfirms) hiddenColumns.add(c.source);
   const visibleColumns = hasRowActions
     ? data.columns.filter((c) => !hiddenColumns.has(c))
     : data.columns;
@@ -167,6 +176,32 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
                               </button>
                             </form>
                           ));
+                        })}
+                        {rowConfirms.map((confirm) => {
+                          // Each row's `source` column holds a JSON
+                          // {label, action} proposal. Parse fail-closed — skip
+                          // when absent/corrupt. The invocation is derived
+                          // SERVER-SIDE from this same column; the form supplies
+                          // only the action name + row id (no injection surface).
+                          const parsed = parseConfirmAction(row[confirm.source]);
+                          if (!parsed) return null;
+                          return (
+                            <form
+                              key={`${confirm.action}:confirm`}
+                              action={invokeRowConfirmForm.bind(
+                                null,
+                                confirm.action,
+                                rowId,
+                              )}
+                            >
+                              <button
+                                type="submit"
+                                className="text-xs rounded border border-foreground px-2 py-1 font-medium text-foreground hover:bg-foreground hover:text-background"
+                              >
+                                {`Confirm: ${parsed.label}`}
+                              </button>
+                            </form>
+                          );
                         })}
                       </div>
                     </td>

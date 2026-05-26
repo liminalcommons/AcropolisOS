@@ -30,6 +30,7 @@ import {
 } from "./catalog";
 import { createReadOnlyDataApi, type CanReadType } from "./read-api";
 import type { RowResolver } from "./row-resolver";
+import type { RowConfirm } from "./row-confirm";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,12 @@ export interface ResolvedWidget {
   // The CHOICES themselves come from each row's choicesFrom column at render
   // time — only the resolver DEFINITIONS for the widget's type live here.
   rowResolvers?: RowResolver[];
+  // Populated alongside rowActions/rowResolvers (same opt-in): the
+  // ontology-derived per-row BINARY CONFIRMs (row_confirm). Each carries the
+  // action + the `source` column whose per-row JSON {label, action} proposal
+  // supplies the Confirm button's label; the invocation is derived server-side
+  // from that same column (the client supplies only the row id).
+  rowConfirms?: RowConfirm[];
 }
 
 // The shape stored in member_context.pinned_widgets (JSON array).
