@@ -89,22 +89,49 @@ export function computePathwayPreference(
   return tally;
 }
 
+// Safety ordering for the reversibility of an action: a more-reversible action
+// is always safer to surface first. Lower rank = safer = ranked earlier.
+const REVERSIBILITY_RANK: Record<string, number> = {
+  easy: 0,
+  moderate: 1,
+  permanent: 2,
+};
+
 /**
- * Returns a NEW array of pathways stable-sorted by preference count DESC.
- * Pathways whose identity is not in the preference map are treated as count 0.
- * Relative order is preserved among ties (stable sort). Input is not mutated.
+ * Reversibility tier of a pathway. Unknown/missing reversibility maps to
+ * "moderate" (1): a neutral middle that neither promotes an un-annotated
+ * pathway to the top nor buries it below annotated reversible ones.
+ */
+function reversibilityRank(p: Pathway): number {
+  const r = p.reversibility;
+  if (typeof r === "string" && r in REVERSIBILITY_RANK) return REVERSIBILITY_RANK[r];
+  return 1;
+}
+
+/**
+ * Returns a NEW array of pathways ranked SAFEST-FIRST, then by accumulated
+ * human preference within each safety tier. Sort keys, in order:
+ *   1. reversibility tier ASC (easy < moderate < permanent) — popularity can
+ *      NEVER surface a less-reversible action above a more-reversible one;
+ *      self-correction must not erode safe-by-default ordering.
+ *   2. preference count DESC (identity not in the map = 0).
+ *   3. original index ASC — preserves the agent's order for full ties (stable).
+ * Input is not mutated.
  */
 export function rankPathways(
   pathways: Pathway[],
   preference: Map<string, number>,
 ): Pathway[] {
-  // Copy so the original is never mutated.
-  const copy = [...pathways];
-  // Stable sort: keep original index as tiebreaker.
-  copy.sort((a, b) => {
-    const countA = preference.get(pathwayIdentity(a)) ?? 0;
-    const countB = preference.get(pathwayIdentity(b)) ?? 0;
-    return countB - countA;
-  });
-  return copy;
+  return pathways
+    .map((p, index) => ({ p, index }))
+    .sort((a, b) => {
+      const revA = reversibilityRank(a.p);
+      const revB = reversibilityRank(b.p);
+      if (revA !== revB) return revA - revB;
+      const countA = preference.get(pathwayIdentity(a.p)) ?? 0;
+      const countB = preference.get(pathwayIdentity(b.p)) ?? 0;
+      if (countA !== countB) return countB - countA;
+      return a.index - b.index;
+    })
+    .map((x) => x.p);
 }

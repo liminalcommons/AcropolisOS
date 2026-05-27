@@ -291,3 +291,58 @@ describe("rankPathways", () => {
     expect(result[0].id).toBe("a");
   });
 });
+
+// ---------------------------------------------------------------------------
+// rankPathways — reversibility safety tier (popularity must NOT lift a
+// less-reversible action above a more-reversible one)
+// ---------------------------------------------------------------------------
+
+describe("rankPathways — reversibility safety tier", () => {
+  it("keeps an easy (reversible) pathway ABOVE a popular permanent one", () => {
+    // The falsifiable case: a heavily-chosen irreversible action must NOT
+    // be surfaced before a safe reversible one.
+    const easyUnpopular: Pathway = {
+      id: "e",
+      label: "Reschedule (reversible)",
+      action: { type: "reschedule" },
+      reversibility: "easy",
+    };
+    const permanentPopular: Pathway = {
+      id: "p",
+      label: "Delete booking (permanent)",
+      action: { type: "delete_booking" },
+      reversibility: "permanent",
+    };
+    const pref = new Map([["delete_booking", 5]]); // permanent is popular
+    const result = rankPathways([easyUnpopular, permanentPopular], pref);
+    expect(result[0].id).toBe("e"); // safe-first wins over popularity
+    expect(result[1].id).toBe("p");
+  });
+
+  it("orders easy < moderate < permanent regardless of preference", () => {
+    const easy: Pathway = { id: "e", label: "E", action: { type: "e" }, reversibility: "easy" };
+    const moderate: Pathway = { id: "m", label: "M", action: { type: "m" }, reversibility: "moderate" };
+    const permanent: Pathway = { id: "p", label: "P", action: { type: "p" }, reversibility: "permanent" };
+    // Preference favors the most-permanent — must not override the tier order.
+    const pref = new Map([["p", 9], ["m", 3]]);
+    const result = rankPathways([permanent, moderate, easy], pref);
+    expect(result.map((x) => x.id)).toEqual(["e", "m", "p"]);
+  });
+
+  it("applies preference as a secondary sort WITHIN the same reversibility tier", () => {
+    const a: Pathway = { id: "a", label: "A", action: { type: "a" }, reversibility: "easy" };
+    const b: Pathway = { id: "b", label: "B", action: { type: "b" }, reversibility: "easy" };
+    const c: Pathway = { id: "c", label: "C", action: { type: "c" }, reversibility: "easy" };
+    const pref = new Map([["b", 5], ["c", 2]]);
+    const result = rankPathways([a, b, c], pref);
+    expect(result.map((x) => x.id)).toEqual(["b", "c", "a"]); // all easy → popularity decides
+  });
+
+  it("treats unknown/missing reversibility as the moderate tier (between easy and permanent)", () => {
+    const easy: Pathway = { id: "e", label: "E", action: { type: "e" }, reversibility: "easy" };
+    const unknown: Pathway = { id: "u", label: "U", action: { type: "u" } }; // no reversibility
+    const permanent: Pathway = { id: "p", label: "P", action: { type: "p" }, reversibility: "permanent" };
+    const result = rankPathways([permanent, unknown, easy], new Map());
+    expect(result.map((x) => x.id)).toEqual(["e", "u", "p"]);
+  });
+});
