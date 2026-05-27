@@ -19,6 +19,7 @@ const AUTO: PolicyOf = (name) => {
   const map: Record<string, "auto_apply" | "always_confirm"> = {
     log_incident: "auto_apply",
     send_notification: "auto_apply",
+    flag_blocker: "auto_apply", // escalation action — policy is auto_apply, but it is an ESCALATION not an autonomous resolution
     assign_bed: "always_confirm",
     evict_guest: "always_confirm",
   };
@@ -44,8 +45,17 @@ const D_t0_t3 = Date.parse(t3) - Date.parse(t0); // 32_400_000
 // ---------------------------------------------------------------------------
 
 describe("autonomyRatio", () => {
-  it("returns null for empty audits", () => {
+  it("returns null for empty audits (zero denominator → null, never NaN/0)", () => {
     expect(autonomyRatio([], AUTO)).toBeNull();
+  });
+
+  it("returns null when there are no agent-initiated decisions (only human-initiated always_confirm)", () => {
+    const audits: MetricAuditRow[] = [
+      { subject_type: "action", subject_id: "assign_bed",  metadata: { result: "ok" } }, // human-initiated
+      { subject_type: "action", subject_id: "evict_guest", metadata: { result: "ok" } }, // human-initiated
+    ];
+    // No auto_apply (non-escalation) rows AND no escalations → denominator 0 → null
+    expect(autonomyRatio(audits, AUTO)).toBeNull();
   });
 
   it("returns null when all audits have non-action subject_type", () => {
@@ -55,68 +65,90 @@ describe("autonomyRatio", () => {
     expect(autonomyRatio(audits, AUTO)).toBeNull();
   });
 
-  it("returns null when all ok-action rows have unknown policy", () => {
+  it("computes auto_applied / (auto_applied + escalated): 2 auto + 1 escalation → 2/3", () => {
     const audits: MetricAuditRow[] = [
-      { subject_type: "action", subject_id: "unknown_action", metadata: { result: "ok" } },
-    ];
-    expect(autonomyRatio(audits, AUTO)).toBeNull();
-  });
-
-  it("computes basic ratio: 2 auto_apply out of 3 known-policy ok actions → 2/3", () => {
-    const audits: MetricAuditRow[] = [
-      { subject_type: "action", subject_id: "log_incident",      metadata: { result: "ok" } }, // auto
-      { subject_type: "action", subject_id: "send_notification", metadata: { result: "ok" } }, // auto
-      { subject_type: "action", subject_id: "assign_bed",        metadata: { result: "ok" } }, // always_confirm
+      { subject_type: "action", subject_id: "log_incident",      metadata: { result: "ok" } }, // auto_applied
+      { subject_type: "action", subject_id: "send_notification", metadata: { result: "ok" } }, // auto_applied
+      { subject_type: "action", subject_id: "flag_blocker",      metadata: { result: "ok" } }, // ESCALATED
     ];
     const ratio = autonomyRatio(audits, AUTO);
     expect(ratio).not.toBeNull();
     expect(ratio).toBeCloseTo(2 / 3, 10);
   });
 
+  it("excludes human-initiated always_confirm rows from the denominator", () => {
+    const audits: MetricAuditRow[] = [
+      { subject_type: "action", subject_id: "log_incident", metadata: { result: "ok" } }, // auto_applied
+      { subject_type: "action", subject_id: "flag_blocker", metadata: { result: "ok" } }, // escalated
+      { subject_type: "action", subject_id: "assign_bed",   metadata: { result: "ok" } }, // human-initiated — EXCLUDED
+      { subject_type: "action", subject_id: "evict_guest",  metadata: { result: "ok" } }, // human-initiated — EXCLUDED
+    ];
+    // auto=1, escalated=1, denominator=2 → 1/2 (the two always_confirm rows do NOT inflate it)
+    expect(autonomyRatio(audits, AUTO)).toBeCloseTo(1 / 2, 10);
+  });
+
+  it("counts flag_blocker as ESCALATED, not auto_applied (even though its policy is auto_apply)", () => {
+    const audits: MetricAuditRow[] = [
+      { subject_type: "action", subject_id: "flag_blocker", metadata: { result: "ok" } },
+      { subject_type: "action", subject_id: "flag_blocker", metadata: { result: "ok" } },
+    ];
+    // all escalations, no auto → 0 / 2 = 0
+    expect(autonomyRatio(audits, AUTO)).toBeCloseTo(0, 10);
+  });
+
+  it("returns 1.0 when the agent handled everything unaided (no escalations)", () => {
+    const audits: MetricAuditRow[] = [
+      { subject_type: "action", subject_id: "log_incident",      metadata: { result: "ok" } },
+      { subject_type: "action", subject_id: "send_notification", metadata: { result: "ok" } },
+    ];
+    expect(autonomyRatio(audits, AUTO)).toBeCloseTo(1, 10);
+  });
+
   it("excludes result=error rows", () => {
     const audits: MetricAuditRow[] = [
-      { subject_type: "action", subject_id: "log_incident", metadata: { result: "ok" } },   // auto
+      { subject_type: "action", subject_id: "log_incident", metadata: { result: "ok" } },    // auto
       { subject_type: "action", subject_id: "log_incident", metadata: { result: "error" } }, // excluded
-      { subject_type: "action", subject_id: "assign_bed",   metadata: { result: "ok" } },   // confirm
+      { subject_type: "action", subject_id: "flag_blocker", metadata: { result: "ok" } },    // escalated
     ];
-    // denominator = 2 (only ok rows with known policy)
-    // numerator = 1 (log_incident auto)
+    // auto=1, escalated=1 → 1/2
     expect(autonomyRatio(audits, AUTO)).toBeCloseTo(1 / 2, 10);
   });
 
   it("excludes result=pending rows", () => {
     const audits: MetricAuditRow[] = [
-      { subject_type: "action", subject_id: "log_incident", metadata: { result: "pending" } },
-      { subject_type: "action", subject_id: "assign_bed",   metadata: { result: "ok" } },
+      { subject_type: "action", subject_id: "log_incident", metadata: { result: "pending" } }, // excluded
+      { subject_type: "action", subject_id: "flag_blocker", metadata: { result: "ok" } },      // escalated
     ];
-    // only assign_bed ok → denominator 1, numerator 0
+    // auto=0, escalated=1 → 0/1 = 0
     expect(autonomyRatio(audits, AUTO)).toBeCloseTo(0, 10);
   });
 
   it("excludes result=replay rows", () => {
     const audits: MetricAuditRow[] = [
-      { subject_type: "action", subject_id: "log_incident", metadata: { result: "replay" } },
-      { subject_type: "action", subject_id: "log_incident", metadata: { result: "ok" } },
+      { subject_type: "action", subject_id: "log_incident", metadata: { result: "replay" } }, // excluded
+      { subject_type: "action", subject_id: "log_incident", metadata: { result: "ok" } },     // auto
     ];
-    // only 1 ok auto row
+    // auto=1, escalated=0 → 1/1 = 1
     expect(autonomyRatio(audits, AUTO)).toBeCloseTo(1, 10);
   });
 
-  it("excludes rows with unknown policy even if result is ok", () => {
+  it("excludes rows with unknown non-escalation policy even if result is ok", () => {
     const audits: MetricAuditRow[] = [
-      { subject_type: "action", subject_id: "mystery_action", metadata: { result: "ok" } },
-      { subject_type: "action", subject_id: "log_incident",   metadata: { result: "ok" } },
+      { subject_type: "action", subject_id: "mystery_action", metadata: { result: "ok" } }, // unknown policy — excluded
+      { subject_type: "action", subject_id: "log_incident",   metadata: { result: "ok" } }, // auto
     ];
-    // denominator = 1 (only log_incident has known policy)
+    // auto=1, escalated=0 → 1/1 = 1
     expect(autonomyRatio(audits, AUTO)).toBeCloseTo(1, 10);
   });
 
-  it("returns 0 when all known-policy ok rows are always_confirm", () => {
+  it("honors a custom escalationActions list", () => {
     const audits: MetricAuditRow[] = [
-      { subject_type: "action", subject_id: "assign_bed", metadata: { result: "ok" } },
-      { subject_type: "action", subject_id: "evict_guest", metadata: { result: "ok" } },
+      { subject_type: "action", subject_id: "log_incident", metadata: { result: "ok" } }, // would be auto by default
+      { subject_type: "action", subject_id: "flag_blocker", metadata: { result: "ok" } }, // default escalation
     ];
-    expect(autonomyRatio(audits, AUTO)).toBeCloseTo(0, 10);
+    // Treat log_incident itself as the escalation action instead:
+    // escalated=1 (log_incident), flag_blocker is auto_apply policy + not escalation → auto=1 → 1/2
+    expect(autonomyRatio(audits, AUTO, ["log_incident"])).toBeCloseTo(1 / 2, 10);
   });
 });
 
@@ -527,14 +559,15 @@ describe("computeCommunityIntelligence", () => {
     ];
 
     const audits: MetricAuditRow[] = [
-      { subject_type: "action", subject_id: "log_incident",      metadata: { result: "ok" } }, // auto
-      { subject_type: "action", subject_id: "send_notification", metadata: { result: "ok" } }, // auto
-      { subject_type: "action", subject_id: "assign_bed",        metadata: { result: "ok" } }, // confirm
+      { subject_type: "action", subject_id: "log_incident",      metadata: { result: "ok" } }, // auto_applied
+      { subject_type: "action", subject_id: "send_notification", metadata: { result: "ok" } }, // auto_applied
+      { subject_type: "action", subject_id: "flag_blocker",      metadata: { result: "ok" } }, // escalated
+      { subject_type: "action", subject_id: "assign_bed",        metadata: { result: "ok" } }, // human-initiated — excluded
     ];
 
     const result = computeCommunityIntelligence(blockers, audits, AUTO);
 
-    // autonomyRatio: 2 auto / 3 known-ok = 2/3
+    // autonomyRatio: 2 auto_applied / (2 auto_applied + 1 escalated) = 2/3 (assign_bed excluded)
     expect(result.autonomyRatio).toBeCloseTo(2 / 3, 10);
 
     // scenarioAcceptanceRate: 1 resolved / 2 closed = 0.5

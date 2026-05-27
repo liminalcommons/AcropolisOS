@@ -77,34 +77,64 @@ function median(values: number[]): number {
 // ---------------------------------------------------------------------------
 
 /**
- * autonomyRatio — fraction of agent actions the system executed unaided.
+ * The action name(s) that constitute an AGENT ESCALATION — i.e. the agent
+ * raising an agent_blocker to hand a judgment call to a human. `flag_blocker`
+ * is the only action in the ontology that writes an agent_blocker row, so it is
+ * the sole escalation action. Exposed as a parameter (with this default) to
+ * keep the function pure and testable without an ontology import.
+ */
+export const DEFAULT_ESCALATION_ACTIONS: readonly string[] = ["flag_blocker"];
+
+/**
+ * autonomyRatio — of the decisions the AGENT ITSELF initiated, what fraction it
+ * handled UNAIDED (auto-applied) vs ESCALATED to a human.
  *
  * Definition (for grant report):
- *   Denominator = action audit rows where subject_type === "action",
- *                 metadata.result === "ok", AND policyOf(subject_id) is
- *                 "auto_apply" or "always_confirm" (i.e., policy is KNOWN).
- *                 Rows with result "error", "pending", or "replay" and rows
- *                 whose action has no registered policy are excluded.
- *   Numerator   = denominator rows whose policy is "auto_apply".
- *   Ratio       = numerator / denominator, or null when denominator === 0.
+ *   We count only AGENT-INITIATED decisions. Purely human-initiated actions
+ *   (always_confirm dispositions a steward drives — resolve_blocker_with_pathway,
+ *   check_in/out, dismiss_blocker) are NOT in the denominator: a human deciding
+ *   is not the agent acting.
+ *
+ *   escalated    = ok action-audit rows whose subject_id is an escalation action
+ *                  (default: "flag_blocker"). Each is the agent handing a
+ *                  judgment call to a human (it raises an agent_blocker).
+ *   auto_applied = ok action-audit rows whose policyOf(subject_id) === "auto_apply"
+ *                  and which are NOT an escalation action. Each is the agent
+ *                  executing a decision unaided.
+ *   Ratio        = auto_applied / (auto_applied + escalated),
+ *                  or null when the denominator is 0 (no agent-initiated decisions).
+ *
+ *   Excluded entirely: result ≠ "ok" (error/pending/replay), subject_type ≠
+ *   "action", always_confirm actions (human-initiated), and actions with no
+ *   registered policy that are not escalation actions.
  */
 export function autonomyRatio(
   audits: MetricAuditRow[],
-  policyOf: PolicyOf
+  policyOf: PolicyOf,
+  escalationActions: readonly string[] = DEFAULT_ESCALATION_ACTIONS
 ): number | null {
-  let denominator = 0;
-  let numerator = 0;
+  const escalationSet = new Set(escalationActions);
+  let autoApplied = 0;
+  let escalated = 0;
 
   for (const row of audits) {
     if (row.subject_type !== "action") continue;
     if (row.metadata?.result !== "ok") continue;
-    const policy = policyOf(row.subject_id ?? "");
-    if (policy !== "auto_apply" && policy !== "always_confirm") continue;
-    denominator += 1;
-    if (policy === "auto_apply") numerator += 1;
+    const name = row.subject_id ?? "";
+
+    if (escalationSet.has(name)) {
+      escalated += 1;
+      continue;
+    }
+    if (policyOf(name) === "auto_apply") {
+      autoApplied += 1;
+    }
+    // always_confirm and unknown-policy non-escalation actions are excluded:
+    // they are human-initiated dispositions or not agent decisions.
   }
 
-  return denominator === 0 ? null : numerator / denominator;
+  const denominator = autoApplied + escalated;
+  return denominator === 0 ? null : autoApplied / denominator;
 }
 
 // ---------------------------------------------------------------------------

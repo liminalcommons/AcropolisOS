@@ -381,10 +381,12 @@ async function main() {
   console.log("  Inserted RF2 (re-flag — same triple, created after RF1 resolved)");
 
   // ── STEP 5: action_audit rows for autonomyRatio ────────────────────────────
-  // ~10 × log_incident (auto_apply, result:ok) + 4 × check_in (always_confirm, result:ok)
-  // + a couple of error/replay rows (excluded by autonomyRatio).
-  // autonomyRatio = auto_apply_ok / (auto_apply_ok + always_confirm_ok)
-  //              = 10 / (10 + 4) ≈ 0.714
+  // autonomyRatio = auto_applied_ok / (auto_applied_ok + escalated_ok), where
+  // escalated = flag_blocker (the agent handing a judgment call to a human).
+  // This seed contributes auto_applied rows (10 × log_incident, auto_apply/ok)
+  // toward the numerator+denominator. The 4 × check_in (always_confirm) rows are
+  // human-initiated dispositions and are EXCLUDED from the ratio entirely; error
+  // rows are excluded (result !== "ok"). Escalations come from the blocker seed.
   console.log("\n=== INSERT ACTION AUDIT ROWS ===");
 
   const auditActor = actors[0];
