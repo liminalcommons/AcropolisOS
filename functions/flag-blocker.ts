@@ -6,6 +6,11 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { defineAction } from "@acropolisos/sdk";
+import {
+  parsePathways,
+  computePathwayPreference,
+  rankPathways,
+} from "@/lib/blockers/pathway-preference";
 
 const ReasonKind = z.enum([
   "approval",
@@ -48,6 +53,21 @@ export default defineAction({
       return { ok: true as const, blocker_id: existing.id, deduped: true as const };
     }
 
+    // Self-correction: rank incoming pathways by the community's past choices for
+    // this reason_kind so the most-preferred option surfaces first.
+    let resolvedPathways = params.pathways;
+    if (
+      params.resolution_mode === "pathways" &&
+      Array.isArray(params.pathways) &&
+      params.pathways.length > 0
+    ) {
+      const incoming = parsePathways(params.pathways);
+      if (incoming.length > 0) {
+        const preference = computePathwayPreference(all, params.reason_kind);
+        resolvedPathways = rankPathways(incoming, preference);
+      }
+    }
+
     const now = new Date().toISOString();
     const row = await ctx.objects.AgentBlocker.create({
       id: randomUUID(),
@@ -57,7 +77,7 @@ export default defineAction({
       detail: params.detail,
       blocked_work_ref: params.blocked_work_ref,
       resolution_mode: params.resolution_mode,
-      pathways: params.pathways !== undefined ? JSON.stringify(params.pathways) : undefined,
+      pathways: resolvedPathways !== undefined ? JSON.stringify(resolvedPathways) : undefined,
       input_schema: params.input_schema !== undefined ? JSON.stringify(params.input_schema) : undefined,
       confirm_action: params.confirm_action !== undefined ? JSON.stringify(params.confirm_action) : undefined,
       status: "open",
