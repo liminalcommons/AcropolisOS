@@ -24,12 +24,25 @@ import { parseConfirmAction } from "@/lib/widgets/row-confirm";
 
 // ── MetricWidget ──────────────────────────────────────────────────────────────
 
+// Renders both the generic `metric` (COUNT(*)) and the vetted
+// `intelligence_metric` (community-intelligence KPI). Both produce MetricData;
+// the only difference is `metric` carries a {type, agg, filter} config (so it
+// can derive a label + show the agg footer) whereas intelligence_metric carries
+// {metric} and relies on the dashboard descriptor's `title` + data.label/display.
 function MetricWidget({ widget }: { widget: ResolvedWidget }) {
   const data = widget.data as MetricData;
-  const config = widget.config as { type: string; agg: string; filter?: { field: string; value: string } };
-  const label = widget.title ?? (config.filter
-    ? `${prettify(config.type)} (${config.filter.field}=${config.filter.value})`
-    : prettify(config.type));
+  const config = widget.config as {
+    type?: string;
+    agg?: string;
+    filter?: { field: string; value: string };
+  };
+  const label =
+    widget.title ??
+    (config.type
+      ? config.filter
+        ? `${prettify(config.type)} (${config.filter.field}=${config.filter.value})`
+        : prettify(config.type)
+      : data.label);
 
   return (
     <div className="rounded-lg border border-border bg-card p-5">
@@ -37,9 +50,11 @@ function MetricWidget({ widget }: { widget: ResolvedWidget }) {
         {label}
       </p>
       <p className="text-4xl font-bold tabular-nums text-foreground">
-        {data.value}
+        {data.display ?? data.value}
       </p>
-      <p className="text-xs text-muted-foreground mt-1">{config.agg}</p>
+      {config.agg ? (
+        <p className="text-xs text-muted-foreground mt-1">{config.agg}</p>
+      ) : null}
     </div>
   );
 }
@@ -308,6 +323,7 @@ function CalendarWidget({ widget }: { widget: ResolvedWidget }) {
 export function ResolvedWidgetCard({ widget }: { widget: ResolvedWidget }) {
   switch (widget.kind) {
     case "metric":
+    case "intelligence_metric":
       return <MetricWidget widget={widget} />;
     case "data_table":
       return <DataTableWidget widget={widget} />;

@@ -15,6 +15,13 @@
 
 import { z } from "zod";
 import type { ReadOnlyDataApi } from "./read-api";
+import {
+  scenarioAcceptanceRate,
+  decisionLatencyMsMedian,
+  coordinationCoverage,
+  resolutionAccuracy,
+  type MetricBlockerRow,
+} from "@/lib/metrics/community-intelligence";
 
 // ── Ontology type registry ────────────────────────────────────────────────────
 //
@@ -44,7 +51,7 @@ export const CATALOG_VALID_FIELDS: Record<CatalogType, string[]> = {
   room: ["id", "code", "kind", "capacity", "floor", "notes"],
   shift: ["id", "label", "kind", "starts_at", "duration_hours", "claimed_by", "status", "notes", "member_id"],
   work_trade_agreement: ["id", "label", "guest", "bed_comp", "hours_per_week", "start_date", "end_date", "status", "notes"],
-  agent_blocker: ["id", "summary", "reason_kind", "blocked_actor_id", "status", "resolution_mode", "created_at", "blocked_work_ref", "detail", "pathways", "confirm_action"],
+  agent_blocker: ["id", "summary", "reason_kind", "blocked_actor_id", "status", "resolution_mode", "created_at", "resolved_at", "blocked_work_ref", "detail", "pathways", "confirm_action"],
 };
 
 // ── Widget kind names ─────────────────────────────────────────────────────────
@@ -54,6 +61,7 @@ export const CATALOG_KINDS = [
   "data_table",
   "roster",
   "calendar",
+  "intelligence_metric",
 ] as const;
 
 export type CatalogKind = (typeof CATALOG_KINDS)[number];
@@ -105,11 +113,30 @@ export const CalendarConfigSchema = z.object({
 });
 export type CalendarConfig = z.infer<typeof CalendarConfigSchema>;
 
+// VETTED community-intelligence KPI widget. Unlike `metric` (a generic COUNT(*)
+// over any type), this binds ONE of four hand-vetted KPIs computed by the pure
+// metrics core over agent_blocker rows. The config carries only WHICH KPI —
+// the query (always agent_blocker, fail-closed via api.select) and the formula
+// are fixed in the catalog, not the descriptor. Composition over generation.
+export const IntelligenceMetricConfigSchema = z.object({
+  metric: z.enum([
+    "scenario_acceptance",
+    "decision_latency",
+    "coordination_coverage",
+    "resolution_accuracy",
+  ]),
+});
+export type IntelligenceMetricConfig = z.infer<typeof IntelligenceMetricConfigSchema>;
+
 // ── Output types ──────────────────────────────────────────────────────────────
 
 export interface MetricData {
   value: number;
   label: string;
+  // OPTIONAL pre-formatted display string (e.g. "92%", "40 min"). When present
+  // the renderer shows this instead of the raw `value`. The generic `metric`
+  // widget leaves it undefined → backward-compatible (renders the raw count).
+  display?: string;
 }
 
 export interface DataTableData {
@@ -136,6 +163,42 @@ export interface CatalogEntry<TConfig, TData> {
   queryBinding: (config: TConfig, api: ReadOnlyDataApi) => Promise<TData>;
 }
 
+// ── intelligence_metric helpers ──────────────────────────────────────────────
+//
+// Format a millisecond duration as a human latency string: under an hour →
+// "Nm" (rounded minutes); an hour or more → "Xh Ym".
+function formatLatency(ms: number): string {
+  const totalMinutes = Math.round(ms / 60000);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h ${minutes}m`;
+}
+
+function formatRatio(ratio: number | null): string {
+  return ratio === null ? "—" : `${Math.round(ratio * 100)}%`;
+}
+
+// Coerce a timestamp field (Date | string | null) to the ISO string the pure
+// core's Date.parse() expects; null/absent stays null.
+function toTs(v: unknown): string | null {
+  if (v == null) return null;
+  if (v instanceof Date) return v.toISOString();
+  return String(v);
+}
+
+// Map raw agent_blocker read rows → the pure-core MetricBlockerRow shape.
+function toBlockerRows(rows: Record<string, unknown>[]): MetricBlockerRow[] {
+  return rows.map((r) => ({
+    status: String(r.status ?? ""),
+    created_at: toTs(r.created_at),
+    resolved_at: toTs(r.resolved_at),
+    reason_kind: (r.reason_kind as string | null | undefined) ?? null,
+    blocked_actor_id: (r.blocked_actor_id as string | null | undefined) ?? null,
+    summary: (r.summary as string | null | undefined) ?? null,
+  }));
+}
+
 // ── The catalog ───────────────────────────────────────────────────────────────
 
 export const WIDGET_CATALOG: {
@@ -143,6 +206,7 @@ export const WIDGET_CATALOG: {
   data_table: CatalogEntry<DataTableConfig, DataTableData>;
   roster: CatalogEntry<RosterConfig, RosterData>;
   calendar: CatalogEntry<CalendarConfig, CalendarData>;
+  intelligence_metric: CatalogEntry<IntelligenceMetricConfig, MetricData>;
 } = {
   // ── metric ──────────────────────────────────────────────────────────────────
   // Returns a COUNT(*) aggregate for any ontology type with optional filter.
@@ -233,6 +297,45 @@ export const WIDGET_CATALOG: {
       return { date_field: config.date_field, buckets };
     },
   },
+
+  // ── intelligence_metric ───────────────────────────────────────────────────────
+  // VETTED community-intelligence KPI. Reads agent_blocker rows through the
+  // fail-closed + permission-aware api.select, then runs the matching pure
+  // metrics-core function. An unauthorized viewer gets rows:[] → every KPI
+  // computes null → display "—" (no leak). READ-ONLY: api.select only.
+  intelligence_metric: {
+    configSchema: IntelligenceMetricConfigSchema,
+    queryBinding: async (config, api) => {
+      const { rows } = await api.select("agent_blocker", {
+        columns: ["id", "status", "created_at", "resolved_at", "reason_kind", "blocked_actor_id", "summary"],
+        limit: 500,
+      });
+      const blockers = toBlockerRows(rows);
+
+      switch (config.metric) {
+        case "scenario_acceptance": {
+          const ratio = scenarioAcceptanceRate(blockers);
+          return { value: ratio ?? 0, label: "Scenario acceptance", display: formatRatio(ratio) };
+        }
+        case "coordination_coverage": {
+          const ratio = coordinationCoverage(blockers);
+          return { value: ratio ?? 0, label: "Coordination coverage", display: formatRatio(ratio) };
+        }
+        case "resolution_accuracy": {
+          const ratio = resolutionAccuracy(blockers);
+          return { value: ratio ?? 0, label: "Resolution accuracy", display: formatRatio(ratio) };
+        }
+        case "decision_latency": {
+          const ms = decisionLatencyMsMedian(blockers);
+          return {
+            value: ms ?? 0,
+            label: "Decision latency",
+            display: ms === null ? "—" : formatLatency(ms),
+          };
+        }
+      }
+    },
+  },
 };
 
 // ── Config validation helper (used by compose_dashboard) ─────────────────────
@@ -242,7 +345,7 @@ export const WIDGET_CATALOG: {
 // rather than throwing.
 
 export type ConfigValidationResult =
-  | { ok: true; config: MetricConfig | DataTableConfig | RosterConfig | CalendarConfig }
+  | { ok: true; config: MetricConfig | DataTableConfig | RosterConfig | CalendarConfig | IntelligenceMetricConfig }
   | { ok: false; error: string; detail?: unknown };
 
 export function validateWidgetConfig(

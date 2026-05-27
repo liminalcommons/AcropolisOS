@@ -42,6 +42,35 @@ const ORG_DASHBOARD_PATH = path.join(UPLOADS_DIR, "org-dashboard.json");
 // governed data_table descriptors resolved through ReadOnlyDataApi.
 export const DEFAULT_ORG_DASHBOARD: OrgDashboardConfig = {
   widgets: [
+    // ── Community-intelligence KPI row ──────────────────────────────────────────
+    // The headline "community intelligence" row (M3 deliverable #6): four VETTED
+    // intelligence_metric widgets computed by the pure metrics core over
+    // agent_blocker rows, read fail-closed via ReadOnlyDataApi. Rendered FIRST,
+    // before the veto queue, as the at-a-glance health of the human↔agent loop.
+    {
+      id: "ci-acceptance",
+      kind: "intelligence_metric",
+      title: "Scenario acceptance",
+      config: { metric: "scenario_acceptance" },
+    },
+    {
+      id: "ci-latency",
+      kind: "intelligence_metric",
+      title: "Decision latency",
+      config: { metric: "decision_latency" },
+    },
+    {
+      id: "ci-coverage",
+      kind: "intelligence_metric",
+      title: "Coordination coverage",
+      config: { metric: "coordination_coverage" },
+    },
+    {
+      id: "ci-accuracy",
+      kind: "intelligence_metric",
+      title: "Resolution accuracy",
+      config: { metric: "resolution_accuracy" },
+    },
     {
       // The headline "M awaiting you" count — the at-a-glance number of
       // agent→human escalations the steward still owes a decision on. Governed
