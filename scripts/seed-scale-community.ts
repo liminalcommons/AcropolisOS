@@ -19,6 +19,7 @@
 
 import { randomUUID } from "node:crypto";
 import { inArray, like, sql } from "drizzle-orm";
+import { validateWidgetConfig, type CatalogKind } from "../lib/widgets/catalog";
 import { createDb } from "../lib/db/client";
 import { member, member_context } from "../lib/db/schema.generated";
 
@@ -41,36 +42,41 @@ const BASE_STARTED_AT = "2023-01-01"; // date string for started_at (date column
 const CTX_CREATED_AT = new Date("2026-01-01T00:00:00Z");
 const CTX_UPDATED_AT = new Date("2026-05-26T00:00:00Z");
 
-// Minimal widget descriptors for rudimentary KB — vary by member index
+// Rudimentary-KB widget presets — VALID governed catalog descriptors (every config
+// conforms to WIDGET_CATALOG schemas: metric = {type, agg:"count", filter?}, data_table =
+// {type, columns[min1], filter?:{field,value}}). Varied 5 ways by member index to
+// represent different roles/interests. NOTE: these are validated fail-closed below.
+const KB_PRESETS: ReadonlyArray<
+  ReadonlyArray<{ id: string; kind: CatalogKind; config: unknown }>
+> = [
+  [{ id: "w-shift", kind: "metric", config: { type: "shift", agg: "count" } }],
+  [{ id: "w-booking", kind: "data_table", config: { type: "booking", columns: ["label", "from_date", "to_date"] } }],
+  [
+    { id: "w-bed", kind: "data_table", config: { type: "bed", columns: ["code", "room", "out_of_service"] } },
+    { id: "w-shift", kind: "metric", config: { type: "shift", agg: "count" } },
+  ],
+  [{ id: "w-guest", kind: "data_table", config: { type: "guest", columns: ["full_name", "country", "current_status"] } }],
+  [
+    { id: "w-blockers", kind: "metric", config: { type: "agent_blocker", agg: "count", filter: { field: "status", value: "open" } } },
+    { id: "w-bed", kind: "data_table", config: { type: "bed", columns: ["code", "room"] } },
+  ],
+];
+
+// FAIL-CLOSED: validate every preset against the governed catalog at module load. A
+// malformed KB descriptor aborts the seed rather than silently persisting a config that
+// would be dropped on /me render. (Closes Via Negativa cycle-4 MED.)
+for (const preset of KB_PRESETS) {
+  for (const w of preset) {
+    const r = validateWidgetConfig(w.kind, w.config);
+    if (!r.ok) {
+      throw new Error(`Invalid KB preset widget "${w.id}" (${w.kind}): ${JSON.stringify(r)}`);
+    }
+  }
+}
+
+// Minimal widget descriptors for rudimentary KB — vary by member index.
 function pinnedWidgetsFor(index: number): string {
-  // Cycle through a few KB widget presets to represent different member roles/interests
-  const mod = index % 5;
-  if (mod === 0) {
-    return JSON.stringify([
-      { id: "w-shift", kind: "metric", config: { type: "shift", agg: "count" } },
-    ]);
-  }
-  if (mod === 1) {
-    return JSON.stringify([
-      { id: "w-booking", kind: "data_table", config: { entity: "booking", filter: "active" } },
-    ]);
-  }
-  if (mod === 2) {
-    return JSON.stringify([
-      { id: "w-bed", kind: "data_table", config: { entity: "bed", filter: "available" } },
-      { id: "w-shift", kind: "metric", config: { type: "shift", agg: "count" } },
-    ]);
-  }
-  if (mod === 3) {
-    return JSON.stringify([
-      { id: "w-guest", kind: "data_table", config: { entity: "guest", filter: "current" } },
-    ]);
-  }
-  // mod === 4
-  return JSON.stringify([
-    { id: "w-incident", kind: "metric", config: { type: "incident", agg: "open_count" } },
-    { id: "w-bed", kind: "data_table", config: { entity: "bed", filter: "all" } },
-  ]);
+  return JSON.stringify(KB_PRESETS[index % KB_PRESETS.length]);
 }
 
 // Zero-pad index to 3 digits
