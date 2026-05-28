@@ -4,6 +4,7 @@ import { member as memberTable, member_context } from "@/lib/db/schema.generated
 import { resolveTheme } from "@/lib/theme/resolve";
 import { BASE_TOKENS } from "@/lib/theme/tokens";
 import { tokenSetToCssVars } from "@/lib/theme/css";
+import { readOrgProfile, resolveOrgDisplayName } from "@/lib/org-profile/store";
 import { LeftNav } from "./left-nav";
 import { CoPilotDock } from "./co-pilot-dock";
 import type { BuiltInRole } from "@/lib/auth/users";
@@ -55,6 +56,7 @@ export async function AppShell({ children, actor, modelName }: Props): Promise<R
   }
 
   const tokens = resolveTheme({ memberPref: themePref, role, orgSeed: null });
+  const orgName = resolveOrgDisplayName(await readOrgProfile());
 
   return (
     <div
@@ -62,7 +64,7 @@ export async function AppShell({ children, actor, modelName }: Props): Promise<R
       style={tokenSetToCssVars(tokens)}
       className="flex h-screen overflow-hidden bg-background text-foreground"
     >
-      <LeftNav memberName={memberName} role={role} />
+      <LeftNav memberName={memberName} role={role} orgName={orgName} />
       <main className="flex-1 overflow-y-auto">{children}</main>
       <CoPilotDock actorRole={actor.role} actorEmail={actor.email} modelName={modelName} />
     </div>

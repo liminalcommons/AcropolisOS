@@ -22,6 +22,8 @@ import { getDb } from "@/lib/db/client";
 import { resolveDescriptors } from "@/lib/widgets/per-user";
 import { buildCanReadType } from "@/lib/widgets/read-api";
 import { readOrgDashboard } from "@/lib/org-dashboard/store";
+import { readOrgProfile } from "@/lib/org-profile/store";
+import { OrgNameEditor } from "@/components/org/org-name-editor";
 import { ResolvedWidgetCard } from "@/components/dashboard/ResolvedWidgetCard";
 import type { ResolvedWidget } from "@/lib/widgets/compose";
 
@@ -79,6 +81,8 @@ export default async function OrgPage(): Promise<React.ReactElement> {
     // Non-fatal — renders empty state if resolution fails
   }
 
+  const orgProfile = await readOrgProfile();
+
   return (
     <main>
       <div className="mx-auto max-w-5xl px-8 py-10 space-y-6">
@@ -92,6 +96,11 @@ export default async function OrgPage(): Promise<React.ReactElement> {
             Steward view — composed via chat. Ask to add a table, list, or metric
             of any type.
           </p>
+        </div>
+
+        {/* Organization identity — steward-editable name shown in the shell */}
+        <div className="rounded-lg border border-border bg-card/20 p-4">
+          <OrgNameEditor initialName={orgProfile?.name ?? ""} />
         </div>
 
         {/* Section label */}

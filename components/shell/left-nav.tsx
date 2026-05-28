@@ -22,7 +22,7 @@ const ITEMS = [
   { href: "/me", label: "People", icon: Users },
 ] as const;
 
-export function LeftNav({ memberName, role }: { memberName: string; role: string }): React.ReactNode {
+export function LeftNav({ memberName, role, orgName }: { memberName: string; role: string; orgName: string }): React.ReactNode {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => setCollapsed(readCollapsed(NAV_KEY)), []);
@@ -45,7 +45,7 @@ export function LeftNav({ memberName, role }: { memberName: string; role: string
     >
       <div className="flex items-center gap-2 px-3 py-4">
         <span className="text-lg font-bold text-foreground">◆</span>
-        {!collapsed && <span className="font-semibold tracking-tight">acropolis</span>}
+        {!collapsed && <span className="font-semibold tracking-tight truncate" title={orgName}>{orgName}</span>}
         <button
           type="button"
           onClick={toggle}

@@ -95,8 +95,10 @@ export function LLMKeyForm() {
 // ─── Step 3: Org profile ──────────────────────────────────────────────────────
 
 export function OrgProfileForm({
+  initialName,
   initialDescription,
 }: {
+  initialName: string;
   initialDescription: string;
 }) {
   const [toast, setToast] = useState<ToastState>({ kind: "idle" });
@@ -118,9 +120,22 @@ export function OrgProfileForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Help the AI understand your world from the start. One or two sentences
-        is enough.
+        Name your community and tell the AI what it is. The name shows in the
+        sidebar across the app.
       </p>
+      <label className="block">
+        <span className="text-[11px] text-muted-foreground uppercase tracking-wider">
+          Organization name
+        </span>
+        <input
+          type="text"
+          name="name"
+          maxLength={80}
+          defaultValue={initialName}
+          placeholder="e.g. Casa Verde"
+          className="mt-1.5 w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-emerald-700 transition-colors"
+        />
+      </label>
       <label className="block">
         <span className="text-[11px] text-muted-foreground uppercase tracking-wider">
           Org description

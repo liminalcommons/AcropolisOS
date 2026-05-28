@@ -9,15 +9,9 @@
 // saveOrgProfile — FUNCTIONAL. Writes to uploads/org-profile.json which is
 //                  bind-mounted into the container and persists across restarts.
 
-import path from "node:path";
-import fs from "node:fs/promises";
 import { z } from "zod";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
-
-// uploads/ is bind-mounted (see docker-compose.yml) — writes here survive
-// container restarts. Never write secrets here; org-profile is public metadata.
-const UPLOADS_DIR = path.join(process.cwd(), "uploads");
-const ORG_PROFILE_PATH = path.join(UPLOADS_DIR, "org-profile.json");
+import { validateOrgName, writeOrgProfile } from "@/lib/org-profile/store";
 
 // ─── saveLLMKey ──────────────────────────────────────────────────────────────
 
@@ -55,6 +49,10 @@ export async function saveLLMKey(
 // ─── saveOrgProfile ──────────────────────────────────────────────────────────
 
 const SaveOrgProfileInput = z.object({
+  name: z
+    .string()
+    .min(1, "Name must not be empty")
+    .max(80, "Name must be 80 characters or fewer"),
   description: z
     .string()
     .min(1, "Description must not be empty")
@@ -74,20 +72,50 @@ export async function saveOrgProfile(
   }
 
   const parsed = SaveOrgProfileInput.safeParse({
+    name: formData.get("name"),
     description: formData.get("description"),
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   }
 
-  const payload = {
-    description: parsed.data.description,
-    updated_at: new Date().toISOString(),
-    updated_by: runtime.actor?.email ?? "unknown",
-  };
-
-  await fs.mkdir(UPLOADS_DIR, { recursive: true });
-  await fs.writeFile(ORG_PROFILE_PATH, JSON.stringify(payload, null, 2), "utf8");
+  await writeOrgProfile(
+    { name: parsed.data.name.trim(), description: parsed.data.description },
+    { updated_by: runtime.actor?.email ?? "unknown" },
+  );
 
   return { ok: true };
+}
+
+// ─── saveOrgName ───────────────────────────────────────────────────────────────
+//
+// Steward-only rename — the "editable anytime" path (decision 2026-05-28).
+// Changing the org's public identity is a steward act, so it gates on role
+// beyond mere authentication (mirrors the /org page gate). Merges into the
+// existing profile so the description is preserved.
+
+export type SaveOrgNameResult =
+  | { ok: true; name: string }
+  | { ok: false; error: string };
+
+export async function saveOrgName(formData: FormData): Promise<SaveOrgNameResult> {
+  const runtime = await buildChatRuntime();
+  if (isAnonymous(runtime.actor)) {
+    return { ok: false, error: "Not authenticated" };
+  }
+  if (runtime.actor?.role !== "steward") {
+    return { ok: false, error: "Only stewards can rename the organization" };
+  }
+
+  const validated = validateOrgName(formData.get("name"));
+  if (!validated.ok) {
+    return { ok: false, error: validated.error };
+  }
+
+  await writeOrgProfile(
+    { name: validated.value },
+    { updated_by: runtime.actor?.email ?? "unknown" },
+  );
+
+  return { ok: true, name: validated.value };
 }

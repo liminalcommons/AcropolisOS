@@ -12,9 +12,8 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import path from "node:path";
-import fs from "node:fs/promises";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
+import { readOrgProfile } from "@/lib/org-profile/store";
 import { getDb } from "@/lib/db/client";
 import { SetupStep } from "@/components/setup/SetupStep";
 import { LLMKeyForm } from "@/components/setup/SetupForms";
@@ -40,17 +39,6 @@ async function checkDatabase(): Promise<{ ok: boolean; detail: string }> {
   }
 }
 
-async function readOrgProfile(): Promise<string> {
-  const filePath = path.join(process.cwd(), "uploads", "org-profile.json");
-  try {
-    const raw = await fs.readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as { description?: string };
-    return parsed.description ?? "";
-  } catch {
-    return "";
-  }
-}
-
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function SetupPage(): Promise<React.ReactElement> {
@@ -59,10 +47,12 @@ export default async function SetupPage(): Promise<React.ReactElement> {
     redirect("/signin");
   }
 
-  const [dbStatus, initialDescription] = await Promise.all([
+  const [dbStatus, profile] = await Promise.all([
     checkDatabase(),
     readOrgProfile(),
   ]);
+  const initialName = profile?.name ?? "";
+  const initialDescription = profile?.description ?? "";
 
   return (
     <main className="min-h-screen bg-background text-foreground font-sans">
@@ -126,7 +116,10 @@ export default async function SetupPage(): Promise<React.ReactElement> {
             status="pending"
             defaultExpanded={true}
           >
-            <OrgProfileForm initialDescription={initialDescription} />
+            <OrgProfileForm
+              initialName={initialName}
+              initialDescription={initialDescription}
+            />
           </SetupStep>
 
         </div>
