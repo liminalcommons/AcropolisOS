@@ -24,9 +24,13 @@ CREATE INDEX IF NOT EXISTS "notification_recipient_unread_idx" ON "notification"
 -- M4.1 cleanup (#29): add FK from notification.recipient_member_id → member.id.
 -- schema.generated.ts declared this FK but the original SQL omitted it.
 -- Wrapped in a DO block for idempotency (Postgres lacks ADD CONSTRAINT IF NOT EXISTS).
+-- Cold-start guard: on an empty DB the entrypoint runs this hand-rolled SQL
+-- BEFORE drizzle-kit push creates "member", so only add the FK once "member"
+-- exists. When absent, push adds the FK from the generated schema; the next
+-- (warm) boot reconciles here if push left it off.
 DO $$
 BEGIN
-  IF NOT EXISTS (
+  IF to_regclass('public."member"') IS NOT NULL AND NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE constraint_name = 'notification_recipient_member_id_fk'
       AND table_name = 'notification'

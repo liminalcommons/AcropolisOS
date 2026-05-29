@@ -15,7 +15,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS "idx_member_context_member" ON "member_context
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (
+  -- Cold-start guard: "member" is created by drizzle-kit push, which runs
+  -- AFTER this hand-rolled SQL. Skip the FK on an empty DB (push adds it).
+  IF to_regclass('public."member"') IS NOT NULL AND NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE constraint_name = 'member_context_member_id_fk'
       AND table_name = 'member_context'
@@ -52,7 +54,8 @@ CREATE INDEX IF NOT EXISTS "idx_agent_blocker_status_created" ON "agent_blocker"
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (
+  -- Cold-start guard (see member_context FK above): skip until "member" exists.
+  IF to_regclass('public."member"') IS NOT NULL AND NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE constraint_name = 'agent_blocker_blocked_actor_id_fk'
       AND table_name = 'agent_blocker'
