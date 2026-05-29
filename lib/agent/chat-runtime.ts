@@ -57,7 +57,7 @@ export interface ChatRuntime {
 let cachedOntology: Ontology | null = null;
 let cachedOntologyDir: string | null = null;
 
-async function getOntologyCached(dir: string): Promise<Ontology> {
+export async function getOntologyCached(dir: string): Promise<Ontology> {
   if (cachedOntology && cachedOntologyDir === dir) return cachedOntology;
   const ontology = await loadOntology(dir);
   cachedOntology = ontology;

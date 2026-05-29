@@ -20,7 +20,7 @@
 
 import { execFileSync } from "child_process";
 import { writeFileSync, unlinkSync } from "fs";
-import { validateFieldMap } from "../app/api/organize/classify/route";
+import { validateFieldMap, buildTargetVocab } from "../app/api/organize/classify/route";
 
 const BASE_URL = "http://localhost:3030";
 
@@ -85,14 +85,17 @@ async function main() {
   // ── FIX 2: Pure helper — deterministic, no HTTP/LLM ────────────────────────
   console.log("\n=== FIX 2: validateFieldMap helper (pure, no LLM) ===");
 
-  const check1 = validateFieldMap("guest", { name: "full_name" });
+  // Load ontology-derived vocab (hostel ontology at default ACROPOLISOS_ONTOLOGY_DIR).
+  const { fields: vocabFields } = await buildTargetVocab();
+
+  const check1 = validateFieldMap("guest", { name: "full_name" }, vocabFields);
   const pass1 = check1.ok === true;
   console.log(
     `  validateFieldMap("guest", { name: "full_name" }).ok === true  →  ${pass1 ? "PASS" : "FAIL"} (got: ${JSON.stringify(check1)})`
   );
   if (!pass1) allPassed = false;
 
-  const check2 = validateFieldMap("guest", { x: "passport_number" });
+  const check2 = validateFieldMap("guest", { x: "passport_number" }, vocabFields);
   const pass2 = check2.ok === false && (check2 as { ok: false; invalid: string[] }).invalid.includes("passport_number");
   console.log(
     `  validateFieldMap("guest", { x: "passport_number" }).ok === false  →  ${pass2 ? "PASS" : "FAIL"} (got: ${JSON.stringify(check2)})`
@@ -100,7 +103,7 @@ async function main() {
   if (!pass2) allPassed = false;
 
   // Mixed: valid + invalid values
-  const check3 = validateFieldMap("member", { a: "full_name", b: "nonexistent_col" });
+  const check3 = validateFieldMap("member", { a: "full_name", b: "nonexistent_col" }, vocabFields);
   const pass3 = check3.ok === false;
   console.log(
     `  validateFieldMap("member", { a: "full_name", b: "nonexistent_col" }).ok === false  →  ${pass3 ? "PASS" : "FAIL"} (got: ${JSON.stringify(check3)})`
@@ -108,7 +111,7 @@ async function main() {
   if (!pass3) allPassed = false;
 
   // All valid for booking
-  const check4 = validateFieldMap("booking", { a: "label", b: "status" });
+  const check4 = validateFieldMap("booking", { a: "label", b: "status" }, vocabFields);
   const pass4 = check4.ok === true;
   console.log(
     `  validateFieldMap("booking", { a: "label", b: "status" }).ok === true  →  ${pass4 ? "PASS" : "FAIL"} (got: ${JSON.stringify(check4)})`

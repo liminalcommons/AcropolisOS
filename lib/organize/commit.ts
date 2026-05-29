@@ -47,7 +47,7 @@ import {
   shift as shiftTable,
   work_trade_agreement as workTradeTable,
 } from "../db/schema.generated";
-import { validateFieldMap } from "../../app/api/organize/classify/route";
+import { validateFieldMap, buildTargetVocab } from "../../app/api/organize/classify/route";
 import { findDuplicates, type DuplicateCandidate } from "./resolve";
 import type { Actor } from "../ctx";
 
@@ -256,7 +256,8 @@ export async function commitProposalCore(
   const { inbox_id, target_type, field_map, } = validated.data;
 
   // 3. Re-validate field_map values server-side (never trust the client's prior validation)
-  const fieldMapCheck = validateFieldMap(target_type, field_map);
+  const { fields: vocabFields } = await buildTargetVocab();
+  const fieldMapCheck = validateFieldMap(target_type, field_map, vocabFields);
   if (!fieldMapCheck.ok) {
     return { status: "field_map_error", invalid_fields: fieldMapCheck.invalid };
   }

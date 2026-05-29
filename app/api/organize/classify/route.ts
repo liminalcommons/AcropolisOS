@@ -5,7 +5,7 @@
 // to produce a structured classification proposal:
 //   { inbox_id, target_type, field_map, confidence, unmapped, reasoning }
 //
-// target_type is a zod enum over EXISTING ontology types only — the model
+// target_type is a zod enum derived from the LOADED ONTOLOGY — the model
 // cannot propose a non-existent type. Validation enforces the boundary.
 // NO commit happens here (A3). This endpoint is READ-ONLY proposal generation.
 //
@@ -18,82 +18,48 @@
 // Hardening (A1 negativa fixes):
 // - FIX 1: Non-object payloads (null/array/string/number) → 422 unclassifiable_payload
 //           before any LLM call. Prevents Object.keys(null) crash and garbage proposals.
-// - FIX 2: field_map values validated against VALID_FIELDS[target_type] after safeParse.
+// - FIX 2: field_map values validated against valid fields for target_type after safeParse.
 //           Any off-list value → 502 llm_field_error. validateFieldMap is exported for
 //           unit testing. Makes existing-fields-only a hard guarantee.
 // - FIX 3: generateText wrapped in try/catch → 503 llm_unavailable (mirrors
 //           llm_not_configured block), so A2 UI can distinguish model-down from bad output.
+// - FIX 4: Ontology load errors (OntologyValidationError) → 503 ontology_unavailable,
+//           mirrors llm_not_configured pattern so callers can distinguish config errors.
 
 import { generateText } from "ai";
 import { z } from "zod";
 import { buildLanguageModel } from "@/lib/agent/mastra";
-import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
+import { buildChatRuntime, isAnonymous, getOntologyCached } from "@/lib/agent/chat-runtime";
 import { extractJson } from "@/lib/agent/extract-json";
 import { getDb } from "@/lib/db/client";
 import { raw_inbox } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { getRuntimeOntologyDir } from "@/lib/setup/paths";
+import { deriveVocabulary } from "@/lib/widgets/vocabulary";
+import { OntologyValidationError } from "@/lib/ontology/load";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Scope guard: ONLY existing ontology object types. The model cannot hallucinate
-// a new type — zod enforces the enum boundary after parsing.
-const TARGET_TYPE_ENUM = z.enum([
-  "guest",
-  "member",
-  "booking",
-  "event",
-  "bed",
-  "room",
-  "shift",
-  "work_trade_agreement",
-]);
-type TargetType = z.infer<typeof TARGET_TYPE_ENUM>;
-
-// Valid target fields per ontology type (derived from types.generated.ts and
-// schema.generated.ts). Passed into the prompt so the model can only map to
-// real columns.
-const VALID_FIELDS: Record<TargetType, string[]> = {
-  guest: [
-    "full_name", "email", "country", "phone",
-    "arrived_at", "expected_departure", "current_status",
-    "is_work_trader", "notes",
-  ],
-  member: [
-    "full_name", "email", "phone", "tier_role",
-    "started_at", "notes",
-  ],
-  booking: [
-    "label", "guest", "bed", "from_date", "to_date",
-    "rate_per_night", "currency", "source", "status",
-  ],
-  event: [
-    "title", "starts_at", "duration_hours", "attendance_cap",
-    "organizer", "description", "status",
-  ],
-  bed: [
-    "code", "room", "is_bottom_bunk", "out_of_service", "notes",
-  ],
-  room: [
-    "code", "kind", "capacity", "floor", "notes",
-  ],
-  shift: [
-    "label", "kind", "starts_at", "duration_hours",
-    "claimed_by", "status", "notes",
-  ],
-  work_trade_agreement: [
-    "label", "guest", "bed_comp", "hours_per_week",
-    "start_date", "end_date", "status", "notes",
-  ],
-};
+// Derived from the loaded ontology at request time — no hostel literals.
+// Exported for deterministic unit testing without HTTP.
+export async function buildTargetVocab(): Promise<{
+  types: string[];
+  fields: Record<string, string[]>;
+}> {
+  const ontology = await getOntologyCached(getRuntimeOntologyDir());
+  const v = deriveVocabulary(ontology);
+  return { types: v.validTypes, fields: v.validFields };
+}
 
 // FIX 2: Pure exported helper — validates every field_map value is in
-// VALID_FIELDS[targetType]. Exported for deterministic unit testing without HTTP/LLM.
+// fields[targetType]. Exported for deterministic unit testing without HTTP/LLM.
 export function validateFieldMap(
-  targetType: TargetType,
+  targetType: string,
   fieldMap: Record<string, string>,
+  fields: Record<string, string[]>,
 ): { ok: true } | { ok: false; invalid: string[] } {
-  const allowed = VALID_FIELDS[targetType];
+  const allowed = fields[targetType];
   if (!allowed) {
     return { ok: false, invalid: Object.values(fieldMap) };
   }
@@ -104,17 +70,6 @@ export function validateFieldMap(
   }
   return { ok: true };
 }
-
-const ProposalSchema = z.object({
-  inbox_id: z.string(),
-  target_type: TARGET_TYPE_ENUM,
-  field_map: z.record(z.string(), z.string()),
-  confidence: z.number().min(0).max(1),
-  unmapped: z.array(z.string()),
-  reasoning: z.string(),
-});
-
-type Proposal = z.infer<typeof ProposalSchema>;
 
 interface ClassifyBody {
   inbox_id: string;
@@ -132,6 +87,28 @@ export async function POST(req: Request): Promise<Response> {
   if (isAnonymous(chatRuntime.actor)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  // FIX 4: Load ontology-derived vocab early — 503 if ontology is misconfigured.
+  let types: string[];
+  let fields: Record<string, string[]>;
+  try {
+    ({ types, fields } = await buildTargetVocab());
+  } catch (err) {
+    if (err instanceof OntologyValidationError) {
+      return Response.json(
+        {
+          error: "ontology_unavailable",
+          detail: err instanceof Error ? err.message : String(err),
+        },
+        { status: 503 },
+      );
+    }
+    throw err;
+  }
+
+  // Scope guard: ONLY existing ontology object types. The model cannot hallucinate
+  // a new type — zod enforces the enum boundary after parsing.
+  const TARGET_TYPE_ENUM = z.enum(types as [string, ...string[]]);
 
   let body: unknown;
   try {
@@ -178,12 +155,12 @@ export async function POST(req: Request): Promise<Response> {
 
   // Build the classification prompt, injecting allowed types + fields so the
   // model cannot invent non-existent ontology terms.
-  const typeDescriptions = (Object.keys(VALID_FIELDS) as TargetType[])
-    .map((t) => `  ${t}: fields=[${VALID_FIELDS[t].join(", ")}]`)
+  const typeDescriptions = types
+    .map((t) => `  ${t}: fields=[${(fields[t] ?? []).join(", ")}]`)
     .join("\n");
 
   const prompt = [
-    "You are classifying a single messy inbound row from a community hostel's raw inbox.",
+    "You are classifying a single messy inbound row from a community's raw inbox.",
     "Choose the BEST matching target type from the allowed list below.",
     "Map source keys to real target fields (only the listed fields — do not invent columns).",
     "Keys you cannot confidently map to a real field go in 'unmapped'.",
@@ -201,6 +178,17 @@ export async function POST(req: Request): Promise<Response> {
     "",
     "No prose before or after the JSON.",
   ].join("\n");
+
+  const ProposalSchema = z.object({
+    inbox_id: z.string(),
+    target_type: TARGET_TYPE_ENUM,
+    field_map: z.record(z.string(), z.string()),
+    confidence: z.number().min(0).max(1),
+    unmapped: z.array(z.string()),
+    reasoning: z.string(),
+  });
+
+  type Proposal = z.infer<typeof ProposalSchema>;
 
   let model;
   try {
@@ -254,13 +242,14 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  // FIX 2: Validate every field_map value is in VALID_FIELDS[target_type].
+  // FIX 2: Validate every field_map value is in the ontology-derived fields for target_type.
   // ProposalSchema only checks z.record(z.string(), z.string()); values are
   // unconstrained. The LLM can emit a non-existent column that passes zod and
   // would reach A3's ctx.objects.<Type>.create → DB error / silent data loss.
   const fieldMapCheck = validateFieldMap(
     validated.data.target_type,
     validated.data.field_map,
+    fields,
   );
   if (!fieldMapCheck.ok) {
     return Response.json(
