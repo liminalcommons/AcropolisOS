@@ -4,7 +4,8 @@ import { member as memberTable, member_context } from "@/lib/db/schema.generated
 import { resolveTheme } from "@/lib/theme/resolve";
 import { BASE_TOKENS } from "@/lib/theme/tokens";
 import { tokenSetToCssVars } from "@/lib/theme/css";
-import { readOrgProfile, resolveOrgDisplayName } from "@/lib/org-profile/store";
+import { resolveOrgDisplayName } from "@/lib/org-profile/shared";
+import { readOrgProfile } from "@/lib/org-profile/store";
 import { LeftNav } from "./left-nav";
 import { CoPilotDock } from "./co-pilot-dock";
 import type { BuiltInRole } from "@/lib/auth/users";

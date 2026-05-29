@@ -5,11 +5,10 @@ import {
   ORG_NAME_FALLBACK,
   ORG_NAME_MAX,
   mergeProfile,
-  readOrgProfile,
   resolveOrgDisplayName,
   validateOrgName,
-  writeOrgProfile,
-} from "./store";
+} from "./shared";
+import { readOrgProfile, writeOrgProfile } from "./store";
 
 // Fixture file lives INSIDE the package tree (vitest/Vite intercepts dynamic
 // imports outside the project root — fs is fine, but keep test artifacts local).

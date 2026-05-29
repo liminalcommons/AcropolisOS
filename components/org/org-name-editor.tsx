@@ -8,7 +8,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveOrgName } from "@/app/setup/actions";
-import { ORG_NAME_MAX } from "@/lib/org-profile/store";
+import { ORG_NAME_MAX } from "@/lib/org-profile/shared";
 
 type Toast = { kind: "idle" } | { kind: "ok" } | { kind: "error"; message: string };
 

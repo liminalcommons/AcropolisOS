@@ -11,7 +11,8 @@
 
 import { z } from "zod";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
-import { validateOrgName, writeOrgProfile } from "@/lib/org-profile/store";
+import { validateOrgName } from "@/lib/org-profile/shared";
+import { writeOrgProfile } from "@/lib/org-profile/store";
 
 // ─── saveLLMKey ──────────────────────────────────────────────────────────────
 
