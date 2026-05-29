@@ -1,0 +1,8 @@
+ReadingMeeting:
+  description: "A meeting where the club discusses a book"
+  title_property: label
+  permissions: { read: ["*"], write: ["steward"] }
+  properties:
+    id: { type: uuid, primary_key: true }
+    label: { type: string, required: true }
+    date: { type: date }

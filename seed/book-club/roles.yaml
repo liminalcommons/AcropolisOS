@@ -1,0 +1,4 @@
+steward:
+  description: "Runs the club"
+member:
+  description: "A club member"
