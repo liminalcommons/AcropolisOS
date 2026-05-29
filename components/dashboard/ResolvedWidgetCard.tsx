@@ -24,11 +24,8 @@ import { parseConfirmAction } from "@/lib/widgets/row-confirm";
 
 // ── MetricWidget ──────────────────────────────────────────────────────────────
 
-// Renders both the generic `metric` (COUNT(*)) and the vetted
-// `intelligence_metric` (community-intelligence KPI). Both produce MetricData;
-// the only difference is `metric` carries a {type, agg, filter} config (so it
-// can derive a label + show the agg footer) whereas intelligence_metric carries
-// {metric} and relies on the dashboard descriptor's `title` + data.label/display.
+// Renders the generic `metric` (COUNT(*) over any ontology type). Produces MetricData;
+// carries a {type, agg, filter} config (so it can derive a label + show the agg footer).
 function MetricWidget({ widget }: { widget: ResolvedWidget }) {
   const data = widget.data as MetricData;
   const config = widget.config as {
@@ -323,7 +320,6 @@ function CalendarWidget({ widget }: { widget: ResolvedWidget }) {
 export function ResolvedWidgetCard({ widget }: { widget: ResolvedWidget }) {
   switch (widget.kind) {
     case "metric":
-    case "intelligence_metric":
       return <MetricWidget widget={widget} />;
     case "data_table":
       return <DataTableWidget widget={widget} />;
