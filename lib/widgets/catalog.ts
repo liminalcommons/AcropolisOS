@@ -83,7 +83,7 @@ export const RosterConfigSchema = z.object({
 export type RosterConfig = z.infer<typeof RosterConfigSchema>;
 
 export const CalendarConfigSchema = z.object({
-  type: z.enum(["event", "booking"]),
+  type: CatalogTypeSchema,
   date_field: z.string(),
   limit: z.number().int().min(1).max(200).optional().default(50),
 });
@@ -276,6 +276,21 @@ export function validateWidgetConfig(
       error: "unknown_filter_field",
       detail: { type: config.type, unknown_field: config.filter.field },
     };
+  }
+
+  // Calendar: validate date_field against the ontology-derived field whitelist.
+  // The type-membership check above already ran; fieldSet is populated for the
+  // validated type. This makes calendar date_field ontology-derived, matching the
+  // filter-field gate for metric/data_table/roster — same error shape.
+  if (kind === "calendar") {
+    const calConfig = parsed.data as { date_field: string; type?: string };
+    if (!fieldSet.has(calConfig.date_field)) {
+      return {
+        ok: false,
+        error: "unknown_filter_field",
+        detail: { type: config.type, unknown_field: calConfig.date_field },
+      };
+    }
   }
 
   return { ok: true, config: parsed.data };

@@ -5,6 +5,10 @@
 // NON-hostel ontology (seed/book-club): a `book` over its column `title` is
 // accepted; a hostel `bed` is rejected; an unknown column on a valid type is
 // rejected. Zero hostel leakage.
+//
+// Calendar suite proves CalendarConfigSchema uses CatalogTypeSchema (z.string()),
+// not the former z.enum(["event","booking"]) — any org's date-bearing type now
+// works, not just hostel types.
 
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -31,5 +35,58 @@ describe("validateWidgetConfig is ontology-aware", () => {
   it("rejects an unknown column on a valid type", () => {
     const r = validateWidgetConfig("data_table", { type: "book", columns: ["nope"] }, book);
     expect(r.ok).toBe(false);
+  });
+});
+
+// ── Calendar: CalendarConfigSchema must use CatalogTypeSchema (z.string()) ──────
+//
+// REGRESSION SENTINEL: before the fix, CalendarConfigSchema used
+// z.enum(["event","booking"]) which rejected any org lacking those literal types.
+// After the fix it uses CatalogTypeSchema (z.string()); type-membership is
+// enforced at runtime via deriveVocabulary(ontology).validTypes — same as
+// metric/data_table/roster. The date_field is additionally validated against the
+// type's field whitelist inside validateWidgetConfig.
+
+describe("validateWidgetConfig — calendar kind is ontology-derived (not hostel enum)", () => {
+  let bookClubOntology: Ontology;
+  let hostelOntology: Ontology;
+
+  beforeAll(async () => {
+    bookClubOntology = await loadOntology(path.resolve(__dirname, "../../seed/book-club"));
+    hostelOntology = await loadOntology(path.resolve(__dirname, "../../seed/hostel"));
+  });
+
+  // REGRESSION SENTINEL: non-hostel type with a real date field must now be accepted.
+  // Before fix: z.enum(["event","booking"]) → "invalid_enum_value" → ok:false.
+  // After fix: z.string() → type-membership check → date_field whitelist check.
+  it("accepts a non-hostel calendar type (reading_meeting / date) — regression sentinel", () => {
+    const r = validateWidgetConfig(
+      "calendar",
+      { type: "reading_meeting", date_field: "date" },
+      bookClubOntology,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  // date_field not in the ontology-derived field whitelist → rejected.
+  it("rejects a calendar config whose date_field is not a real field on the type", () => {
+    const r = validateWidgetConfig(
+      "calendar",
+      { type: "reading_meeting", date_field: "nope" },
+      bookClubOntology,
+    );
+    expect(r.ok).toBe(false);
+    expect((r as { ok: false; error: string }).error).toBe("unknown_filter_field");
+  });
+
+  // Hostel path must continue to work after the fix.
+  // seed/hostel/object-types/event.yaml: starts_at is the date property.
+  it("accepts a hostel calendar (event / starts_at) — hostel path still works", () => {
+    const r = validateWidgetConfig(
+      "calendar",
+      { type: "event", date_field: "starts_at" },
+      hostelOntology,
+    );
+    expect(r.ok).toBe(true);
   });
 });

@@ -9,14 +9,14 @@
 // physically cannot call db.insert / db.update / db.delete.
 //
 // Safety rules (enforced here, not by callers):
-//   (a) type validated against CATALOG_VALID_TYPES whitelist → out-of-whitelist
+//   (a) type validated against vocab.validTypes (from deriveVocabulary) → out-of-whitelist
 //       returns safe empty, never reaches SQL.
 //   (b) per-actor read permission gate — the VIEWER must be permitted to read
 //       the catalog type (per the loaded ontology's object_type read tokens).
 //       FAIL CLOSED: a viewer not permitted gets the SAME safe-empty value the
 //       unknown-type branch returns, BEFORE any SQL runs. This reuses the exact
 //       permission semantics of ctx.objects (actorMatchesTokens) — one model.
-//   (c) columns/fields validated against CATALOG_VALID_FIELDS → unknowns dropped.
+//   (c) columns/fields validated against vocab.validFields (from deriveVocabulary) → unknowns dropped.
 //   (d) limit / filter values bound as parameters, never interpolated.
 //   (e) SELECT-only — no insert/update/delete anywhere in this file.
 
@@ -215,7 +215,8 @@ export function createReadOnlyDataApi(
    * registry, keyed by the EXACT PascalCase ontology object-type name (inversion,
    * never a guess). MUST only be called for a token that passed resolveType.
    * Indexing TABLES yields a union of heterogeneous table types; cast to the
-   * guestTable shape for the typed-select paths exactly as the old TABLE_MAP did.
+   * guestTable shape for the typed-select paths exactly as the generated TABLES
+   * registry does.
    */
   function tableFor(type: string): typeof guestTable {
     return (TABLES as Record<string, unknown>)[
