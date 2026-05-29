@@ -290,5 +290,18 @@ export function generateDrizzleModule(ontology: Ontology): string {
     }
   }
 
+  // === TABLES registry ===
+  // Keyed by PascalCase ontology object-type name → its generated snake_case table variable.
+  // Used by the read-only data API to resolve a validated type to its Drizzle table.
+  const tableEntries = Object.keys(ontology.object_types)
+    .map((typeName) => `  ${typeName}: ${snakeCase(typeName)},`)
+    .join("\n");
+
+  parts.push(
+    "// Registry of all object-type tables keyed by PascalCase ontology name.\n" +
+    "// Generated — used by the read-only data API to resolve a validated type to its table.\n" +
+    `export const TABLES = {\n${tableEntries}\n} as const;\n`,
+  );
+
   return parts.join("");
 }

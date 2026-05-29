@@ -205,3 +205,20 @@ export const incident_log_involves_guest = pgTable(
   (t) => [primaryKey({ columns: [t.incident_log_id, t.guest_id] })],
 );
 
+// Registry of all object-type tables keyed by PascalCase ontology name.
+// Generated — used by the read-only data API to resolve a validated type to its table.
+export const TABLES = {
+  AgentBlocker: agent_blocker,
+  Bed: bed,
+  Booking: booking,
+  Event: event,
+  Guest: guest,
+  IncidentLog: incident_log,
+  MeetingMinute: meeting_minute,
+  MemberContext: member_context,
+  Member: member,
+  Notification: notification,
+  Room: room,
+  Shift: shift,
+  WorkTradeAgreement: work_trade_agreement,
+} as const;
