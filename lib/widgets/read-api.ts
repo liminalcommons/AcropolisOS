@@ -25,61 +25,8 @@ import type { Database } from "@/lib/db/client";
 import type { Actor } from "@/lib/ctx";
 import { actorMatchesTokens, buildObjectPermissionsMap } from "@/lib/ontology/ctx";
 import type { Ontology } from "@/lib/ontology/schema";
-import {
-  guest as guestTable,
-  member as memberTable,
-  booking as bookingTable,
-  event as eventTable,
-  bed as bedTable,
-  room as roomTable,
-  shift as shiftTable,
-  work_trade_agreement as wtaTable,
-  agent_blocker as agentBlockerTable,
-} from "@/lib/db/schema.generated";
-import {
-  CATALOG_VALID_TYPES,
-  CATALOG_VALID_FIELDS,
-  type CatalogType,
-} from "./catalog";
-
-// ── Table map ─────────────────────────────────────────────────────────────────
-// Internal only — never exposed on ReadOnlyDataApi.
-
-const TABLE_MAP: Record<CatalogType, typeof guestTable> = {
-  guest: guestTable as unknown as typeof guestTable,
-  member: memberTable as unknown as typeof guestTable,
-  booking: bookingTable as unknown as typeof guestTable,
-  event: eventTable as unknown as typeof guestTable,
-  bed: bedTable as unknown as typeof guestTable,
-  room: roomTable as unknown as typeof guestTable,
-  shift: shiftTable as unknown as typeof guestTable,
-  work_trade_agreement: wtaTable as unknown as typeof guestTable,
-  agent_blocker: agentBlockerTable as unknown as typeof guestTable,
-};
-
-// ── Internal helpers ──────────────────────────────────────────────────────────
-
-/**
- * Resolves a type string to a verified CatalogType via the whitelist.
- * Returns null for anything not in the whitelist — caller returns safe empty.
- * This is the single table-name safety chokepoint (previously scattered across
- * individual queryBindings as resolveTableName; now centralised here).
- */
-function resolveType(type: string): CatalogType | null {
-  if ((CATALOG_VALID_TYPES as readonly string[]).includes(type)) {
-    return type as CatalogType;
-  }
-  return null;
-}
-
-/**
- * Filters requested columns to those present in CATALOG_VALID_FIELDS[type].
- * Unknown columns are silently dropped (no injection path).
- */
-function safeColumns(type: CatalogType, requested: string[]): string[] {
-  const allowed = new Set(CATALOG_VALID_FIELDS[type]);
-  return requested.filter((c) => allowed.has(c));
-}
+import { guest as guestTable, TABLES } from "@/lib/db/schema.generated";
+import { deriveVocabulary, type Vocabulary } from "./vocabulary";
 
 // RELATIVE-DATE filter tokens. A widget filter value of "@today" resolves, at
 // QUERY time, to the current date (YYYY-MM-DD) — so a descriptor like
@@ -97,10 +44,10 @@ export function resolveFilterValue(value: string): string {
 //
 // THE SECURITY BOUNDARY: read-api takes a raw db handle and would otherwise let
 // any caller read ANY whitelisted type's rows regardless of the viewer's role.
-// The structural whitelist (CATALOG_VALID_TYPES/FIELDS) says only WHAT is
-// queryable at all — it says nothing about WHO may read it. This predicate
-// closes that hole by gating each read on the viewer's per-type read permission,
-// reusing the SAME permission semantics as ctx.objects.
+// The structural whitelist (the ontology-derived validTypes/validFields) says
+// only WHAT is queryable at all — it says nothing about WHO may read it. This
+// predicate closes that hole by gating each read on the viewer's per-type read
+// permission, reusing the SAME permission semantics as ctx.objects.
 
 /**
  * Predicate: may the current viewer read this catalog type at all?
@@ -108,24 +55,6 @@ export function resolveFilterValue(value: string): string {
  * seeder/proof contexts). FAIL CLOSED: when in doubt, deny.
  */
 export type CanReadType = (catalogType: string) => boolean;
-
-// Maps the read-api's lowercase/snake catalog type to the PascalCase ontology
-// object_type name used in the permissions map (buildObjectPermissionsMap keys).
-// CASING IS LOAD-BEARING: catalog uses `bed`/`work_trade_agreement`; the perms
-// map uses `Bed`/`WorkTradeAgreement`. A mismatch here would silently mean
-// "no permissions entry" → deny-all (fail-closed) for valid types, OR worse if
-// inverted. Keep this exhaustive over CatalogType.
-const CATALOG_TYPE_TO_OBJECT_TYPE: Record<CatalogType, string> = {
-  guest: "Guest",
-  member: "Member",
-  booking: "Booking",
-  event: "Event",
-  bed: "Bed",
-  room: "Room",
-  shift: "Shift",
-  work_trade_agreement: "WorkTradeAgreement",
-  agent_blocker: "AgentBlocker",
-};
 
 /**
  * Trusted-context predicate: allow all reads. ONLY for seeder / proof / migration
@@ -145,16 +74,24 @@ export const CAN_READ_ALL: CanReadType = () => true;
  * The type-level gate passes row = null, so `member_self` cannot match here —
  * that is intentional: per-row ownership lives in ctx.objects, not the coarse
  * catalog read fence.
+ *
+ * CASING IS LOAD-BEARING: the read-api's snake token (`bed`/`work_trade_agreement`)
+ * is mapped to the PascalCase ontology object_type name (`Bed`/`WorkTradeAgreement`)
+ * used by buildObjectPermissionsMap. That map is derived by INVERTING the loaded
+ * ontology's real keys (deriveVocabulary().typeToObjectType) — never guessed and
+ * never a hostel-shaped literal. A token absent from the loaded ontology has no
+ * mapping → deny (fail-closed).
  */
 export function buildCanReadType(
   actor: Actor | null,
   ontology: Ontology,
 ): CanReadType {
   const permissions = buildObjectPermissionsMap(ontology);
+  const vocab = deriveVocabulary(ontology);
   return (catalogType: string): boolean => {
-    const resolved = resolveType(catalogType);
-    if (!resolved) return false; // not even a whitelisted type → deny
-    const objectTypeName = CATALOG_TYPE_TO_OBJECT_TYPE[resolved];
+    // not even a type present in the loaded ontology → deny (membership gate)
+    if (!vocab.validTypes.includes(catalogType)) return false;
+    const objectTypeName = vocab.typeToObjectType[catalogType];
     const perms = permissions[objectTypeName];
     // FAIL CLOSED: no permissions entry → deny (mirrors wrapObjectAccess(!perms)).
     if (!perms) return false;
@@ -223,11 +160,54 @@ export interface ReadOnlyDataApi {
  * safe-empty value if the viewer may not read the type. Build it per request via
  * buildCanReadType(actor, ontology); use CAN_READ_ALL only in trusted seeder/proof
  * contexts. There is no default — fail-closed requires an explicit decision.
+ *
+ * `ontology` is the SOURCE of the structural whitelist. The type/field/table
+ * whitelist is DERIVED from the loaded ontology (deriveVocabulary + the generated
+ * TABLES registry) — never from request input and never from hostel-shaped
+ * literals. Any organization's ontology flows through the same fence.
  */
 export function createReadOnlyDataApi(
   db: Database,
   canReadType: CanReadType,
+  ontology: Ontology,
 ): ReadOnlyDataApi {
+  // The ontology-derived structural whitelist, computed ONCE. Closed over by the
+  // gate helpers below. Comes from the validated ontology only — never request input.
+  const vocab: Vocabulary = deriveVocabulary(ontology);
+
+  /**
+   * Resolves a type string to a verified token via the ontology-derived
+   * membership gate. Returns null for anything not in the loaded ontology's
+   * object types — caller returns safe empty. The single table-name safety
+   * chokepoint: only a returned (validated) token may reach SQL.
+   */
+  function resolveType(type: string): string | null {
+    return vocab.validTypes.includes(type) ? type : null;
+  }
+
+  /**
+   * Filters requested columns to those in the ontology-derived field whitelist
+   * for the (already-validated) type. Unknown columns are silently dropped — no
+   * injection path. Caller MUST pass a token that passed resolveType.
+   */
+  function safeColumns(type: string, requested: string[]): string[] {
+    const allowed = new Set(vocab.validFields[type] ?? []);
+    return requested.filter((c) => allowed.has(c));
+  }
+
+  /**
+   * Resolves a VALIDATED token to its Drizzle table via the generated TABLES
+   * registry, keyed by the EXACT PascalCase ontology object-type name (inversion,
+   * never a guess). MUST only be called for a token that passed resolveType.
+   * Indexing TABLES yields a union of heterogeneous table types; cast to the
+   * guestTable shape for the typed-select paths exactly as the old TABLE_MAP did.
+   */
+  function tableFor(type: string): typeof guestTable {
+    return (TABLES as Record<string, unknown>)[
+      vocab.typeToObjectType[type]
+    ] as unknown as typeof guestTable;
+  }
+
   return {
     // ── count ──────────────────────────────────────────────────────────────────
     async count(type, filter) {
@@ -238,8 +218,8 @@ export function createReadOnlyDataApi(
       if (!canReadType(resolved)) return 0;
 
       if (filter) {
-        // Validate filter field against whitelist
-        const allowed = new Set(CATALOG_VALID_FIELDS[resolved]);
+        // Validate filter field against the ontology-derived whitelist
+        const allowed = new Set(vocab.validFields[resolved] ?? []);
         if (!allowed.has(filter.field)) return 0;
 
         // Field name is whitelisted — safe to interpolate as SQL identifier.
@@ -252,7 +232,7 @@ export function createReadOnlyDataApi(
       }
 
       // Unfiltered count — drizzle typed select (no raw SQL needed)
-      const table = TABLE_MAP[resolved];
+      const table = tableFor(resolved);
       const rows = await db
         .select({ count: sql<number>`COUNT(*)::int` })
         .from(table) as Array<{ count: unknown }>;
@@ -274,7 +254,7 @@ export function createReadOnlyDataApi(
       const safeLimit = Math.min(Math.max(1, limit), 500);
 
       if (filter) {
-        const allowed = new Set(CATALOG_VALID_FIELDS[resolved]);
+        const allowed = new Set(vocab.validFields[resolved] ?? []);
         // Fail-closed, matching count(): an unrecognized filter field returns
         // empty — never a silent unfiltered superset. (A "status=open" queue
         // must not degrade into "show everything" if the field is wrong.)
@@ -343,12 +323,12 @@ export function createReadOnlyDataApi(
       // PERMISSION GATE (fail-closed): same safe-empty as unknown type; pre-SQL.
       if (!canReadType(resolved)) return [];
 
-      // Validate dateField against whitelist
-      const allowed = new Set(CATALOG_VALID_FIELDS[resolved]);
+      // Validate dateField against the ontology-derived whitelist
+      const allowed = new Set(vocab.validFields[resolved] ?? []);
       if (!allowed.has(dateField)) return [];
 
       const safeLimit = Math.min(Math.max(1, limit), 200);
-      const table = TABLE_MAP[resolved];
+      const table = tableFor(resolved);
 
       // drizzle typed select — no raw column list needed
       const rows = await db

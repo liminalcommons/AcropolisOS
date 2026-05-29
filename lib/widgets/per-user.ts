@@ -223,16 +223,18 @@ async function runDescriptors(
   descriptors: unknown[],
   canReadType: CanReadType,
 ): Promise<ResolvedWidget[]> {
-  // SECURITY: the api is gated by the VIEWER's per-type read permission.
-  // A widget bound to a restricted type (e.g. booking) returns safe-empty for
-  // a viewer not permitted to read it — fail-closed, before any SQL.
-  const api = createReadOnlyDataApi(db, canReadType);
-  // Ontology drives REF-LABEL resolution (which columns are FKs, target's
-  // title_property). Loaded once per call (cached across calls — disk reads are
-  // non-trivial and the ontology only changes on /apply, which restarts the
-  // process). REUSES the same `api` (same canReadType) for fetching target
-  // labels, so resolution is fail-closed on the TARGET type's read permission.
+  // Ontology drives BOTH the read-api's structural whitelist (validTypes/
+  // validFields/table lookup) AND REF-LABEL resolution (which columns are FKs,
+  // target's title_property). Loaded once per call (cached across calls — disk
+  // reads are non-trivial and the ontology only changes on /apply, which restarts
+  // the process).
   const ontology = await getRenderOntologyCached();
+  // SECURITY: the api is gated by the VIEWER's per-type read permission AND its
+  // structural whitelist is DERIVED from this loaded ontology. A widget bound to a
+  // restricted type (e.g. booking) returns safe-empty for a viewer not permitted to
+  // read it — fail-closed, before any SQL. REUSES the same `api` for fetching
+  // target labels, so resolution is fail-closed on the TARGET type's read permission.
+  const api = createReadOnlyDataApi(db, canReadType, ontology);
   const resolved: ResolvedWidget[] = [];
 
   for (let i = 0; i < descriptors.length; i++) {

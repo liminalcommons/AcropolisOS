@@ -21,6 +21,8 @@ import { member_context, member } from "../lib/db/schema.generated";
 import { WIDGET_CATALOG } from "../lib/widgets/catalog";
 import { createReadOnlyDataApi, CAN_READ_ALL } from "../lib/widgets/read-api";
 import { CATALOG_WIDGET_KINDS } from "../lib/me/widgets";
+import { loadOntology } from "../lib/ontology/load";
+import { getRuntimeOntologyDir } from "../lib/setup/paths";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -43,8 +45,10 @@ function assert(condition: boolean, message: string): void {
 
 async function main() {
   const db = createDb(DATABASE_URL!);
-  // V2: build the ReadOnlyDataApi once — bindings receive api, not db
-  const api = createReadOnlyDataApi(db, CAN_READ_ALL);
+  // V2: build the ReadOnlyDataApi once — bindings receive api, not db.
+  // Trusted proof context: structural whitelist derived from the loaded ontology.
+  const ontology = await loadOntology(getRuntimeOntologyDir());
+  const api = createReadOnlyDataApi(db, CAN_READ_ALL, ontology);
 
   // ── Find steward member ──────────────────────────────────────────────────────
   console.log("\n=== SETUP: Find steward/manager member ===");

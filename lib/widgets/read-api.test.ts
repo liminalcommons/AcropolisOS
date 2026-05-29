@@ -112,7 +112,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
   describe("member viewer + restricted type (booking, read:[steward,manager])", () => {
     it("select → { columns: [], rows: [] } and never touches SQL", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology), ontology);
       const result = await api.select("booking", {
         columns: ["label", "status"],
         limit: 10,
@@ -124,7 +124,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 
     it("count → 0 and never touches SQL", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology), ontology);
       const result = await api.count("booking");
       expect(result).toBe(0);
       expect(db.executeCalls).toBe(0);
@@ -133,7 +133,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 
     it("count with filter → 0 and never touches SQL", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology), ontology);
       const result = await api.count("booking", { field: "status", value: "confirmed" });
       expect(result).toBe(0);
       expect(db.executeCalls).toBe(0);
@@ -142,7 +142,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 
     it("byDate → [] and never touches SQL", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology), ontology);
       const result = await api.byDate("booking", "from_date", 10);
       expect(result).toEqual([]);
       expect(db.executeCalls).toBe(0);
@@ -153,7 +153,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
   describe("steward viewer + restricted type (booking)", () => {
     it("select reaches SQL — the gate does NOT force-empty an authorized read", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
       const result = await api.select("booking", { columns: ["label"], limit: 10 });
       expect(result.columns).toEqual(["label"]);
       expect(result.rows.length).toBeGreaterThan(0);
@@ -162,7 +162,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 
     it("count reaches SQL and returns the live count", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
       const result = await api.count("booking");
       expect(result).toBe(7);
       expect(db.selectCalls).toBeGreaterThan(0);
@@ -170,7 +170,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 
     it("byDate reaches SQL and returns rows", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
       const result = await api.byDate("booking", "from_date", 10);
       expect(result.length).toBeGreaterThan(0);
       expect(db.selectCalls).toBeGreaterThan(0);
@@ -180,7 +180,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
   describe("public type (bed, read:[\"*\"]) reaches SQL for BOTH roles", () => {
     it("member can read bed", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology), ontology);
       const result = await api.select("bed", { columns: ["code"], limit: 10 });
       expect(result.columns).toEqual(["code"]);
       expect(result.rows.length).toBeGreaterThan(0);
@@ -189,7 +189,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 
     it("steward can read bed", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
       const result = await api.count("bed");
       expect(result).toBe(7);
       expect(db.selectCalls).toBeGreaterThan(0);
@@ -199,7 +199,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
   describe("selectByIds — fail-closed permission gate + parameterization", () => {
     it("member + restricted type (booking) → {columns:[], rows:[]} and NO SQL executed", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology), ontology);
       const result = await api.selectByIds("booking", ["some-uuid"], ["id", "label"]);
       expect(result).toEqual({ columns: [], rows: [] });
       // The permission gate must fire BEFORE any SQL — db never touched.
@@ -209,7 +209,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 
     it("steward + restricted type (booking) → reaches SQL and returns the row", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
       const result = await api.selectByIds("booking", ["some-uuid"], ["id", "label"]);
       expect(result.columns).toContain("id");
       expect(result.columns).toContain("label");
@@ -219,7 +219,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 
     it("unknown type → {columns:[], rows:[]} and no SQL", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
       const result = await api.selectByIds("not_a_type", ["some-uuid"], ["id"]);
       expect(result).toEqual({ columns: [], rows: [] });
       expect(db.executeCalls).toBe(0);
@@ -228,7 +228,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 
     it("empty ids array → {columns, rows:[]} and no SQL executed", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
       const result = await api.selectByIds("booking", [], ["id", "label"]);
       expect(result.rows).toEqual([]);
       // No SQL should fire for an empty id list.
@@ -238,7 +238,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 
     it("public type (bed, read:[\"*\"]) → reaches SQL for member viewer", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology), ontology);
       const result = await api.selectByIds("bed", ["bed-id-1"], ["id", "code"]);
       expect(result.columns).toContain("id");
       expect(result.columns).toContain("code");
@@ -253,7 +253,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
     // steward viewer reaches SQL; the filter field is whitelisted + bound.
     it("steward + agent_blocker with status=open filter → reaches filtered SQL", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
       const result = await api.select("agent_blocker", {
         columns: ["summary", "reason_kind", "blocked_actor_id"],
         filter: { field: "status", value: "open" },
@@ -267,7 +267,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 
     it("member + agent_blocker → empty and no SQL (read:[steward, member_self], type gate denies member)", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology), ontology);
       const result = await api.select("agent_blocker", {
         columns: ["summary"],
         filter: { field: "status", value: "open" },
@@ -280,7 +280,7 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 
     it("invalid filter field returns empty (fail-closed, matches count) — no SQL", async () => {
       const db = makeStubDb();
-      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+      const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
       const result = await api.select("agent_blocker", {
         columns: ["summary"],
         filter: { field: "not_a_real_field", value: "x" },
@@ -315,6 +315,24 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
       expect(can("bed")).toBe(true);
       expect(can("booking")).toBe(false);
     });
+  });
+});
+
+describe("read-api is ontology-derived (non-hostel)", () => {
+  // The litmus: a completely different org's ontology (book-club) must work
+  // through the SAME fence, with ZERO hostel-type leakage. The structural
+  // whitelist is derived from the LOADED ontology, never from hostel literals.
+  it("resolves a book-club type and rejects a hostel type", async () => {
+    const onto = await loadOntology(path.resolve(__dirname, "../../seed/book-club"));
+    const db = makeStubDb();
+    const api = createReadOnlyDataApi(db.asDatabase(), () => true, onto);
+    // 'book' exists in the loaded ontology → query proceeds (stub returns rows)
+    const ok = await api.select("book", { columns: ["title"], limit: 5 });
+    expect(ok.columns).toContain("title");
+    // 'bed' is a hostel type, NOT in this ontology → structural gate denies → safe-empty
+    const denied = await api.select("bed", { columns: ["code"], limit: 5 });
+    expect(denied.rows).toEqual([]);
+    expect(denied.columns).toEqual([]);
   });
 });
 

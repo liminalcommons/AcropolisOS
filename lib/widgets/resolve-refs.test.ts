@@ -201,7 +201,7 @@ describe("public target (bed.room → Room read:['*'])", () => {
 
   it("steward: room UUID resolves to Room.code", async () => {
     const db = makeStubDb();
-    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
     const out = await resolveRefLabels(
       structuredClone(bedRows),
       "bed",
@@ -217,7 +217,7 @@ describe("public target (bed.room → Room read:['*'])", () => {
 
   it("member: room UUID also resolves (Room is public)", async () => {
     const db = makeStubDb();
-    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology), ontology);
     const out = await resolveRefLabels(
       structuredClone(bedRows),
       "bed",
@@ -238,7 +238,7 @@ describe("restricted target (booking.guest → Guest read:[steward,manager]) —
 
   it("member viewer: guest stays the RAW UUID and no fetch is issued (no leak)", async () => {
     const db = makeStubDb();
-    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology));
+    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(member, ontology), ontology);
     const out = await resolveRefLabels(
       structuredClone(bookingRows),
       "booking",
@@ -255,7 +255,7 @@ describe("restricted target (booking.guest → Guest read:[steward,manager]) —
 
   it("steward viewer: guest UUID resolves to Guest.full_name", async () => {
     const db = makeStubDb();
-    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
     const out = await resolveRefLabels(
       structuredClone(bookingRows),
       "booking",
@@ -271,7 +271,7 @@ describe("restricted target (booking.guest → Guest read:[steward,manager]) —
 describe("edge cases", () => {
   it("rows with no ref columns are unchanged", async () => {
     const db = makeStubDb();
-    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
     const rows = [
       { id: "g-1", full_name: "Lena", country: "DE" },
       { id: "g-2", full_name: "Anna", country: "AT" },
@@ -290,7 +290,7 @@ describe("edge cases", () => {
 
   it("null/missing ref value stays as-is", async () => {
     const db = makeStubDb();
-    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
     const rows = [
       { id: "bed-1", code: "D3-A2", room: "room-1" },
       { id: "bed-2", code: "D3-A3", room: null },
@@ -310,7 +310,7 @@ describe("edge cases", () => {
 
   it("empty rows array returns empty, no fetch", async () => {
     const db = makeStubDb();
-    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
     const out = await resolveRefLabels([], "bed", ["code", "room"], ontology, api);
     expect(out).toEqual([]);
     expect(Object.keys(db.execCountByTable)).toHaveLength(0);
@@ -320,7 +320,7 @@ describe("edge cases", () => {
 describe("batching — one fetch per distinct target type (no N+1)", () => {
   it("many rows over the same ref column → a single target-type fetch", async () => {
     const db = makeStubDb();
-    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
     // 10 bed rows referencing only 2 distinct rooms.
     const rows = Array.from({ length: 10 }, (_, i) => ({
       id: `bed-${i}`,
@@ -341,7 +341,7 @@ describe("scale — no 500-row ceiling (selectByIds fetches exactly referenced i
     // fetched the first 500 rows of the table. selectByIds fetches ONLY the
     // referenced id, so row #550 resolves regardless of total table size.
     const db = makeStubDb({ largeRoomFixture: true });
-    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
     const rows = [{ id: "bed-x", code: "X", room: "room-550" }];
     const out = await resolveRefLabels(rows, "bed", ["code", "room"], ontology, api);
     // LARGE_ROOM_ROWS[549] → { id: "room-550", code: "R-550" }
@@ -351,7 +351,7 @@ describe("scale — no 500-row ceiling (selectByIds fetches exactly referenced i
   it("single referenced id → selectByIds is called with exactly that 1 id (no over-fetch)", async () => {
     // Proves precision: only the required ids are requested — not hundreds.
     const db = makeStubDb();
-    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology));
+    const api = createReadOnlyDataApi(db.asDatabase(), buildCanReadType(steward, ontology), ontology);
     const rows = [{ id: "bed-1", code: "D3-A2", room: "room-1" }];
     await resolveRefLabels(rows, "bed", ["code", "room"], ontology, api);
 

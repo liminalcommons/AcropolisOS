@@ -29,6 +29,8 @@ import {
   type CalendarData,
 } from "./catalog";
 import { createReadOnlyDataApi, type CanReadType } from "./read-api";
+import { loadOntology } from "@/lib/ontology/load";
+import { getRuntimeOntologyDir } from "@/lib/setup/paths";
 import type { RowResolver } from "./row-resolver";
 import type { RowConfirm } from "./row-confirm";
 
@@ -196,11 +198,17 @@ export async function resolveDashboard(
     return [];
   }
 
+  // The loaded ontology is the SOURCE of the read-api's structural whitelist
+  // (validTypes/validFields/table lookup). Loaded from the runtime ontology dir;
+  // changes only on /apply (which restarts the process).
+  const ontology = await loadOntology(getRuntimeOntologyDir());
+
   // Build the read-only api once — passed to ALL bindings.
   // Bindings receive this api, NOT db, so they physically cannot write.
   // SECURITY: the api is gated by the VIEWER's per-type read permission
-  // (canReadType) — restricted types are safe-empty for unauthorized viewers.
-  const api = createReadOnlyDataApi(db, canReadType);
+  // (canReadType) AND its structural whitelist is DERIVED from the loaded
+  // ontology — restricted types are safe-empty for unauthorized viewers.
+  const api = createReadOnlyDataApi(db, canReadType, ontology);
 
   // Resolve each descriptor — run READ-ONLY queryBinding
   const resolved: ResolvedWidget[] = [];

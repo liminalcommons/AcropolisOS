@@ -34,6 +34,8 @@ import {
 import { commitProposalCore } from "@/lib/organize/commit";
 import { resolvePerUserDashboard } from "@/lib/widgets/per-user";
 import { createReadOnlyDataApi, CAN_READ_ALL } from "@/lib/widgets/read-api";
+import { loadOntology } from "@/lib/ontology/load";
+import { getRuntimeOntologyDir } from "@/lib/setup/paths";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -416,8 +418,10 @@ async function main() {
   );
   pass(`★ The committed row flowed to the per-user dashboard (resolvePerUserDashboard guest metric ${V0}→${V1})`);
 
-  // 6b: createReadOnlyDataApi — the new row must be visible through the read-only view path
-  const api = createReadOnlyDataApi(db, CAN_READ_ALL);
+  // 6b: createReadOnlyDataApi — the new row must be visible through the read-only view path.
+  // Trusted proof context: structural whitelist derived from the loaded ontology.
+  const ontology = await loadOntology(getRuntimeOntologyDir());
+  const api = createReadOnlyDataApi(db, CAN_READ_ALL, ontology);
   const selectResult = await api.select("guest", {
     columns: ["full_name", "email"],
     filter: { field: "full_name", value: DISPOSABLE_NAME },

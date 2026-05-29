@@ -33,6 +33,8 @@ import { createDb } from "../lib/db/client";
 import { member, member_context } from "../lib/db/schema.generated";
 import { createReadOnlyDataApi, CAN_READ_ALL } from "../lib/widgets/read-api";
 import { compose_dashboard, resolveDashboard } from "../lib/widgets/compose";
+import { loadOntology } from "../lib/ontology/load";
+import { getRuntimeOntologyDir } from "../lib/setup/paths";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -55,7 +57,9 @@ function assert(condition: boolean, message: string): void {
 
 async function main() {
   const db = createDb(DATABASE_URL!);
-  const api = createReadOnlyDataApi(db, CAN_READ_ALL);
+  // Trusted proof context: structural whitelist derived from the loaded ontology.
+  const ontology = await loadOntology(getRuntimeOntologyDir());
+  const api = createReadOnlyDataApi(db, CAN_READ_ALL, ontology);
 
   // ════════════════════════════════════════════════════════════════════════════
   // CASE 1 — Live reads via the API
