@@ -20,7 +20,7 @@
 //   (d) limit / filter values bound as parameters, never interpolated.
 //   (e) SELECT-only — no insert/update/delete anywhere in this file.
 
-import { sql } from "drizzle-orm";
+import { getTableName, sql } from "drizzle-orm";
 import type { Database } from "@/lib/db/client";
 import type { Actor } from "@/lib/ctx";
 import { actorMatchesTokens, buildObjectPermissionsMap } from "@/lib/ontology/ctx";
@@ -180,9 +180,24 @@ export function createReadOnlyDataApi(
    * membership gate. Returns null for anything not in the loaded ontology's
    * object types — caller returns safe empty. The single table-name safety
    * chokepoint: only a returned (validated) token may reach SQL.
+   *
+   * FAIL-CLOSED ON ONTOLOGY↔SCHEMA DRIFT: a token may be valid in the LOADED
+   * ontology's whitelist yet have NO entry in the generated TABLES registry
+   * (e.g. a runtime ontology whose object type was never code-genned). Return
+   * null in that case too, so the raw-SQL paths never index TABLES with a
+   * missing key (which would cast `undefined` to a table and let getTableName
+   * throw / a stray identifier escape). resolveType is now the SINGLE place
+   * that guarantees both (a) whitelist membership and (b) a real table object —
+   * so the permission gate and the raw SQL resolve through the IDENTICAL lookup.
    */
   function resolveType(type: string): string | null {
-    return vocab.validTypes.includes(type) ? type : null;
+    if (!vocab.validTypes.includes(type)) return null;
+    if (vocab.typeToObjectType[type] === undefined) return null;
+    // The generated TABLES registry must hold a defined table for this type —
+    // the EXACT object the permission gate keys on. No drift → no phantom read.
+    const table = (TABLES as Record<string, unknown>)[vocab.typeToObjectType[type]];
+    if (table === undefined || table === null) return null;
+    return type;
   }
 
   /**
@@ -224,8 +239,12 @@ export function createReadOnlyDataApi(
 
         // Field name is whitelisted — safe to interpolate as SQL identifier.
         // Filter value is a bound parameter via sql template literal.
+        // TABLE NAME comes from getTableName(tableFor(resolved)) — the SAME
+        // TABLES object the permission gate keys on — NEVER reconstructed from
+        // the token string (token = pascalToSnake, table = snakeCase; these
+        // diverge for acronym-cased types → cross-type read leak).
         const rows = await db.execute(
-          sql`SELECT COUNT(*)::int AS count FROM ${sql.raw(`"${resolved}"`)} WHERE ${sql.raw(`"${filter.field}"`)} = ${resolveFilterValue(filter.value)}`,
+          sql`SELECT COUNT(*)::int AS count FROM ${sql.raw(`"${getTableName(tableFor(resolved))}"`)} WHERE ${sql.raw(`"${filter.field}"`)} = ${resolveFilterValue(filter.value)}`,
         ) as Array<{ count: unknown }>;
         const raw = rows[0]?.count;
         return typeof raw === "number" ? raw : Number(raw ?? 0);
@@ -259,14 +278,16 @@ export function createReadOnlyDataApi(
         // empty — never a silent unfiltered superset. (A "status=open" queue
         // must not degrade into "show everything" if the field is wrong.)
         if (!allowed.has(filter.field)) return { columns: [], rows: [] };
+        // TABLE NAME from getTableName(tableFor(resolved)) — the SAME TABLES
+        // object the permission gate keys on; never the token string.
         const rows = await db.execute(
-          sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(`"${resolved}"`)} WHERE ${sql.raw(`"${filter.field}"`)} = ${resolveFilterValue(filter.value)} LIMIT ${safeLimit}`,
+          sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(`"${getTableName(tableFor(resolved))}"`)} WHERE ${sql.raw(`"${filter.field}"`)} = ${resolveFilterValue(filter.value)} LIMIT ${safeLimit}`,
         ) as Record<string, unknown>[];
         return { columns: validCols, rows };
       }
 
       const rows = await db.execute(
-        sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(`"${resolved}"`)} LIMIT ${safeLimit}`,
+        sql`SELECT ${sql.raw(colList)} FROM ${sql.raw(`"${getTableName(tableFor(resolved))}"`)} LIMIT ${safeLimit}`,
       ) as Record<string, unknown>[];
       return { columns: validCols, rows };
     },
@@ -290,7 +311,9 @@ export function createReadOnlyDataApi(
       if (uniqueIds.length === 0) return { columns: validCols, rows: [] };
 
       const colList = validCols.map((c) => `"${c}"`).join(", ");
-      const tableSql = sql.raw(`"${resolved}"`);
+      // TABLE NAME from getTableName(tableFor(resolved)) — the SAME TABLES object
+      // the permission gate keys on; never the token string (acronym-divergence).
+      const tableSql = sql.raw(`"${getTableName(tableFor(resolved))}"`);
       const colsSql = sql.raw(colList);
 
       // Chunk into batches of 500 to stay under any per-statement parameter

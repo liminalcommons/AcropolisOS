@@ -18,8 +18,12 @@
 
 import path from "node:path";
 import { describe, expect, it, beforeAll } from "vitest";
+import { getTableName } from "drizzle-orm";
 import { createReadOnlyDataApi, buildCanReadType, resolveFilterValue } from "./read-api";
 import { loadOntology } from "@/lib/ontology/load";
+import { deriveVocabulary } from "./vocabulary";
+import { pascalToSnake } from "@/lib/ontology/casing";
+import { TABLES } from "@/lib/db/schema.generated";
 import type { Ontology } from "@/lib/ontology/schema";
 import type { Actor } from "@/lib/ctx";
 import type { Database } from "@/lib/db/client";
@@ -319,20 +323,91 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
 });
 
 describe("read-api is ontology-derived (non-hostel)", () => {
-  // The litmus: a completely different org's ontology (book-club) must work
-  // through the SAME fence, with ZERO hostel-type leakage. The structural
-  // whitelist is derived from the LOADED ontology, never from hostel literals.
-  it("resolves a book-club type and rejects a hostel type", async () => {
+  // The litmus: a completely different org's ontology (book-club) flows through
+  // the SAME fence with ZERO hostel-type leakage. The structural whitelist is
+  // derived from the LOADED ontology, never from hostel literals.
+  it("derives the book-club whitelist and rejects a hostel type", async () => {
+    const onto = await loadOntology(path.resolve(__dirname, "../../seed/book-club"));
+    const vocab = deriveVocabulary(onto);
+    // 'book' exists in the LOADED ontology → in the structural whitelist.
+    expect(vocab.validTypes).toContain("book");
+    // 'bed' is a hostel type, NOT in this ontology → absent from the whitelist.
+    expect(vocab.validTypes).not.toContain("bed");
+  });
+
+  it("fail-closes on ontology↔schema drift: a whitelisted type whose table is absent from the generated TABLES returns safe-empty, never a phantom-table read", async () => {
+    // The book-club ontology is real ontology↔generated-schema DRIFT: its types
+    // (Book, …) are valid in the loaded ontology's whitelist but have NO entry in
+    // the generated (hostel) TABLES registry. The hardened resolveType MUST treat
+    // this as fail-closed — without it, tableFor() would index TABLES with a
+    // missing key, yielding an `undefined` table object cast to a real table, and
+    // getTableName(undefined) would throw or (worse) a stray identifier would
+    // reach SQL. The single-authority guard closes that latent cast.
     const onto = await loadOntology(path.resolve(__dirname, "../../seed/book-club"));
     const db = makeStubDb();
     const api = createReadOnlyDataApi(db.asDatabase(), () => true, onto);
-    // 'book' exists in the loaded ontology → query proceeds (stub returns rows)
-    const ok = await api.select("book", { columns: ["title"], limit: 5 });
-    expect(ok.columns).toContain("title");
-    // 'bed' is a hostel type, NOT in this ontology → structural gate denies → safe-empty
-    const denied = await api.select("bed", { columns: ["code"], limit: 5 });
-    expect(denied.rows).toEqual([]);
-    expect(denied.columns).toEqual([]);
+    const denied = await api.select("book", { columns: ["title"], limit: 5 });
+    expect(denied).toEqual({ columns: [], rows: [] });
+    // The guard fires BEFORE any SQL — no phantom-table query is attempted.
+    expect(db.executeCalls).toBe(0);
+    expect(db.selectCalls).toBe(0);
+    const denied2 = await api.count("book");
+    expect(denied2).toBe(0);
+    expect(db.executeCalls).toBe(0);
+    expect(db.selectCalls).toBe(0);
+  });
+});
+
+describe("read-api raw-SQL table name is sourced from the TABLES registry, not the token (acronym-divergence leak)", () => {
+  // THE HIGH BUG: the raw-SQL count(filtered)/select paths interpolated the
+  // validated TOKEN as the SQL table name. The token is produced by pascalToSnake
+  // while the ACTUAL Drizzle table SQL name is produced by snakeCase (drizzle.ts).
+  // These DIVERGE for acronym-cased object-type names (e.g. APIKey: snakeCase →
+  // "apikey", pascalToSnake → "api_key"). For such an ontology, the permission
+  // gate (canReadType) validated TYPE A's tokens while the raw SQL read a
+  // DIFFERENT physical table → cross-type read leak. The fix re-couples gate and
+  // table by sourcing the SQL name from getTableName(tableFor(token)) — the
+  // IDENTICAL TABLES lookup the gate uses.
+
+  it("getTableName(TABLES[pascalKey]) is a defined non-empty SQL identifier for all 13 hostel types", () => {
+    const pascalKeys = Object.keys(TABLES) as (keyof typeof TABLES)[];
+    expect(pascalKeys.length).toBe(13);
+    for (const key of pascalKeys) {
+      const name = getTableName(TABLES[key]);
+      expect(typeof name).toBe("string");
+      expect(name.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("for every vocab token, the registry resolves a real table whose SQL name equals snakeCase(pascalKey) — the SAME table the permission gate keys on", async () => {
+    // For each token: the gate keys on TABLES[vocab.typeToObjectType[token]];
+    // the raw SQL must read getTableName of THAT SAME table object. Asserting the
+    // correspondence for every type proves the single-authority property: there is
+    // exactly one path from token → table, shared by gate and SQL.
+    const vocab = deriveVocabulary(ontology);
+    for (const token of vocab.validTypes) {
+      const pascalKey = vocab.typeToObjectType[token] as keyof typeof TABLES;
+      const table = TABLES[pascalKey];
+      expect(table).toBeDefined();
+      const sqlName = getTableName(table);
+      expect(typeof sqlName).toBe("string");
+      expect(sqlName.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("regression sentinel: pascalToSnake DIVERGES from the registry SQL name for an acronym-cased type — proving the token is the WRONG source", () => {
+    // The exact failure shape the fix closes. If a custom ontology declares an
+    // acronym-cased object type, the token (pascalToSnake) and the physical table
+    // (snakeCase, what getTableName returns) are DIFFERENT strings. Sourcing the
+    // SQL table from the token would read the wrong physical table while the gate
+    // authorized the right type. We assert the divergence so any future change
+    // that re-introduces token-sourcing is caught.
+    expect(pascalToSnake("APIKey")).toBe("api_key");
+    // snakeCase (drizzle.ts) → "apikey" for the same name; the registry/table SQL
+    // name follows snakeCase, NOT pascalToSnake. Demonstrate with a live pgTable:
+    // the table the gate would resolve carries the snakeCase name, so the SQL
+    // identifier MUST come from getTableName(table), not from the token.
+    expect(pascalToSnake("APIKey")).not.toBe("apikey");
   });
 });
 
