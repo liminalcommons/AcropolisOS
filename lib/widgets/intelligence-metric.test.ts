@@ -8,9 +8,12 @@
 // Fail-closed proof: an api returning rows:[] (the unauthorized/empty case)
 // makes every KPI compute null → value 0, display "—" (no leak).
 
-import { describe, expect, it } from "vitest";
+import path from "node:path";
+import { beforeAll, describe, expect, it } from "vitest";
 import { WIDGET_CATALOG, validateWidgetConfig } from "./catalog";
 import type { ReadOnlyDataApi } from "./read-api";
+import { loadOntology } from "@/lib/ontology/load";
+import type { Ontology } from "@/lib/ontology/schema";
 
 // ── Fixture rows ───────────────────────────────────────────────────────────────
 // Two resolved (with created_at/resolved_at), one open, one dismissed.
@@ -151,13 +154,21 @@ describe("intelligence_metric — latency formatting crosses the hour boundary",
 });
 
 describe("intelligence_metric — validateWidgetConfig", () => {
+  // validateWidgetConfig is ontology-aware; intelligence_metric carries no `type`,
+  // so the ontology only gates the shape parse (no membership/field check), but the
+  // 3rd arg is now required by the signature.
+  let ontology: Ontology;
+  beforeAll(async () => {
+    ontology = await loadOntology(path.resolve(__dirname, "../../ontology"));
+  });
+
   it("accepts a valid metric name", () => {
-    const r = validateWidgetConfig("intelligence_metric", { metric: "scenario_acceptance" });
+    const r = validateWidgetConfig("intelligence_metric", { metric: "scenario_acceptance" }, ontology);
     expect(r.ok).toBe(true);
   });
 
   it("rejects an invalid metric name", () => {
-    const r = validateWidgetConfig("intelligence_metric", { metric: "not_a_metric" });
+    const r = validateWidgetConfig("intelligence_metric", { metric: "not_a_metric" }, ontology);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe("invalid_config");
   });

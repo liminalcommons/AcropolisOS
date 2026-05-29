@@ -15,35 +15,15 @@
 //
 // BATCHED: one fetch per distinct target type (not per row). No N+1.
 //
-// VALIDATION: the target type must be a CatalogType and the title_property must
-// be a whitelisted field on it (CATALOG_VALID_FIELDS) — otherwise the read-api
-// would drop it anyway; we skip (leave raw) rather than fetch a column that the
-// whitelist would refuse.
+// VALIDATION: the target type must be an ontology-derived catalog type and the
+// title_property must be a whitelisted field on it (vocab.validFields) — otherwise
+// the read-api would drop it anyway; we skip (leave raw) rather than fetch a
+// column that the whitelist would refuse.
 
 import type { Ontology } from "@/lib/ontology/schema";
 import type { ReadOnlyDataApi } from "./read-api";
-import {
-  CATALOG_VALID_TYPES,
-  CATALOG_VALID_FIELDS,
-  type CatalogType,
-} from "./catalog";
-
-// Catalog's lowercase/snake type ↔ ontology PascalCase object-type name.
-// read-api owns CATALOG_TYPE_TO_OBJECT_TYPE (name→catalog is the forward map);
-// here we need the INVERSE (ontology object-type name → catalog type) so we can
-// take a ref's `target` (PascalCase, e.g. "Room") back to the read-api's catalog
-// type (e.g. "room"). Derived once from CATALOG_VALID_TYPES so it stays in sync:
-// catalog types are snake_case; object-type names are PascalCase of the segments.
-function snakeToPascal(snake: string): string {
-  return snake
-    .split("_")
-    .map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1))
-    .join("");
-}
-
-const OBJECT_TYPE_TO_CATALOG_TYPE: Record<string, CatalogType> = Object.fromEntries(
-  CATALOG_VALID_TYPES.map((ct) => [snakeToPascal(ct), ct]),
-) as Record<string, CatalogType>;
+import type { CatalogType } from "./catalog";
+import { deriveVocabulary } from "./vocabulary";
 
 // A ref column on the source type that we can attempt to resolve.
 interface RefColumn {
@@ -67,7 +47,18 @@ function refColumnsFor(
   columns: string[],
   ontology: Ontology,
 ): RefColumn[] {
-  const sourceObjectTypeName = snakeToPascal(sourceCatalogType);
+  // Ontology-derived vocabulary: token↔ObjectType (by INVERSION of the real keys,
+  // never a guess) + the per-type field whitelist. No hostel literals.
+  const vocab = deriveVocabulary(ontology);
+  // INVERSE of typeToObjectType: ontology object-type name (e.g. "Room") → catalog
+  // token (e.g. "room"), so a ref's `target` resolves back to the read-api token.
+  const objectTypeToCatalogType: Record<string, CatalogType> = {};
+  for (const [token, objType] of Object.entries(vocab.typeToObjectType)) {
+    objectTypeToCatalogType[objType] = token;
+  }
+
+  const sourceObjectTypeName = vocab.typeToObjectType[sourceCatalogType];
+  if (!sourceObjectTypeName) return [];
   const sourceDef = ontology.object_types[sourceObjectTypeName];
   if (!sourceDef) return [];
 
@@ -79,7 +70,7 @@ function refColumnsFor(
     // never refs to object types — so the `"type" in prop` guard filters them.
     if (!prop || !("type" in prop) || prop.type !== "ref") continue;
 
-    const targetCatalogType = OBJECT_TYPE_TO_CATALOG_TYPE[prop.target];
+    const targetCatalogType = objectTypeToCatalogType[prop.target];
     // Target not a known catalog type → cannot fetch via read-api → leave raw.
     if (!targetCatalogType) continue;
 
@@ -90,9 +81,9 @@ function refColumnsFor(
 
     // The title field must be whitelisted/queryable on the target type, else
     // the read-api would drop it. Guard here so we never fetch a doomed column.
-    if (!CATALOG_VALID_FIELDS[targetCatalogType]?.includes(titleProp)) continue;
+    if (!vocab.validFields[targetCatalogType]?.includes(titleProp)) continue;
     // The id field must also be queryable (it is for every type) — defensive.
-    if (!CATALOG_VALID_FIELDS[targetCatalogType]?.includes("id")) continue;
+    if (!vocab.validFields[targetCatalogType]?.includes("id")) continue;
 
     out.push({ column, targetCatalogType, titleProp });
   }
@@ -124,7 +115,7 @@ export async function resolveRefLabels(
   api: ReadOnlyDataApi,
 ): Promise<Record<string, unknown>[]> {
   if (rows.length === 0) return rows;
-  if (!(CATALOG_VALID_TYPES as readonly string[]).includes(sourceCatalogType)) {
+  if (!deriveVocabulary(ontology).validTypes.includes(sourceCatalogType)) {
     return rows;
   }
   const source = sourceCatalogType as CatalogType;

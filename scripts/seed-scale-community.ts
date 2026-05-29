@@ -20,6 +20,8 @@
 import { randomUUID } from "node:crypto";
 import { inArray, like, sql } from "drizzle-orm";
 import { validateWidgetConfig, type CatalogKind } from "../lib/widgets/catalog";
+import { loadOntology } from "../lib/ontology/load";
+import { getRuntimeOntologyDir } from "../lib/setup/paths";
 import { createDb } from "../lib/db/client";
 import { member, member_context } from "../lib/db/schema.generated";
 
@@ -62,14 +64,19 @@ const KB_PRESETS: ReadonlyArray<
   ],
 ];
 
-// FAIL-CLOSED: validate every preset against the governed catalog at module load. A
-// malformed KB descriptor aborts the seed rather than silently persisting a config that
-// would be dropped on /me render. (Closes Via Negativa cycle-4 MED.)
-for (const preset of KB_PRESETS) {
-  for (const w of preset) {
-    const r = validateWidgetConfig(w.kind, w.config);
-    if (!r.ok) {
-      throw new Error(`Invalid KB preset widget "${w.id}" (${w.kind}): ${JSON.stringify(r)}`);
+// FAIL-CLOSED: validate every preset against the governed catalog (membership +
+// field whitelist now ONTOLOGY-DERIVED). A malformed KB descriptor aborts the
+// seed rather than silently persisting a config that would be dropped on /me
+// render. (Closes Via Negativa cycle-4 MED.) Async because validation reads the
+// loaded ontology, so it runs inside main() rather than at module load.
+async function assertPresetsValid(): Promise<void> {
+  const ontology = await loadOntology(getRuntimeOntologyDir());
+  for (const preset of KB_PRESETS) {
+    for (const w of preset) {
+      const r = validateWidgetConfig(w.kind, w.config, ontology);
+      if (!r.ok) {
+        throw new Error(`Invalid KB preset widget "${w.id}" (${w.kind}): ${JSON.stringify(r)}`);
+      }
     }
   }
 }
@@ -121,6 +128,9 @@ async function main() {
   }
 
   const db = createDb(DATABASE_URL);
+
+  // FAIL-CLOSED preset validation (ontology-derived) before any DB writes.
+  await assertPresetsValid();
 
   // ── STEP 1: Idempotent cleanup ──────────────────────────────────────────────
   console.log("\n=== CLEANUP (idempotent) ===");

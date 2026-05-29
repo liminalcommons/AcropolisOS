@@ -253,8 +253,8 @@ async function runDescriptors(
     const entry = WIDGET_CATALOG[kind];
     const config = d.config ?? {};
 
-    // Validate config
-    const validation = validateWidgetConfig(kind, config);
+    // Validate config — membership + field whitelist come from the loaded ontology.
+    const validation = validateWidgetConfig(kind, config, ontology);
     if (!validation.ok) continue;
 
     try {

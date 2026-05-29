@@ -9,12 +9,16 @@
 // config → the catalog drives the query." No hardcoded data; config drives
 // which type and columns are fetched.
 //
-// VALID_TYPES and VALID_FIELDS mirror the ontology-type enum in
-// app/api/organize/classify/route.ts — any change to the ontology enum must
-// be reflected here too (they share the same source of truth: schema.generated.ts).
+// CatalogType is a plain `string`: the SET of valid types is NOT a compile-time
+// literal — it is derived at runtime from the LOADED ontology (deriveVocabulary)
+// and enforced as a MEMBERSHIP gate inside validateWidgetConfig + the read-api
+// fence. This is what makes the catalog a projection of WHATEVER ontology is
+// loaded (any org's types work), with zero hostel literals.
 
 import { z } from "zod";
 import type { ReadOnlyDataApi } from "./read-api";
+import type { Ontology } from "@/lib/ontology/schema";
+import { deriveVocabulary } from "./vocabulary";
 import {
   scenarioAcceptanceRate,
   decisionLatencyMsMedian,
@@ -23,36 +27,13 @@ import {
   type MetricBlockerRow,
 } from "@/lib/metrics/community-intelligence";
 
-// ── Ontology type registry ────────────────────────────────────────────────────
+// ── Catalog type ──────────────────────────────────────────────────────────────
 //
-// Mirrors TARGET_TYPE_ENUM / VALID_FIELDS in classify/route.ts.
-// Agent cannot bind a widget to a non-existent type.
+// A catalog type is a snake_case token naming an ontology object type. The set of
+// valid tokens is ontology-derived (deriveVocabulary().validTypes), not a fixed
+// union — so `CatalogType` is just `string`; membership is enforced at runtime.
 
-export const CATALOG_VALID_TYPES = [
-  "guest",
-  "member",
-  "booking",
-  "event",
-  "bed",
-  "room",
-  "shift",
-  "work_trade_agreement",
-  "agent_blocker",
-] as const;
-
-export type CatalogType = (typeof CATALOG_VALID_TYPES)[number];
-
-export const CATALOG_VALID_FIELDS: Record<CatalogType, string[]> = {
-  guest: ["id", "full_name", "email", "country", "phone", "arrived_at", "expected_departure", "current_status", "is_work_trader", "notes"],
-  member: ["id", "full_name", "email", "phone", "tier_role", "started_at", "notes"],
-  booking: ["id", "label", "guest", "bed", "from_date", "to_date", "rate_per_night", "currency", "source", "status"],
-  event: ["id", "title", "starts_at", "duration_hours", "attendance_cap", "organizer", "description", "status"],
-  bed: ["id", "code", "room", "is_bottom_bunk", "out_of_service", "notes"],
-  room: ["id", "code", "kind", "capacity", "floor", "notes"],
-  shift: ["id", "label", "kind", "starts_at", "duration_hours", "claimed_by", "status", "notes", "member_id"],
-  work_trade_agreement: ["id", "label", "guest", "bed_comp", "hours_per_week", "start_date", "end_date", "status", "notes"],
-  agent_blocker: ["id", "summary", "reason_kind", "blocked_actor_id", "status", "resolution_mode", "created_at", "resolved_at", "blocked_work_ref", "detail", "pathways", "confirm_action"],
-};
+export type CatalogType = string;
 
 // ── Widget kind names ─────────────────────────────────────────────────────────
 
@@ -68,7 +49,10 @@ export type CatalogKind = (typeof CATALOG_KINDS)[number];
 
 // ── Config schemas ────────────────────────────────────────────────────────────
 
-const CatalogTypeSchema = z.enum(CATALOG_VALID_TYPES);
+// SHAPE only: the config must carry a string `type`. TYPE MEMBERSHIP (is this a
+// real ontology object type?) is enforced separately in validateWidgetConfig
+// against the LOADED ontology's deriveVocabulary().validTypes — not here.
+const CatalogTypeSchema = z.string();
 
 export const MetricConfigSchema = z.object({
   type: CatalogTypeSchema,
@@ -214,16 +198,12 @@ export const WIDGET_CATALOG: {
   metric: {
     configSchema: MetricConfigSchema,
     queryBinding: async (config, api) => {
-      // api.count() validates type against CATALOG_VALID_TYPES whitelist and
-      // the filter field against CATALOG_VALID_FIELDS — returns 0 for unknowns.
+      // api.count() validates the type against the ontology-derived whitelist and
+      // the filter field against the type's field whitelist — returns 0 for an
+      // unknown type or filter field (fail-closed, inside the read-api fence). No
+      // inline literal check here: membership is the read-api's responsibility and
+      // validateWidgetConfig has already rejected an unknown type before persist.
       const value = await api.count(config.type, config.filter);
-      // Distinguish unknown type from valid-type-zero-count via type check:
-      // resolveTableName would return null for unknowns → api.count returns 0.
-      // For label signaling, check whitelist inline (no SQL).
-      const isKnown = (CATALOG_VALID_TYPES as readonly string[]).includes(config.type);
-      if (!isKnown) {
-        return { value: 0, label: `${config.type} (unknown type — rejected)` };
-      }
       return { value, label: config.type };
     },
   },
@@ -351,6 +331,7 @@ export type ConfigValidationResult =
 export function validateWidgetConfig(
   kind: CatalogKind,
   rawConfig: unknown,
+  ontology: Ontology,
 ): ConfigValidationResult {
   const entry = WIDGET_CATALOG[kind];
   const parsed = entry.configSchema.safeParse(rawConfig);
@@ -362,62 +343,39 @@ export function validateWidgetConfig(
     };
   }
 
-  const config = parsed.data;
+  // The membership gate (was z.enum) + the column/field whitelist now come from
+  // the LOADED ontology — never from a hostel literal. data_table/roster/metric/
+  // calendar all carry a `type`; intelligence_metric carries none (config.type
+  // undefined → no membership/field check, only shape).
+  const config = parsed.data as {
+    type?: string;
+    columns?: string[];
+    fields?: string[];
+    filter?: { field: string };
+  };
+  const vocab = deriveVocabulary(ontology);
 
-  // Extra check: verify all column/field references are in the ontology
-  if (kind === "data_table") {
-    const cfg = config as DataTableConfig;
-    const badCols = cfg.columns.filter(
-      (c) => !CATALOG_VALID_FIELDS[cfg.type]?.includes(c),
-    );
-    if (badCols.length > 0) {
-      return {
-        ok: false,
-        error: "unknown_columns",
-        detail: { type: cfg.type, unknown_columns: badCols },
-      };
-    }
-    // Optional filter field must reference a real ontology field (mirrors metric).
-    if (cfg.filter) {
-      const valid = CATALOG_VALID_FIELDS[cfg.type]?.includes(cfg.filter.field);
-      if (!valid) {
-        return {
-          ok: false,
-          error: "unknown_filter_field",
-          detail: { type: cfg.type, unknown_field: cfg.filter.field },
-        };
-      }
-    }
+  if (config.type !== undefined && !vocab.validTypes.includes(config.type)) {
+    return { ok: false, error: "unknown_type", detail: { type: config.type } };
   }
 
-  if (kind === "roster") {
-    const cfg = config as RosterConfig;
-    const badFields = cfg.fields.filter(
-      (f) => !CATALOG_VALID_FIELDS[cfg.type]?.includes(f),
-    );
-    if (badFields.length > 0) {
-      return {
-        ok: false,
-        error: "unknown_fields",
-        detail: { type: cfg.type, unknown_fields: badFields },
-      };
-    }
+  const fieldSet = new Set(config.type ? (vocab.validFields[config.type] ?? []) : []);
+  const cols = config.columns ?? config.fields ?? [];
+  const bad = cols.filter((c) => !fieldSet.has(c));
+  if (bad.length > 0) {
+    return {
+      ok: false,
+      error: "unknown_columns",
+      detail: { type: config.type, unknown_columns: bad },
+    };
+  }
+  if (config.filter && !fieldSet.has(config.filter.field)) {
+    return {
+      ok: false,
+      error: "unknown_filter_field",
+      detail: { type: config.type, unknown_field: config.filter.field },
+    };
   }
 
-  // For metric with filter, validate filter.field
-  if (kind === "metric") {
-    const cfg = config as MetricConfig;
-    if (cfg.filter) {
-      const valid = CATALOG_VALID_FIELDS[cfg.type]?.includes(cfg.filter.field);
-      if (!valid) {
-        return {
-          ok: false,
-          error: "unknown_filter_field",
-          detail: { type: cfg.type, unknown_field: cfg.filter.field },
-        };
-      }
-    }
-  }
-
-  return { ok: true, config };
+  return { ok: true, config: parsed.data };
 }

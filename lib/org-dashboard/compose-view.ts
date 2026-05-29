@@ -9,9 +9,10 @@
 //
 // VALIDATION ORDER (fail-closed; nothing persists until ALL pass):
 //   1. kind ∈ WIDGET_CATALOG                         (else invalid_kind)
-//   2. type ∈ CATALOG_VALID_TYPES                    (else unknown_type)
+//   2. type ∈ deriveVocabulary(ontology).validTypes  (else unknown_type)
 //   3. config parses against WIDGET_CATALOG[kind] schema AND every
-//      column/field/filter ∈ CATALOG_VALID_FIELDS[type]  (validateWidgetConfig)
+//      column/field/filter ∈ the type's ontology-derived field whitelist
+//      (validateWidgetConfig — ontology-aware)
 //   4. canReadType(type) — the SAME fail-closed read fence the render path uses
 //      (buildCanReadType). An actor who cannot read the type cannot compose a
 //      widget that reads it. Reject; never persist a leak.
@@ -22,9 +23,10 @@
 import {
   WIDGET_CATALOG,
   validateWidgetConfig,
-  CATALOG_VALID_TYPES,
   type CatalogKind,
 } from "@/lib/widgets/catalog";
+import { deriveVocabulary } from "@/lib/widgets/vocabulary";
+import type { Ontology } from "@/lib/ontology/schema";
 import type { CanReadType } from "@/lib/widgets/read-api";
 import {
   addOrgWidget,
@@ -51,6 +53,10 @@ export interface ComposeOrgViewInput {
 export interface DashboardWriteAuth {
   canReadType: CanReadType;
   canWriteDashboard: boolean;
+  // The LOADED ontology — the source of the type-membership gate and the
+  // column/field whitelist (deriveVocabulary). Threaded from the caller, which
+  // already loaded it to build canReadType (buildCanReadType).
+  ontology: Ontology;
 }
 
 export type ComposeOrgViewResult =
@@ -102,7 +108,7 @@ function buildConfig(input: ComposeOrgViewInput): unknown {
 
 export async function composeOrgView(
   input: ComposeOrgViewInput,
-  { canReadType, canWriteDashboard }: DashboardWriteAuth,
+  { canReadType, canWriteDashboard, ontology }: DashboardWriteAuth,
 ): Promise<ComposeOrgViewResult> {
   // 0. STRUCTURAL WRITE-AUTH (fail-closed, FIRST). A caller cannot mutate the
   // dashboard without proving write-auth — independent of, and prior to, the
@@ -117,14 +123,14 @@ export async function composeOrgView(
     return { ok: false, reason: `unknown widget kind "${input.kind}"` };
   }
 
-  // 2. type ∈ catalog types
-  if (!(CATALOG_VALID_TYPES as readonly string[]).includes(input.type)) {
+  // 2. type ∈ the LOADED ontology's object types (ontology-derived membership gate)
+  if (!deriveVocabulary(ontology).validTypes.includes(input.type)) {
     return { ok: false, reason: `unknown type "${input.type}"` };
   }
 
   // 3. config parses against the kind's schema + columns/fields ⊆ ontology fields
   const config = buildConfig(input);
-  const validation = validateWidgetConfig(input.kind, config);
+  const validation = validateWidgetConfig(input.kind, config, ontology);
   if (!validation.ok) {
     return {
       ok: false,

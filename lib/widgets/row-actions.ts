@@ -15,7 +15,8 @@
 // row-action.server.ts as the invocation gate — one rule, two call sites.
 
 import type { Ontology } from "@/lib/ontology/schema";
-import { CATALOG_VALID_TYPES, type CatalogType } from "./catalog";
+import type { CatalogType } from "./catalog";
+import { deriveVocabulary } from "./vocabulary";
 
 export interface RowAction {
   /** the action_type name to invoke (e.g. "dismiss_blocker") */
@@ -40,15 +41,15 @@ export function isRowActionEnabled(
   return actionDef.row_action === true;
 }
 
-// Catalog snake_case type → ontology PascalCase object-type name.
-// Same forward mapping read-api.ts's CATALOG_TYPE_TO_OBJECT_TYPE encodes and
-// resolve-refs.ts derives via snakeToPascal — kept derivational so it stays in
-// sync with CATALOG_VALID_TYPES (no separate hand-maintained table to drift).
-export function catalogTypeToObjectType(catalogType: CatalogType): string {
-  return catalogType
-    .split("_")
-    .map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1))
-    .join("");
+// Catalog snake_case token → ontology PascalCase object-type name, resolved by
+// INVERTING the real ontology keys (deriveVocabulary().typeToObjectType) — never
+// by a lossy snakeToPascal guess. Returns null for a token absent from the loaded
+// ontology (the membership gate, parity with the read-api fence).
+export function catalogTypeToObjectType(
+  catalogType: CatalogType,
+  ontology: Ontology,
+): string | null {
+  return deriveVocabulary(ontology).typeToObjectType[catalogType] ?? null;
 }
 
 /**
@@ -134,10 +135,12 @@ export function oneClickRowActionsForType(
   ontology: Ontology,
 ): RowAction[] {
   // Defensive: an unknown type yields no actions (parity with read-api's fence).
-  if (!(CATALOG_VALID_TYPES as readonly string[]).includes(catalogType)) {
+  // The membership gate + the token→ObjectType resolution are both ontology-
+  // derived: a token absent from the loaded ontology maps to null → no actions.
+  const objectTypeName = catalogTypeToObjectType(catalogType, ontology);
+  if (objectTypeName === null) {
     return [];
   }
-  const objectTypeName = catalogTypeToObjectType(catalogType);
 
   const out: RowAction[] = [];
   for (const [actionName, def] of Object.entries(ontology.action_types)) {

@@ -54,7 +54,7 @@ describe("composeOrgView — governed + fail-closed", () => {
         columns: ["label", "kind", "starts_at", "status"],
         limit: 20,
       },
-      { canReadType, canWriteDashboard: true },
+      { canReadType, canWriteDashboard: true, ontology },
     );
 
     expect(result.ok).toBe(true);
@@ -81,7 +81,7 @@ describe("composeOrgView — governed + fail-closed", () => {
         columns: ["label", "status"],
         limit: 10,
       },
-      { canReadType, canWriteDashboard: false },
+      { canReadType, canWriteDashboard: false, ontology },
     );
 
     expect(result.ok).toBe(false);
@@ -100,7 +100,7 @@ describe("composeOrgView — governed + fail-closed", () => {
     const result = await composeOrgView(
       // @ts-expect-error — deliberately invalid kind
       { kind: "pie_chart", type: "shift", columns: ["label"] },
-      { canReadType, canWriteDashboard: true },
+      { canReadType, canWriteDashboard: true, ontology },
     );
     expect(result.ok).toBe(false);
 
@@ -112,9 +112,9 @@ describe("composeOrgView — governed + fail-closed", () => {
   it("unknown type → rejected and not persisted", async () => {
     const canReadType = buildCanReadType(steward, ontology);
     const result = await composeOrgView(
-      // "spaceship" is not in CATALOG_VALID_TYPES — rejected at the type gate.
+      // "spaceship" is not in the loaded ontology — rejected at the type gate.
       { kind: "data_table", type: "spaceship", columns: ["label"] },
-      { canReadType, canWriteDashboard: true },
+      { canReadType, canWriteDashboard: true, ontology },
     );
     expect(result.ok).toBe(false);
 
@@ -130,7 +130,7 @@ describe("composeOrgView — governed + fail-closed", () => {
         type: "shift",
         columns: ["not_a_real_field"],
       },
-      { canReadType, canWriteDashboard: true },
+      { canReadType, canWriteDashboard: true, ontology },
     );
     expect(result.ok).toBe(false);
 
@@ -153,7 +153,7 @@ describe("structural write-authorization — fail-closed and independent of read
         type: "shift",
         columns: ["label", "status"],
       },
-      { canReadType, canWriteDashboard: false },
+      { canReadType, canWriteDashboard: false, ontology },
     );
 
     expect(result.ok).toBe(false);
@@ -170,7 +170,7 @@ describe("structural write-authorization — fail-closed and independent of read
     const canReadType = buildCanReadType(steward, ontology);
     const result = await composeOrgView(
       { kind: "data_table", type: "shift", columns: ["label", "status"] },
-      { canReadType, canWriteDashboard: true },
+      { canReadType, canWriteDashboard: true, ontology },
     );
     expect(result.ok).toBe(true);
 
@@ -186,7 +186,7 @@ describe("removeOrgView — gated, fail-closed, idempotent", () => {
     const canReadType = buildCanReadType(steward, ontology);
     await composeOrgView(
       { kind: "data_table", type: "shift", columns: ["label"] },
-      { canReadType, canWriteDashboard: true },
+      { canReadType, canWriteDashboard: true, ontology },
     );
     expect(
       (await readOrgDashboard()).widgets.some(
@@ -211,7 +211,7 @@ describe("removeOrgView — gated, fail-closed, idempotent", () => {
     const canReadType = buildCanReadType(steward, ontology);
     await composeOrgView(
       { kind: "data_table", type: "shift", columns: ["label"] },
-      { canReadType, canWriteDashboard: true },
+      { canReadType, canWriteDashboard: true, ontology },
     );
 
     const r = await removeOrgView(
@@ -233,7 +233,7 @@ describe("clearOrgView — gated, fail-closed", () => {
     const canReadType = buildCanReadType(steward, ontology);
     await composeOrgView(
       { kind: "data_table", type: "shift", columns: ["label"] },
-      { canReadType, canWriteDashboard: true },
+      { canReadType, canWriteDashboard: true, ontology },
     );
 
     const r = await clearOrgView({ canWriteDashboard: true });
@@ -249,7 +249,7 @@ describe("clearOrgView — gated, fail-closed", () => {
     const canReadType = buildCanReadType(steward, ontology);
     await composeOrgView(
       { kind: "data_table", type: "shift", columns: ["label"] },
-      { canReadType, canWriteDashboard: true },
+      { canReadType, canWriteDashboard: true, ontology },
     );
 
     const r = await clearOrgView({ canWriteDashboard: false });
@@ -269,13 +269,13 @@ describe("multiple widgets coexist (append, not replace)", () => {
 
     const a = await composeOrgView(
       { kind: "data_table", type: "shift", columns: ["label", "status"] },
-      { canReadType, canWriteDashboard: true },
+      { canReadType, canWriteDashboard: true, ontology },
     );
     expect(a.ok).toBe(true);
 
     const b = await composeOrgView(
       { kind: "metric", type: "bed" },
-      { canReadType, canWriteDashboard: true },
+      { canReadType, canWriteDashboard: true, ontology },
     );
     expect(b.ok).toBe(true);
 
@@ -301,7 +301,7 @@ describe("multiple widgets coexist (append, not replace)", () => {
         columns: ["label", "from_date"],
         filter: { field: "from_date", value: "@today" },
       },
-      { canReadType, canWriteDashboard: true },
+      { canReadType, canWriteDashboard: true, ontology },
     );
 
     expect(result.ok).toBe(true);

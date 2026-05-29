@@ -39,7 +39,7 @@ import {
   removeOrgView,
   clearOrgView,
 } from "@/lib/org-dashboard/compose-view";
-import { CATALOG_KINDS, CATALOG_VALID_TYPES } from "@/lib/widgets/catalog";
+import { CATALOG_KINDS } from "@/lib/widgets/catalog";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -186,8 +186,12 @@ export async function POST(req: Request): Promise<Response> {
       kind: z
         .enum(CATALOG_KINDS)
         .describe("The widget kind: data_table | roster | metric | calendar."),
+      // SHAPE only (z.string()): the SET of valid types is ontology-derived, not a
+      // fixed enum. Type MEMBERSHIP is enforced SERVER-SIDE at execution by
+      // composeOrgView → validateWidgetConfig (deriveVocabulary gate), never at the
+      // tool schema — so any loaded ontology's types work without re-emitting the tool.
       type: z
-        .enum(CATALOG_VALID_TYPES)
+        .string()
         .describe("The ontology type to display, e.g. guest, shift, booking, event."),
       columns: z
         .array(z.string())
@@ -223,6 +227,7 @@ export async function POST(req: Request): Promise<Response> {
         {
           canReadType: buildCanReadType(composeActor, composeOntology),
           canWriteDashboard,
+          ontology: composeOntology,
         },
       );
       if (!r.ok) return { ok: false, reason: r.reason };
@@ -244,8 +249,10 @@ export async function POST(req: Request): Promise<Response> {
       kind: z
         .enum(CATALOG_KINDS)
         .describe("The widget kind to remove: data_table | roster | metric | calendar."),
+      // SHAPE only (z.string()): membership is enforced server-side at execution
+      // (removeOrgView targets a stable id; an unknown type simply matches nothing).
       type: z
-        .enum(CATALOG_VALID_TYPES)
+        .string()
         .describe("The ontology type of the widget to remove, e.g. guest, shift, booking."),
     }),
     execute: async ({ kind, type }) => {

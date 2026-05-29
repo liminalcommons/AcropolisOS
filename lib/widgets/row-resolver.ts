@@ -20,7 +20,8 @@
 // row-action.server.ts as the invocation gate — one rule, two call sites.
 
 import type { Ontology } from "@/lib/ontology/schema";
-import { CATALOG_VALID_TYPES, type CatalogType } from "./catalog";
+import type { CatalogType } from "./catalog";
+import { deriveVocabulary } from "./vocabulary";
 import { requiredRefParam, catalogTypeToObjectType } from "./row-actions";
 
 export interface RowResolver {
@@ -123,10 +124,11 @@ export function resolversForType(
   ontology: Ontology,
 ): RowResolver[] {
   // Defensive: an unknown type yields no resolvers (parity with read-api's fence).
-  if (!(CATALOG_VALID_TYPES as readonly string[]).includes(catalogType)) {
+  if (!deriveVocabulary(ontology).validTypes.includes(catalogType)) {
     return [];
   }
-  const objectTypeName = catalogTypeToObjectType(catalogType);
+  const objectTypeName = catalogTypeToObjectType(catalogType, ontology);
+  if (objectTypeName === null) return [];
 
   const out: RowResolver[] = [];
   for (const [actionName, def] of Object.entries(ontology.action_types)) {

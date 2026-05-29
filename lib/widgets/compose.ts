@@ -94,6 +94,10 @@ export async function compose_dashboard(
   memberId: string,
   selections: WidgetSelection[],
 ): Promise<ComposeDashboardResult> {
+  // The loaded ontology is the SOURCE of validateWidgetConfig's membership +
+  // field whitelist (deriveVocabulary). Loaded once for the whole batch.
+  const ontology = await loadOntology(getRuntimeOntologyDir());
+
   // Step 1: Validate all configs — fail fast on first invalid, collect all errors
   const errors: Array<{ index: number; kind: string; error: string; detail?: unknown }> = [];
 
@@ -111,7 +115,7 @@ export async function compose_dashboard(
       continue;
     }
 
-    const result = validateWidgetConfig(sel.kind as CatalogKind, sel.config);
+    const result = validateWidgetConfig(sel.kind as CatalogKind, sel.config, ontology);
     if (!result.ok) {
       errors.push({
         index: i,
@@ -220,7 +224,7 @@ export async function resolveDashboard(
     const entry = WIDGET_CATALOG[kind];
 
     // Re-validate config from storage (defensive — garbage in storage is skipped)
-    const validation = validateWidgetConfig(kind, descriptor.config);
+    const validation = validateWidgetConfig(kind, descriptor.config, ontology);
     if (!validation.ok) continue;
 
     try {
