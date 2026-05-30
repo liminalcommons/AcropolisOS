@@ -16,6 +16,7 @@
 import type { Ontology, ObjectType } from "@/lib/ontology/schema";
 import { pascalToSnake, snakeToPascal } from "@/lib/ontology/casing";
 import { emptyDraft, type ProposalDiff } from "@/lib/proposals/diff";
+import { inferLinks } from "./infer-links";
 import type { GrowDecision } from "./evolve";
 
 export interface GrowDiffs {
@@ -80,6 +81,13 @@ export function growDecisionToDiffs(decision: GrowDecision, ontology: Ontology):
       // ObjectType requires >=1 property; guarantee one.
       if (Object.keys(properties).length === 0) properties.name = optionalString();
       diff.new_object_types[pascal] = { properties };
+
+      // Shared-key -> link inference: a field that references an existing type
+      // (FK-naming) proposes a many-to-many link, rendered dashed-amber on /graph
+      // and approved by the steward (links are structural).
+      for (const link of inferLinks(ontology, pascal, gp.fields)) {
+        diff.new_link_types[link.name] = { from: link.from, to: link.to, cardinality: link.cardinality };
+      }
     }
     if (Object.keys(diff.new_object_types).length > 0) structural = diff;
   }

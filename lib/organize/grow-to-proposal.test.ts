@@ -64,6 +64,19 @@ describe("growDecisionToDiffs", () => {
     }
   });
 
+  it("a new type whose fields reference an existing type also proposes a many-to-many link", () => {
+    const decision: GrowDecision = {
+      autoApply: [],
+      escalate: [{ kind: "new_type", object_type: "booking", fields: ["guest_email", "nights"], evidence: ["raw_inbox:x"] }],
+    };
+    const { structural } = growDecisionToDiffs(decision, ontology);
+    expect(Object.keys(structural!.new_object_types)).toEqual(["Booking"]);
+    // guest_email -> Guest (exists in the fixture); nights -> no match
+    expect(structural!.new_link_types).toEqual({
+      booking_links_guest: { from: "Booking", to: "Guest", cardinality: "many-to-many" },
+    });
+  });
+
   it("a new type whose fields all sanitize away still gets a placeholder property (ObjectType requires >=1)", () => {
     const decision: GrowDecision = {
       autoApply: [],
