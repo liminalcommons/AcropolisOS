@@ -1,7 +1,7 @@
-import path from "node:path";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadOntology } from "@/lib/ontology/load";
+import { getRuntimeOntologyDir } from "@/lib/setup/paths";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { prettify } from "@/lib/prettify";
 
@@ -44,9 +44,9 @@ export default async function ObjectTypeListPage(
   const chatRuntime = await buildChatRuntime();
   if (isAnonymous(chatRuntime.actor)) notFound();
 
-  const ontology = await loadOntology(
-    path.join(process.cwd(), "ontology"),
-  ).catch(() => null);
+  const ontology = await loadOntology(getRuntimeOntologyDir()).catch(
+    () => null,
+  );
   if (!ontology) notFound();
 
   const objectType = ontology.object_types[type];

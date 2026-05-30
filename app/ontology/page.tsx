@@ -1,6 +1,6 @@
-import path from "node:path";
 import Link from "next/link";
 import { loadOntology } from "@/lib/ontology/load";
+import { getRuntimeOntologyDir } from "@/lib/setup/paths";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ function summarizeProperty(body: unknown): string {
 }
 
 export default async function OntologyPage(): Promise<React.ReactElement> {
-  const ontologyRoot = path.join(process.cwd(), "ontology");
+  const ontologyRoot = getRuntimeOntologyDir();
   const ontology = await loadOntology(ontologyRoot);
 
   const objectTypeRows = Object.entries(ontology.object_types).map(
