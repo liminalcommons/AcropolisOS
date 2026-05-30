@@ -5,6 +5,10 @@ import { getRuntimeOntologyDir } from "@/lib/setup/paths";
 import { pascalToSnake } from "@/lib/ontology/casing";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { prettify } from "@/lib/prettify";
+import { buildCanWriteType } from "@/lib/widgets/write-api";
+import { deriveFormFields } from "@/lib/ontology/object-form";
+import { ObjectForm } from "@/components/generated/ObjectForm";
+import { createObjectAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -66,6 +70,8 @@ export default async function ObjectTypeListPage(
   if (!access) notFound();
 
   const tableName = snakeCase(type);
+  const canWrite = buildCanWriteType(chatRuntime.actor, ontology)(pascalToSnake(type));
+  const formFields = deriveFormFields(ontology, type);
   const propertyNames = Object.keys(objectType.properties ?? {});
 
   // Resolve property types via the shared registry when a ref is used so
@@ -123,6 +129,21 @@ export default async function ObjectTypeListPage(
             </p>
           </div>
         </div>
+
+        {canWrite && formFields.length > 0 ? (
+          <details className="mt-6 rounded-md border border-border bg-card/20 p-4">
+            <summary className="cursor-pointer select-none text-sm font-medium text-foreground">
+              + New {prettify(type)}
+            </summary>
+            <div className="mt-4">
+              <ObjectForm
+                fields={formFields}
+                submitLabel={`Create ${prettify(type)}`}
+                action={createObjectAction.bind(null, type)}
+              />
+            </div>
+          </details>
+        ) : null}
 
         {queryError ? (
           <div

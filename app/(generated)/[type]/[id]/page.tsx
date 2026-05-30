@@ -5,6 +5,10 @@ import { getRuntimeOntologyDir } from "@/lib/setup/paths";
 import { pascalToSnake } from "@/lib/ontology/casing";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { prettify } from "@/lib/prettify";
+import { buildCanWriteType } from "@/lib/widgets/write-api";
+import { deriveFormFields } from "@/lib/ontology/object-form";
+import { ObjectForm, DeleteButton } from "@/components/generated/ObjectForm";
+import { updateObjectAction, deleteObjectAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -53,6 +57,9 @@ export default async function ObjectDetailPage(
   const row = await access.findById(id);
   if (!row) notFound();
 
+  const canWrite = buildCanWriteType(chatRuntime.actor, ontology)(pascalToSnake(type));
+  const formFields = deriveFormFields(ontology, type);
+
   return (
     <main>
       <div className="mx-auto max-w-3xl px-8 py-10">
@@ -82,6 +89,32 @@ export default async function ObjectDetailPage(
             </div>
           ))}
         </dl>
+
+        {canWrite && formFields.length > 0 ? (
+          <div className="mt-8 space-y-6">
+            <details className="rounded-md border border-border bg-card/20 p-4">
+              <summary className="cursor-pointer select-none text-sm font-medium text-foreground">
+                Edit {prettify(type)}
+              </summary>
+              <div className="mt-4">
+                <ObjectForm
+                  fields={formFields}
+                  initial={row}
+                  submitLabel="Save changes"
+                  action={updateObjectAction.bind(null, type, id)}
+                  afterSuccessHref={`/${type}/${id}`}
+                />
+              </div>
+            </details>
+            <div className="flex items-center gap-3">
+              <DeleteButton
+                action={deleteObjectAction.bind(null, type, id)}
+                afterHref={`/${type}`}
+                label={`Delete this ${prettify(type)}`}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     </main>
   );
