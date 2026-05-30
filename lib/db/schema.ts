@@ -89,3 +89,22 @@ export const raw_inbox = pgTable("raw_inbox", {
 
 export type RawInboxRow = typeof raw_inbox.$inferSelect;
 export type RawInboxInsert = typeof raw_inbox.$inferInsert;
+
+// Slice 3: approved_views — the governed-view registry. NOT an ontology object
+// type (infra table, managed here like proposals/raw_inbox). Populated ONLY via
+// the proposal apply loop. scope ∈ {org, role, viewer}; scope_key is "" for org,
+// the role name for role, the member id for viewer. descriptors is the same
+// widget-descriptor list shape the render path consumes. One active row per
+// (scope, scope_key).
+export const approved_views = pgTable("approved_views", {
+  id: uuid("id").primaryKey().defaultRandom().notNull(),
+  scope: text("scope").notNull(),
+  scope_key: text("scope_key").notNull(),
+  descriptors: jsonb("descriptors").notNull().default(sql`'[]'::jsonb`),
+  created_by: text("created_by").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type ApprovedViewRow = typeof approved_views.$inferSelect;
+export type ApprovedViewInsert = typeof approved_views.$inferInsert;
