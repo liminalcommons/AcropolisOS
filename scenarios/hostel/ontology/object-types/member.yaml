@@ -1,4 +1,5 @@
 Member:
+  kind: agent
   description: Staff or work-trader with a verified login account
   title_property: full_name
   data_audit: true

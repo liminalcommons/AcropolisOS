@@ -1,4 +1,5 @@
 WorkTradeAgreement:
+  kind: commitment
   description: Agreement between hostel and a guest to exchange work for stay
   title_property: label
   data_audit: true

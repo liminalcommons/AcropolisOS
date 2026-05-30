@@ -1,4 +1,5 @@
 Bed:
+  kind: resource
   description: A specific bed in a room
   title_property: code
   permissions:

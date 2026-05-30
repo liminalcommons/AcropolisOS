@@ -1,4 +1,5 @@
 Room:
+  kind: resource
   description: A physical room at the hostel
   title_property: code
   permissions:

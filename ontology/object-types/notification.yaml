@@ -1,4 +1,5 @@
 Notification:
+  kind: concept
   description: |
     An in-app inbox row delivered to a Member. Written by the notify_member
     side-effect dispatcher whenever an action declares notify_member in its

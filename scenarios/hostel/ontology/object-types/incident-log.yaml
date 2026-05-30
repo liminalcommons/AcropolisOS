@@ -1,4 +1,5 @@
 IncidentLog:
+  kind: event
   description: A logged incident (noise, damage, lost key, medical, etc.)
   title_property: summary
   data_audit: true

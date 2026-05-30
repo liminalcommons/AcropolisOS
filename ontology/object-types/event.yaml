@@ -1,4 +1,5 @@
 Event:
+  kind: event
   description: Hostel social event (movie night, walking tour, dinner)
   title_property: title
   permissions:

@@ -4,7 +4,7 @@ import { buildOverlay, diffToGraph } from "./overlay";
 import type { GraphModel, GraphNode } from "./derive";
 
 function gnode(id: string, propertyCount = 1): GraphNode {
-  return { id, label: id, titleProperty: null, propertyCount, readRoles: [], writeRoles: [] };
+  return { id, label: id, titleProperty: null, propertyCount, readRoles: [], writeRoles: [], kind: null };
 }
 
 // A tiny committed graph: Guest -> Bed (sleeps_in).
@@ -28,7 +28,7 @@ describe("diffToGraph (project a pending proposal's diff to graph nodes/edges)",
     });
     const g = diffToGraph(diff);
     expect(g.nodes).toEqual([
-      { id: "Booking", label: "Booking", titleProperty: null, propertyCount: 2, readRoles: [], writeRoles: [] },
+      { id: "Booking", label: "Booking", titleProperty: null, propertyCount: 2, readRoles: [], writeRoles: [], kind: null },
     ]);
     expect(g.relations).toEqual([
       { id: "booked", source: "Guest", target: "Booking", label: "booked", cardinality: "one-to-many" },

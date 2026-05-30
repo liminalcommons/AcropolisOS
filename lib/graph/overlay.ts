@@ -43,6 +43,7 @@ export function diffToGraph(diff: ProposalDiff): GraphModel {
       propertyCount: Object.keys(ot.properties).length,
       readRoles: ot.permissions?.read ?? [],
       writeRoles: ot.permissions?.write ?? [],
+      kind: ot.kind ?? null,
     }))
     .sort(byId);
   const relations: GraphRelationEdge[] = Object.entries(diff.new_link_types)

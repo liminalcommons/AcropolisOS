@@ -1,4 +1,5 @@
 AgentBlocker:
+  kind: concept
   description: |
     Typed escalation from the agent to a specific human. Written by
     the flag_blocker action only — humans never edit the row directly

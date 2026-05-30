@@ -1,4 +1,5 @@
 MeetingMinute:
+  kind: event
   description: Notes captured from a community event
   title_property: title
   permissions:

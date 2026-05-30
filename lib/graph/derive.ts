@@ -16,6 +16,9 @@ export interface GraphNode {
   propertyCount: number;
   readRoles: string[];
   writeRoles: string[];
+  // The universal element kind (agent | resource | event | commitment |
+  // concept), or null when the type is unclassified. Drives the node accent.
+  kind: string | null;
 }
 
 export interface GraphRelationEdge {
@@ -66,6 +69,7 @@ export function ontologyToGraph(ontology: Ontology): GraphModel {
       propertyCount: Object.keys(ot.properties).length,
       readRoles: ot.permissions?.read ?? [],
       writeRoles: ot.permissions?.write ?? [],
+      kind: ot.kind ?? null,
     }))
     .sort(byId);
 

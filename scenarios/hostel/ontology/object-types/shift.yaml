@@ -1,4 +1,5 @@
 Shift:
+  kind: commitment
   description: A scheduled work slot (reception, cleaning, kitchen, etc.)
   title_property: label
   permissions:

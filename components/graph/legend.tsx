@@ -22,6 +22,17 @@ export const POLICY_VAR: Record<AgentPolicy, string> = {
 export const PROPOSED_COLOR = "oklch(0.78 0.14 80)";
 export const PROPOSED_TINT = "oklch(0.78 0.14 80 / 0.12)";
 
+// Element-kind accents (the universal organizational classification). Literal
+// oklch for the same reason as POLICY_VAR. `commitment` deliberately avoids the
+// proposed-amber hue (80) so a proposed-vs-committed signal never reads as a kind.
+export const KIND_COLOR: Record<string, string> = {
+  agent: "oklch(0.70 0.13 250)", // blue — a locus of action
+  resource: "oklch(0.72 0.12 180)", // teal — value whose state is tended
+  event: "oklch(0.68 0.16 300)", // violet — a state-changing occurrence
+  commitment: "oklch(0.72 0.16 35)", // orange — a future obligation
+  concept: "oklch(0.62 0.03 270)", // slate — catch-all / unclassified
+};
+
 export function Legend({ proposedCount = 0 }: { proposedCount?: number }): React.ReactElement {
   return (
     <div className="rounded-lg border border-border bg-card/90 p-3 text-xs text-muted-foreground backdrop-blur">
@@ -49,6 +60,15 @@ export function Legend({ proposedCount = 0 }: { proposedCount?: number }): React
           <span className="h-2.5 w-2.5 rounded-sm" style={{ boxShadow: `0 0 0 2px ${PROPOSED_COLOR}` }} />
           existing type gaining fields
         </li>
+      </ul>
+      <p className="mt-3 mb-1 font-medium text-foreground">Element kinds</p>
+      <ul className="space-y-1">
+        {(["agent", "resource", "event", "commitment", "concept"] as const).map((k) => (
+          <li key={k} className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: KIND_COLOR[k] }} />
+            {k}
+          </li>
+        ))}
       </ul>
       <p className="mt-3 mb-1 font-medium text-foreground">Edges</p>
       <ul className="space-y-1">

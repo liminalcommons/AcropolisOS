@@ -31,7 +31,7 @@ import type { GraphModel, GraphAction } from "@/lib/graph/derive";
 import type { ProposalDiff } from "@/lib/proposals/diff";
 import { buildOverlay, type NodeStatus } from "@/lib/graph/overlay";
 import { layoutGraph } from "@/lib/graph/layout";
-import { POLICY_VAR, PROPOSED_COLOR, PROPOSED_TINT, Legend } from "./legend";
+import { POLICY_VAR, PROPOSED_COLOR, PROPOSED_TINT, KIND_COLOR, Legend } from "./legend";
 import { Inspector } from "./inspector";
 
 interface ObjectNodeData extends Record<string, unknown> {
@@ -40,6 +40,7 @@ interface ObjectNodeData extends Record<string, unknown> {
   actions: GraphAction[];
   status: NodeStatus;
   growingFields: string[];
+  kind: string | null;
 }
 
 // v12 idiomatic pattern: name the full Node specialisation, then pass to NodeProps
@@ -60,8 +61,19 @@ function ObjectNode({ data }: NodeProps<ObjectNodeType>): React.ReactElement {
       }}
     >
       <Handle type="target" position={Position.Top} className="!opacity-0" />
-      <div className="truncate text-sm font-medium text-foreground" title={data.label}>
-        {data.label}
+      <div className="flex items-center justify-between gap-2">
+        <div className="truncate text-sm font-medium text-foreground" title={data.label}>
+          {data.label}
+        </div>
+        {data.kind && KIND_COLOR[data.kind] && (
+          <span
+            className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-background"
+            style={{ backgroundColor: KIND_COLOR[data.kind] }}
+            title={`element kind: ${data.kind}`}
+          >
+            {data.kind}
+          </span>
+        )}
       </div>
       <div className="text-[10px] text-muted-foreground">
         {data.propertyCount} {data.propertyCount === 1 ? "property" : "properties"}
@@ -156,6 +168,7 @@ export function OntologyGraph({ model }: { model: GraphModel }): React.ReactElem
         actions: actionsByTarget.get(n.id) ?? [],
         status: overlay.nodeStatus[n.id] ?? "committed",
         growingFields: overlay.growingFields[n.id] ?? [],
+        kind: n.kind,
       },
     }));
     const edges: Edge[] = overlay.model.relations.map((r) => {

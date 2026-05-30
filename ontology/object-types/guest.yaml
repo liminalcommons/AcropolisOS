@@ -1,4 +1,5 @@
 Guest:
+  kind: agent
   description: Anyone staying at the hostel — paid, work-trade, or visitor
   title_property: full_name
   data_audit: true

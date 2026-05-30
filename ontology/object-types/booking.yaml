@@ -1,4 +1,5 @@
 Booking:
+  kind: commitment
   description: A guest's booking into a specific bed for a date range
   title_property: label
   data_audit: true

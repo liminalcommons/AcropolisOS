@@ -4,8 +4,8 @@ import type { GraphModel } from "./derive";
 
 const model: GraphModel = {
   nodes: [
-    { id: "A", label: "A", titleProperty: null, propertyCount: 1, readRoles: [], writeRoles: [] },
-    { id: "B", label: "B", titleProperty: null, propertyCount: 1, readRoles: [], writeRoles: [] },
+    { id: "A", label: "A", titleProperty: null, propertyCount: 1, readRoles: [], writeRoles: [], kind: null },
+    { id: "B", label: "B", titleProperty: null, propertyCount: 1, readRoles: [], writeRoles: [], kind: null },
   ],
   relations: [{ id: "rel", source: "A", target: "B", label: "rel", cardinality: "one-to-many" }],
   actions: [],

@@ -1,4 +1,5 @@
 MemberContext:
+  kind: concept
   description: |
     One row per Member; auto-created on first /me visit or first
     query_member_context call. Holds the member's `pinned_widgets`
