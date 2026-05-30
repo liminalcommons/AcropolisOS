@@ -6,7 +6,7 @@ import {
 } from "./validate-view-proposal";
 import type { ViewConfigProposal } from "../views/view-proposal";
 import { InMemoryProposalDraftStore } from "./store";
-import { buildProposalTools } from "./tools";
+import { buildAiSdkProposalTools } from "./ai-sdk-tools";
 
 // A minimal hand-built ontology with a single object type `Member` carrying a
 // `full_name` field. deriveVocabulary turns this into validTypes=["member"],
@@ -107,24 +107,21 @@ describe("validateViewProposal — fail loudly at propose time", () => {
 describe("propose_view tool — live fence enforcement", () => {
   it("throws InvalidViewProposalError for a bogus type, leaving the draft empty", async () => {
     const store = new InMemoryProposalDraftStore();
-    const { propose_view } = buildProposalTools(store);
+    const { propose_view } = buildAiSdkProposalTools(store, "fence-s1");
     await expect(
       propose_view.execute!(
         {
-          session_id: "fence-s1",
-          proposal: {
-            scope: "role",
-            scope_key: "steward",
-            descriptors: [
-              {
-                id: "v1",
-                kind: "metric",
-                config: { type: "definitely_not_a_real_type", agg: "count" },
-              },
-            ],
-          },
+          scope: "role",
+          scope_key: "steward",
+          descriptors: [
+            {
+              id: "v1",
+              kind: "metric",
+              config: { type: "definitely_not_a_real_type", agg: "count" },
+            },
+          ],
         },
-        {},
+        {} as never,
       ),
     ).rejects.toBeInstanceOf(InvalidViewProposalError);
     // The bogus view never made it into the draft.
@@ -133,19 +130,16 @@ describe("propose_view tool — live fence enforcement", () => {
 
   it("stages a valid descriptor referencing a real live type", async () => {
     const store = new InMemoryProposalDraftStore();
-    const { propose_view } = buildProposalTools(store);
+    const { propose_view } = buildAiSdkProposalTools(store, "fence-s2");
     const result = (await propose_view.execute!(
       {
-        session_id: "fence-s2",
-        proposal: {
-          scope: "role",
-          scope_key: "steward",
-          descriptors: [
-            { id: "v1", kind: "metric", config: { type: "member", agg: "count" } },
-          ],
-        },
+        scope: "role",
+        scope_key: "steward",
+        descriptors: [
+          { id: "v1", kind: "metric", config: { type: "member", agg: "count" } },
+        ],
       },
-      {},
+      {} as never,
     )) as { ok: true; draft: { new_view_configs: Record<string, unknown> } };
     expect(result.ok).toBe(true);
     expect(result.draft.new_view_configs["role:steward"]).toBeDefined();

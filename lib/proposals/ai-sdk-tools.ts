@@ -1,7 +1,7 @@
-// ai-sdk-shaped proposal tools backed by the same `ProposalDraftStore` as
-// `tools.ts`. The Mastra-shaped tools in `tools.ts` are kept for unit-test
-// parity and future Agent-API usage; this module is what the live /api/chat
-// route wires into `streamText({ tools })`.
+// ai-sdk-shaped proposal tools backed by `ProposalDraftStore`. This is the SOLE
+// proposal-tool surface — the live /api/chat route wires it into
+// `streamText({ tools })`. (A parallel Mastra-shaped `tools.ts` was retired; the
+// ai-sdk path superseded it as the single source of the propose_* tools.)
 //
 // session_id is closed over at construction time so the model only sees the
 // content-bearing parameters. The route extracts session_id from the request
