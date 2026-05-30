@@ -3,10 +3,12 @@
 // Server component. Auth-gated (any authenticated user — steward-to-be runs
 // this on first install). Anonymous callers are redirected to /signin.
 //
-// Three step cards rendered in a vertical stack:
-//   Step 1 — "System ready"     : reads DATABASE_URL env var + runs SELECT 1.
-//   Step 2 — "Bring your LLM key" : BYOK textarea. Save is STUBBED this cycle.
-//   Step 3 — "What kind of org?" : functional write to uploads/org-profile.json.
+// Five step cards rendered in a vertical stack:
+//   Step 1 — "Install confirmed"   : reads DATABASE_URL env var + runs SELECT 1.
+//   Step 2 — "Create the steward"  : POST /api/setup/steward (first steward).
+//   Step 3 — "Bring your LLM key"  : BYOK, validated + persisted to .env.
+//   Step 4 — "What kind of org?"   : functional write to uploads/org-profile.json.
+//   Step 5 — "Choose a scenario"   : installs the ontology + finalizes setup.
 //
 // Bottom: "You're in →" link to / — always visible, no progression gate.
 
@@ -18,7 +20,10 @@ import { getDb } from "@/lib/db/client";
 import { isSetupComplete } from "@/lib/setup/state";
 import { getSetupFile } from "@/lib/setup/config";
 import { listScenarioChoices } from "@/lib/setup/scenario-choices";
+import { FileUserStore } from "@/lib/auth/users";
+import { getUsersFile } from "@/lib/auth/config";
 import { SetupStep } from "@/components/setup/SetupStep";
+import { StewardForm } from "@/components/setup/SetupForms";
 import { LLMKeyForm } from "@/components/setup/SetupForms";
 import { OrgProfileForm } from "@/components/setup/SetupForms";
 import { ScenarioPicker } from "@/components/setup/ScenarioPicker";
@@ -51,14 +56,16 @@ export default async function SetupPage(): Promise<React.ReactElement> {
     redirect("/signin");
   }
 
-  const [dbStatus, profile, scenarios, setupComplete] = await Promise.all([
+  const [dbStatus, profile, scenarios, setupComplete, stewardCount] = await Promise.all([
     checkDatabase(),
     readOrgProfile(),
     listScenarioChoices(),
     isSetupComplete(getSetupFile()),
+    new FileUserStore(getUsersFile()).countStewards().catch(() => 0),
   ]);
   const initialName = profile?.name ?? "";
   const initialDescription = profile?.description ?? "";
+  const stewardExists = stewardCount > 0;
 
   return (
     <main className="min-h-screen bg-background text-foreground font-sans">
@@ -66,7 +73,7 @@ export default async function SetupPage(): Promise<React.ReactElement> {
 
         {/* Eyebrow */}
         <p className="text-[10px] uppercase tracking-widest text-muted-foreground text-center mb-8">
-          Setup · 4 steps to a usable system
+          Setup · 5 steps to a usable system
         </p>
 
         {/* Step cards */}
@@ -105,9 +112,19 @@ export default async function SetupPage(): Promise<React.ReactElement> {
             )}
           </SetupStep>
 
-          {/* Step 2 — BYOK LLM key (stubbed) */}
+          {/* Step 2 — Create the first steward */}
           <SetupStep
             step={2}
+            title="Create the first steward"
+            status={stewardExists ? "ok" : "pending"}
+            defaultExpanded={!stewardExists}
+          >
+            <StewardForm alreadyExists={stewardExists} />
+          </SetupStep>
+
+          {/* Step 3 — BYOK LLM key (validated + persisted) */}
+          <SetupStep
+            step={3}
             title="Bring your own LLM key"
             status="pending"
             defaultExpanded={true}
@@ -115,9 +132,9 @@ export default async function SetupPage(): Promise<React.ReactElement> {
             <LLMKeyForm />
           </SetupStep>
 
-          {/* Step 3 — Org description (functional) */}
+          {/* Step 4 — Org description (functional) */}
           <SetupStep
-            step={3}
+            step={4}
             title="What kind of org is this?"
             status="pending"
             defaultExpanded={true}
@@ -128,9 +145,9 @@ export default async function SetupPage(): Promise<React.ReactElement> {
             />
           </SetupStep>
 
-          {/* Step 4 — Choose a starting scenario (discovery-driven) */}
+          {/* Step 5 — Choose a starting scenario (discovery-driven) */}
           <SetupStep
-            step={4}
+            step={5}
             title="Choose a starting scenario"
             status={setupComplete ? "ok" : "pending"}
             defaultExpanded={!setupComplete}
