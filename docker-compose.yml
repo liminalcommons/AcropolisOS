@@ -84,6 +84,10 @@ services:
       - ./components:/app/components
       - ./lib:/app/lib
       - ./scripts:/app/scripts
+      # S4 demote: scenario bundles (scenarios/<name>/{ontology,seed}) replaced
+      # the baked seed/ dir. Bind-mount so the dev container sees them without an
+      # image rebuild (the Dockerfile COPYs scenarios/ for prod images).
+      - ./scenarios:/app/scenarios
       # Protect the compiled .next/ dir from host-side shadowing.
       - nexttmp:/app/.next
     ports:
