@@ -50,3 +50,32 @@ describe("0008_approved_views migration", () => {
     expect(unique!.columns.map((c) => c.name).sort()).toEqual(["scope", "scope_key"]);
   });
 });
+
+// BOOT WIRING — the gap that made this table silently absent in production.
+//
+// The migration file + schema export above can ALL be correct while the table
+// is missing from the live DB: `drizzle-kit push` skips creating a brand-new
+// table on non-TTY stdin (it cannot answer its own "is this a rename of X?"
+// prompt), exits 0, and the app boots without approved_views. The hand-rolled
+// CREATE TABLE IF NOT EXISTS only sidesteps that prompt if docker-entrypoint.sh
+// actually APPLIES it BEFORE push — and only stays applied if post-push
+// verification would FAIL LOUD when the table is absent. These assertions pin
+// both, so the file existing can never again imply the table exists.
+const ENTRYPOINT = readFileSync(
+  path.resolve(__dirname, "..", "..", "docker-entrypoint.sh"),
+  "utf8",
+);
+
+describe("docker-entrypoint boot wiring for approved_views", () => {
+  it("pre-applies 0008_approved_views.sql before drizzle-kit push (sidesteps the rename prompt)", () => {
+    const preApplyMatch = ENTRYPOINT.match(/for SQL in ([^\n]*)/);
+    expect(preApplyMatch, "entrypoint must have a pre-apply SQL loop").toBeTruthy();
+    expect(preApplyMatch![1]).toMatch(/drizzle\/0008_approved_views\.sql/);
+  });
+
+  it("verifies approved_views post-push so a silent skip becomes a hard boot failure", () => {
+    // A check_column on approved_views — without it, a skipped push exits 0 and
+    // the governance-view registry is silently lost (proposals fail to persist).
+    expect(ENTRYPOINT).toMatch(/check_column\s+"approved_views"/);
+  });
+});

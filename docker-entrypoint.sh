@@ -16,7 +16,7 @@ set -euo pipefail
 # suppress the rename-vs-create prompt on non-TTY stdin (it errors with
 # "Interactive prompts require a TTY terminal"). Pre-creating with CREATE
 # TABLE IF NOT EXISTS sidesteps the question entirely.
-for SQL in drizzle/0004_proposals.sql drizzle/0005_notification.sql drizzle/0006_member_context_and_blockers.sql; do
+for SQL in drizzle/0004_proposals.sql drizzle/0005_notification.sql drizzle/0006_member_context_and_blockers.sql drizzle/0007_raw_inbox.sql drizzle/0008_approved_views.sql; do
   if [ -f "$SQL" ]; then
     echo "[entrypoint] applying $SQL..."
     psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$SQL"
@@ -89,6 +89,10 @@ check_column "member"             "started_at"
 check_column "notification"       "recipient_member_id"
 # Migration 0006: member_context table
 check_column "member_context"     "member_id"
+# Migration 0008: approved_views (governed-view registry). This table is a NEW
+# table push silently skips on non-TTY stdin — verifying it is what turns that
+# skip from a silent loss of the registry into a loud boot failure.
+check_column "approved_views"     "descriptors"
 
 if [ "$VERIFY_FAIL" -ne 0 ]; then
   echo "[entrypoint] FATAL: schema verification failed after push — one or more critical columns are absent." >&2
