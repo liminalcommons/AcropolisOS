@@ -40,6 +40,8 @@ describe("growDecisionToDiffs", () => {
       title: { type: "string", required: false },
       capacity_max: { type: "string", required: false },
     });
+    // GROW classifies the new type (workshop_session -> "session" -> event)
+    expect(structural!.new_object_types.WorkshopSession.kind).toBe("event");
   });
 
   it("add_optional_field -> additive diff keyed by the REAL existing Pascal type, optional fields", () => {
@@ -71,6 +73,7 @@ describe("growDecisionToDiffs", () => {
     };
     const { structural } = growDecisionToDiffs(decision, ontology);
     expect(Object.keys(structural!.new_object_types)).toEqual(["Booking"]);
+    expect(structural!.new_object_types.Booking.kind).toBe("commitment"); // GROW classified it
     // guest_email -> Guest (exists in the fixture); nights -> no match
     expect(structural!.new_link_types).toEqual({
       booking_links_guest: { from: "Booking", to: "Guest", cardinality: "many-to-many" },
