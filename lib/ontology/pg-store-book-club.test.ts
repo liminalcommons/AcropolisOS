@@ -4,7 +4,7 @@
 //
 // HERMETIC: no codegen, no DB, no docker. createInMemoryStore(typeNames) builds
 // the store from the LOADED ontology's type names; loadOntology reads YAML from
-// seed/book-club-org. schema.generated.ts is never touched.
+// scenarios/book-club-org/ontology. schema.generated.ts is never touched.
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -16,7 +16,7 @@ import {
 import { loadOntology } from "./load";
 import type { Actor } from "../ctx";
 
-const BC = path.resolve(__dirname, "..", "..", "seed", "book-club-org");
+const BC = path.resolve(__dirname, "..", "..", "scenarios", "book-club-org", "ontology");
 
 const steward: Actor = {
   userId: "00000000-0000-4000-8000-000000000001",

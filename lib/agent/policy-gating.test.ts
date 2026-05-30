@@ -27,8 +27,8 @@ import { runApplyActionTool, getToolsForActor } from "./tool-gating";
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
 const SMALL_COMMUNITY = path.join(
   PKG_ROOT,
-  "seed",
-  "small-community",
+  "scenarios",
+  "small-community", "ontology",
 );
 
 const stewardActor: Actor = {

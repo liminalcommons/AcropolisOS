@@ -5,10 +5,10 @@ import path from "node:path";
 
 describe("TABLES registry emission", () => {
   it("emits a TABLES const keyed by every object type name", async () => {
-    // Use the same seed the codegen pipeline defaults to (seed/small-community).
+    // Use the same seed the codegen pipeline defaults to (scenarios/small-community/ontology).
     // NOTE: generateDrizzleModule is the actual exported name (plan assumed generateDrizzleSchema).
     const ontology = await loadOntology(
-      path.resolve(__dirname, "../../seed/small-community"),
+      path.resolve(__dirname, "../../scenarios/small-community/ontology"),
     );
     const out = generateDrizzleModule(ontology);
     expect(out).toContain("export const TABLES");

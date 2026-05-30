@@ -18,9 +18,9 @@ import { describe, expect, it } from "vitest";
 import { loadOntology } from "./load";
 
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
-const SEED_DIR = path.join(PKG_ROOT, "seed", "small-community");
+const SEED_DIR = path.join(PKG_ROOT, "scenarios", "small-community", "ontology");
 
-describe("seed/small-community — delete_member action_type", () => {
+describe("scenarios/small-community/ontology — delete_member action_type", () => {
   it("is declared with deletes:Member + agent_policy:confirm_if_unfamiliar + steward-only permissions", async () => {
     const ontology = await loadOntology(SEED_DIR);
     const def = ontology.action_types.delete_member;

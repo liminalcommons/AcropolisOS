@@ -21,7 +21,7 @@ import type { Member, AgentBlocker } from "@/lib/ontology/types.generated";
 import type { Ontology } from "@/lib/ontology/schema";
 import { buildMeReadTools } from "./read-tools-me";
 
-const SEED_ROOT = path.resolve(__dirname, "..", "..", "seed", "small-community");
+const SEED_ROOT = path.resolve(__dirname, "..", "..", "scenarios", "small-community", "ontology");
 
 const memberA: Actor = {
   userId: "00000000-0000-4000-8000-0000000000aa",

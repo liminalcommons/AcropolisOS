@@ -28,7 +28,7 @@ export async function runOntologyCodegen(
 ): Promise<OntologyCodegenResult> {
   const start = Date.now();
   const { pkgRoot, seedName = "small-community" } = options;
-  const seedRoot = path.join(pkgRoot, "seed", seedName, "ontology");
+  const seedRoot = path.join(pkgRoot, "scenarios", seedName, "ontology");
   const ontologyOutDir = path.join(pkgRoot, "lib", "ontology");
   const agentOutDir = path.join(pkgRoot, "lib", "agent");
   const dbOutDir = path.join(pkgRoot, "lib", "db");

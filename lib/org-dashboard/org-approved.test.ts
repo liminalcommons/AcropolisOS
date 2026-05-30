@@ -6,7 +6,7 @@ import { adminDefaultBoard } from "@/lib/org-dashboard/store";
 import { loadOntology } from "@/lib/ontology/load";
 import path from "node:path";
 
-const SMALL = path.resolve(__dirname, "..", "..", "seed", "small-community");
+const SMALL = path.resolve(__dirname, "..", "..", "scenarios", "small-community", "ontology");
 
 describe("org floor + approved org views", () => {
   it("an org-scope approved view appends after the admin floor", async () => {

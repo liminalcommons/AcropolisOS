@@ -1,0 +1,6 @@
+{
+  "name": "hostel",
+  "description": "A hostel: beds, rooms, bookings, guests, shifts, work-trade agreements, and incident logs.",
+  "default": false,
+  "version": "1.0.0"
+}

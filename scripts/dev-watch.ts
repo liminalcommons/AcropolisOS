@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     debounceMs: Number(process.env.ACROPOLISOS_WATCH_DEBOUNCE_MS ?? 150),
   };
 
-  const seedRoot = path.join(opts.pkgRoot, "seed", opts.seedName, "ontology");
+  const seedRoot = path.join(opts.pkgRoot, "scenarios", opts.seedName, "ontology");
   const viewsRoot = path.join(opts.pkgRoot, "views");
 
   process.stdout.write(

@@ -1,0 +1,6 @@
+{
+  "name": "book-club-org",
+  "description": "A book-club organization: books, reading meetings, members, events, and governance.",
+  "default": false,
+  "version": "1.0.0"
+}

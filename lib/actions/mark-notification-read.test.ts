@@ -21,7 +21,7 @@ import { InMemoryAuditStore } from "../audit/writer";
 import type { Ontology } from "../ontology/schema";
 import type { SideEffectAdapters } from "./side-effects";
 
-const SEED_ROOT = path.resolve(__dirname, "..", "..", "seed", "small-community");
+const SEED_ROOT = path.resolve(__dirname, "..", "..", "scenarios", "small-community", "ontology");
 const FUNCTIONS_DIR = path.resolve(__dirname, "..", "..", "functions");
 
 const memberA: Actor = {

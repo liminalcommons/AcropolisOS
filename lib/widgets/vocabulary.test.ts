@@ -9,7 +9,8 @@ import {
   deriveRequiredRefs,
 } from "@/lib/widgets/vocabulary";
 
-const seed = (n: string) => path.resolve(__dirname, "..", "..", "seed", n);
+const seed = (n: string) =>
+  path.resolve(__dirname, "..", "..", "scenarios", n, "ontology");
 
 describe("deriveVocabulary — shipped (hostel) ontology", () => {
   let onto: Ontology;
@@ -41,7 +42,7 @@ describe("deriveVocabulary — shipped (hostel) ontology", () => {
 
 describe("deriveVocabulary — NON-hostel ontology (the litmus)", () => {
   let onto: Ontology;
-  beforeAll(async () => { onto = await loadOntology(path.resolve(__dirname, "../../seed/book-club")); });
+  beforeAll(async () => { onto = await loadOntology(path.resolve(__dirname, "../../scenarios/book-club/ontology")); });
 
   it("accepts a completely different org's types with zero hostel leakage", () => {
     const v = deriveVocabulary(onto);

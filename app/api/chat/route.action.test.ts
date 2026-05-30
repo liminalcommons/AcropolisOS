@@ -31,7 +31,7 @@ import { InMemoryAuditStore } from "@/lib/audit/writer";
 import type { Actor } from "@/lib/ctx";
 
 const PKG_ROOT = path.resolve(__dirname, "..", "..", "..");
-const SEED_ROOT = path.join(PKG_ROOT, "seed", "small-community");
+const SEED_ROOT = path.join(PKG_ROOT, "scenarios", "small-community", "ontology");
 const FUNCTIONS_DIR = path.join(PKG_ROOT, "functions");
 
 // Seeded member id is generated at insert; the test seeds its own row.
@@ -58,7 +58,7 @@ vi.mock("@/lib/agent/chat-runtime", async () => {
   const { loadOntology } = await import("@/lib/ontology/load");
   const PKG_ROOT_INNER = path.resolve(__dirname, "..", "..", "..");
   const ontology = await loadOntology(
-    path.join(PKG_ROOT_INNER, "seed", "small-community"),
+    path.join(PKG_ROOT_INNER, "scenarios", "small-community", "ontology"),
   );
   return {
     buildChatRuntime: async () => ({

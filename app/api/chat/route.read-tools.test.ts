@@ -41,7 +41,7 @@ vi.mock("@/lib/agent/chat-runtime", async () => {
   const { buildReadToolsForActor } = await import("@/lib/agent/read-tools");
   const PKG_ROOT_INNER = path.resolve(__dirname, "..", "..", "..");
   const ontology = await loadOntology(
-    path.join(PKG_ROOT_INNER, "seed", "small-community"),
+    path.join(PKG_ROOT_INNER, "scenarios", "small-community", "ontology"),
   );
   return {
     buildChatRuntime: async () => {

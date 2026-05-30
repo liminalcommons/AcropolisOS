@@ -13,9 +13,8 @@ const SEED_DIR = path.join(
   __dirname,
   "..",
   "..",
-  "seed",
-  "small-community",
-  "ontology",
+  "scenarios",
+  "small-community", "ontology",
 );
 
 describe("inngestFunctionIdFor", () => {

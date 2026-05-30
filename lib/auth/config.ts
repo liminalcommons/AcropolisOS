@@ -11,7 +11,7 @@ const DEFAULT_DATA_DIR = path.join(PKG_ROOT, "data");
 const DEFAULT_USERS_FILE = path.join(DEFAULT_DATA_DIR, "users.json");
 const DEFAULT_ONTOLOGY_DIR = path.join(
   PKG_ROOT,
-  "seed",
+  "scenarios",
   "small-community",
   "ontology",
 );

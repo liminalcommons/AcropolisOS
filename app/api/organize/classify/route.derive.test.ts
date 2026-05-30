@@ -2,7 +2,7 @@
 //
 // Tests that buildTargetVocab() derives types/fields from the loaded ontology
 // (not hostel hardcoded literals). The ontology dir is redirected to
-// seed/book-club so we can assert book-club types appear and hostel types don't.
+// scenarios/book-club/ontology so we can assert book-club types appear and hostel types don't.
 //
 // Heavy next-auth / db transitive deps are mocked so the route module can be
 // imported in a pure vitest environment.
@@ -31,7 +31,7 @@ vi.mock("@/lib/agent/mastra", () => ({ buildLanguageModel: vi.fn() }));
 vi.mock("@/lib/agent/extract-json", () => ({ extractJson: vi.fn() }));
 vi.mock("ai", () => ({ generateText: vi.fn() }));
 
-// Redirect the ontology dir to seed/book-club — the litmus.
+// Redirect the ontology dir to scenarios/book-club/ontology — the litmus.
 // Use import.meta to compute the path inline (vi.mock factories are hoisted,
 // so closures over module-level consts would see undefined).
 vi.mock("@/lib/setup/paths", async () => {
@@ -44,11 +44,8 @@ vi.mock("@/lib/setup/paths", async () => {
   );
   return {
     getRuntimeOntologyDir: () =>
-      path.resolve(here, "../../../../seed/book-club"),
+      path.resolve(here, "../../../../scenarios/book-club/ontology"),
     getEnvFile: () => "",
-    getSeedRoot: () => "",
-    isSeedName: () => false,
-    SEED_NAMES: [],
   };
 });
 

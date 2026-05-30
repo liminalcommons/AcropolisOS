@@ -3,7 +3,7 @@
 // Proves commitProposalCore derives its target type+table from the LOADED
 // ontology (via resolveTargetTable), not from hostel literals.
 //
-// The ontology dir is redirected to seed/book-club. `book` is a valid type in
+// The ontology dir is redirected to scenarios/book-club/ontology. `book` is a valid type in
 // that ontology's vocabulary but has NO entry in the generated (hostel-genned)
 // TABLES registry — so resolveTargetTable is fail-closed and commit must return
 // { status: "invalid_target_type" } rather than reaching SQL.
@@ -22,13 +22,13 @@ vi.mock("@/lib/agent/chat-runtime", async () => {
   };
 });
 
-// Redirect the runtime ontology dir to seed/book-club — the litmus.
+// Redirect the runtime ontology dir to scenarios/book-club/ontology — the litmus.
 vi.mock("@/lib/setup/paths", async () => {
   const path = await import("node:path");
   const { fileURLToPath } = await import("node:url");
   const here = path.resolve(fileURLToPath(import.meta.url), "..");
   return {
-    getRuntimeOntologyDir: () => path.resolve(here, "../../seed/book-club"),
+    getRuntimeOntologyDir: () => path.resolve(here, "../../scenarios/book-club/ontology"),
   };
 });
 

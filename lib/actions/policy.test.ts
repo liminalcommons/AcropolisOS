@@ -27,7 +27,7 @@ import type { Ontology } from "../ontology/schema";
 import { resolveActionPolicy } from "./policy";
 
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
-const SEED_DIR = path.join(PKG_ROOT, "seed", "small-community");
+const SEED_DIR = path.join(PKG_ROOT, "scenarios", "small-community", "ontology");
 
 const steward: Actor = {
   userId: "u-steward",

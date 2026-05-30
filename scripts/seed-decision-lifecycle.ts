@@ -30,7 +30,7 @@ import { computePathwayPreference } from "../lib/blockers/pathway-preference";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Proof-time policy map — covers all actions in the seed's action_audit rows.
-// Source: seed/hostel/action-types/*.yaml + seed/small-community/action-types/*.yaml
+// Source: scenarios/hostel/ontology/action-types/*.yaml + scenarios/small-community/ontology/action-types/*.yaml
 // ─────────────────────────────────────────────────────────────────────────────
 const POLICY_MAP: Record<string, "auto_apply" | "always_confirm"> = {
   // hostel

@@ -11,7 +11,7 @@ const PKG_ROOT = path.resolve(__dirname, "..", "..");
 // Seed root layout is: seed/<community>/{properties.yaml, roles.yaml,
 // link-types.yaml, object-types/, action-types/}. There is no nested
 // `ontology/` directory — loadOntology takes the community root directly.
-const SMALL_COMMUNITY = path.join(PKG_ROOT, "seed", "small-community");
+const SMALL_COMMUNITY = path.join(PKG_ROOT, "scenarios", "small-community", "ontology");
 
 describe("DATA_AUDIT_TABLE_DDL", () => {
   it("declares the generic data_audit table with the required columns", () => {

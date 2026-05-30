@@ -33,7 +33,7 @@ import type { Ontology } from "../ontology/schema";
 import { invokeAction } from "./invoke";
 
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
-const SMALL_COMMUNITY = path.join(PKG_ROOT, "seed", "small-community");
+const SMALL_COMMUNITY = path.join(PKG_ROOT, "scenarios", "small-community", "ontology");
 
 // Real v4 UUIDs (gotcha_acropolisos_zod4_uuid_strict).
 const MEMBER_A_ID = "11111111-1111-4111-8111-111111111111";

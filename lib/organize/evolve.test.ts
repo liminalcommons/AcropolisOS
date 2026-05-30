@@ -4,7 +4,7 @@ import { evaluateGrow } from "./evolve";
 import { loadOntology } from "../ontology/load";
 import path from "node:path";
 
-const SMALL = path.resolve(__dirname, "..", "..", "seed", "small-community");
+const SMALL = path.resolve(__dirname, "..", "..", "scenarios", "small-community", "ontology");
 
 describe("evaluateGrow — the reversibility dial (§6.2)", () => {
   it("an unknown field on an EXISTING type is additive+reversible → auto-apply, with evidence", async () => {

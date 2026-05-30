@@ -46,7 +46,7 @@ describe("deriveDefaultBoard — hostel ontology", () => {
 
 describe("deriveDefaultBoard — NON-hostel litmus (book-club)", () => {
   let onto: Ontology;
-  beforeAll(async () => { onto = await loadOntology(path.resolve(__dirname, "../../seed/book-club")); });
+  beforeAll(async () => { onto = await loadOntology(path.resolve(__dirname, "../../scenarios/book-club/ontology")); });
 
   it("derives over book-club types with zero hostel leakage", () => {
     const board = deriveDefaultBoard(onto, ALL);

@@ -30,8 +30,8 @@ const SEED_DIR = path.join(
   __dirname,
   "..",
   "..",
-  "seed",
-  "small-community",
+  "scenarios",
+  "small-community", "ontology",
 );
 
 let ontology: Ontology;

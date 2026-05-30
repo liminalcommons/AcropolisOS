@@ -14,7 +14,7 @@ import { loadOntology } from "@/lib/ontology/load";
 import type { Member, MemberContext } from "@/lib/ontology/types.generated";
 import { getOrCreateMemberContext } from "./member-context";
 
-const SEED_ROOT = path.resolve(__dirname, "..", "..", "..", "seed", "small-community");
+const SEED_ROOT = path.resolve(__dirname, "..", "..", "..", "scenarios", "small-community", "ontology");
 
 const memberA: Actor = {
   userId: "00000000-0000-4000-8000-0000000000aa",

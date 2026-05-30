@@ -14,8 +14,8 @@ const SEED_ROOT = path.resolve(
   __dirname,
   "..",
   "..",
-  "seed",
-  "small-community",
+  "scenarios",
+  "small-community", "ontology",
 );
 
 const stewardActor: Actor = {

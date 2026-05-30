@@ -11,20 +11,12 @@ export function getEnvFile(): string {
   return process.env.ACROPOLISOS_ENV_FILE ?? path.join(PKG_ROOT, ".env");
 }
 
-export function getSeedRoot(): string {
-  return process.env.ACROPOLISOS_SEED_ROOT ?? path.join(PKG_ROOT, "seed");
-}
-
+// The runtime, MUTABLE loaded-ontology dir. First-run setup copies a chosen
+// scenario's ontology INTO here; the running app and the proposal pipeline
+// read and mutate it. Distinct from scenarios/<name>/ontology (the read-only
+// templates) — scenario discovery + path helpers live in ./scenarios.
 export function getRuntimeOntologyDir(): string {
   return (
-    process.env.ACROPOLISOS_ONTOLOGY_DIR ??
-    path.join(PKG_ROOT, "ontology")
+    process.env.ACROPOLISOS_ONTOLOGY_DIR ?? path.join(PKG_ROOT, "ontology")
   );
-}
-
-export const SEED_NAMES = ["empty", "small-community"] as const;
-export type SeedName = (typeof SEED_NAMES)[number];
-
-export function isSeedName(v: string): v is SeedName {
-  return (SEED_NAMES as readonly string[]).includes(v);
 }

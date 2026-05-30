@@ -99,8 +99,7 @@ function resolveProperty(
   };
 }
 
-async function readDataDir(bundleRoot: string): Promise<DataFile[]> {
-  const dataDir = path.join(bundleRoot, "data");
+async function readDataDir(dataDir: string): Promise<DataFile[]> {
   let names: string[];
   try {
     names = await readdir(dataDir);
@@ -274,9 +273,12 @@ interface AuditResult {
 
 async function auditBundle(bundleName: string): Promise<AuditResult> {
   const pkgRoot = path.resolve(__dirname, "..");
-  const bundleRoot = path.join(pkgRoot, "seed", bundleName);
-  const ontology: Ontology = await loadOntology(bundleRoot);
-  const dataFiles = await readDataDir(bundleRoot);
+  const ontology: Ontology = await loadOntology(
+    path.join(pkgRoot, "scenarios", bundleName, "ontology"),
+  );
+  const dataFiles = await readDataDir(
+    path.join(pkgRoot, "scenarios", bundleName, "seed"),
+  );
 
   const violations: Violation[] = [];
   const objectTypeCounts: Record<string, number> = {};
@@ -425,7 +427,7 @@ async function collectBundleData(
   ontology: Ontology,
 ): Promise<BundleData> {
   const pkgRoot = path.resolve(__dirname, "..");
-  const dataDir = path.join(pkgRoot, "seed", bundleName, "data");
+  const dataDir = path.join(pkgRoot, "scenarios", bundleName, "seed");
   let names: string[];
   try {
     names = await readdir(dataDir);
@@ -521,15 +523,22 @@ async function main(): Promise<void> {
   }
 
   const pkgRoot = path.resolve(__dirname, "..");
-  const bundleRoot = path.join(pkgRoot, "seed", bundleName);
-  const ontology = await loadOntology(bundleRoot);
+  const ontology = await loadOntology(
+    path.join(pkgRoot, "scenarios", bundleName, "ontology"),
+  );
   const data = await collectBundleData(bundleName, ontology);
   const { combined } = emitBundleSql(ontology, data, {
     schema,
     dropFirst: true,
   });
 
-  const sqlPath = path.join(bundleRoot, `${bundleName}.generated.sql`);
+  const sqlPath = path.join(
+    pkgRoot,
+    "scenarios",
+    bundleName,
+    "seed",
+    `${bundleName}.generated.sql`,
+  );
   await writeFile(sqlPath, combined, "utf8");
   process.stdout.write(`\nWrote ${sqlPath} (${combined.length} bytes)\n`);
 

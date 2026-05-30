@@ -327,7 +327,7 @@ describe("read-api is ontology-derived (non-hostel)", () => {
   // the SAME fence with ZERO hostel-type leakage. The structural whitelist is
   // derived from the LOADED ontology, never from hostel literals.
   it("derives the book-club whitelist and rejects a hostel type", async () => {
-    const onto = await loadOntology(path.resolve(__dirname, "../../seed/book-club"));
+    const onto = await loadOntology(path.resolve(__dirname, "../../scenarios/book-club/ontology"));
     const vocab = deriveVocabulary(onto);
     // 'book' exists in the LOADED ontology → in the structural whitelist.
     expect(vocab.validTypes).toContain("book");
@@ -343,7 +343,7 @@ describe("read-api is ontology-derived (non-hostel)", () => {
     // missing key, yielding an `undefined` table object cast to a real table, and
     // getTableName(undefined) would throw or (worse) a stray identifier would
     // reach SQL. The single-authority guard closes that latent cast.
-    const onto = await loadOntology(path.resolve(__dirname, "../../seed/book-club"));
+    const onto = await loadOntology(path.resolve(__dirname, "../../scenarios/book-club/ontology"));
     const db = makeStubDb();
     const api = createReadOnlyDataApi(db.asDatabase(), () => true, onto);
     const denied = await api.select("book", { columns: ["title"], limit: 5 });

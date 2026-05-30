@@ -1,12 +1,11 @@
-import path from "node:path";
 import { isSetupComplete, markSetupComplete } from "@/lib/setup/state";
 import { getSetupFile } from "@/lib/setup/config";
+import { getRuntimeOntologyDir } from "@/lib/setup/paths";
 import {
-  getRuntimeOntologyDir,
-  getSeedRoot,
-  isSeedName,
-  SEED_NAMES,
-} from "@/lib/setup/paths";
+  discoverScenarios,
+  getScenariosRoot,
+  scenarioOntologyDir,
+} from "@/lib/setup/scenarios";
 import { copySeedOntology } from "@/lib/setup/seed-copy";
 import { runCodegen, runMigrations } from "@/lib/setup/codegen-runner";
 
@@ -29,14 +28,22 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const { seed } = body as { seed?: unknown };
-  if (typeof seed !== "string" || !isSeedName(seed)) {
+  if (typeof seed !== "string") {
+    return Response.json({ error: "seed must be a string" }, { status: 400 });
+  }
+  const scenarios = await discoverScenarios(getScenariosRoot());
+  if (!scenarios.some((s) => s.manifest.name === seed)) {
     return Response.json(
-      { error: `seed must be one of ${SEED_NAMES.join(", ")}` },
+      {
+        error: `seed must be one of ${scenarios
+          .map((s) => s.manifest.name)
+          .join(", ")}`,
+      },
       { status: 400 },
     );
   }
 
-  const srcOntology = path.join(getSeedRoot(), seed);
+  const srcOntology = scenarioOntologyDir(seed);
   const destOntology = getRuntimeOntologyDir();
 
   try {

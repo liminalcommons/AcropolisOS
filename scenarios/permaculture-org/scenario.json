@@ -1,0 +1,6 @@
+{
+  "name": "permaculture-org",
+  "description": "A permaculture project: sites, plantings, observations, work parties, tasks, and harvests.",
+  "default": false,
+  "version": "1.0.0"
+}

@@ -12,9 +12,8 @@ import {
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
 const SMALL_COMMUNITY = path.join(
   PKG_ROOT,
-  "seed",
-  "small-community",
-  "ontology",
+  "scenarios",
+  "small-community", "ontology",
 );
 
 function evalModuleSource(source: string): Record<string, unknown> {

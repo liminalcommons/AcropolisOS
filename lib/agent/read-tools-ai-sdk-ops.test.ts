@@ -7,7 +7,7 @@ import { createInMemoryStore } from "../ontology/ctx";
 import { buildObjectPermissionsMap } from "../ontology/ctx";
 import path from "node:path";
 
-const SMALL = path.resolve(__dirname, "..", "..", "seed", "small-community");
+const SMALL = path.resolve(__dirname, "..", "..", "scenarios", "small-community", "ontology");
 
 describe("buildReadToolsAiSdk op coverage", () => {
   it("surfaces query/read/describe AND traverse/sample (all FENCED) so proposals are evidence-grounded", async () => {

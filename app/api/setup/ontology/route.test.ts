@@ -5,37 +5,38 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let dir: string;
 let setupFile: string;
-let seedRoot: string;
+let scenariosRoot: string;
 let runtimeOntologyDir: string;
+
+async function writeScenario(name: string, rolesYaml: string): Promise<void> {
+  const ontologyDir = path.join(scenariosRoot, name, "ontology");
+  await mkdir(ontologyDir, { recursive: true });
+  await writeFile(
+    path.join(scenariosRoot, name, "scenario.json"),
+    JSON.stringify({ name, description: name, default: false, version: "1.0.0" }),
+    "utf8",
+  );
+  await writeFile(path.join(ontologyDir, "roles.yaml"), rolesYaml, "utf8");
+}
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(tmpdir(), "acrop-route-ont-"));
   setupFile = path.join(dir, "setup.json");
-  seedRoot = path.join(dir, "seed");
+  scenariosRoot = path.join(dir, "scenarios");
   runtimeOntologyDir = path.join(dir, "ontology");
 
-  await mkdir(path.join(seedRoot, "empty"), { recursive: true });
-  await writeFile(
-    path.join(seedRoot, "empty", "roles.yaml"),
-    "roles: []\n",
-    "utf8",
-  );
-  await mkdir(path.join(seedRoot, "small-community"), { recursive: true });
-  await writeFile(
-    path.join(seedRoot, "small-community", "roles.yaml"),
-    "roles:\n  - name: member\n",
-    "utf8",
-  );
+  await writeScenario("empty", "roles: []\n");
+  await writeScenario("small-community", "roles:\n  - name: member\n");
 
   process.env.ACROPOLISOS_SETUP_FILE = setupFile;
-  process.env.ACROPOLISOS_SEED_ROOT = seedRoot;
+  process.env.ACROPOLISOS_SCENARIOS_ROOT = scenariosRoot;
   process.env.ACROPOLISOS_ONTOLOGY_DIR = runtimeOntologyDir;
   vi.resetModules();
 });
 
 afterEach(async () => {
   delete process.env.ACROPOLISOS_SETUP_FILE;
-  delete process.env.ACROPOLISOS_SEED_ROOT;
+  delete process.env.ACROPOLISOS_SCENARIOS_ROOT;
   delete process.env.ACROPOLISOS_ONTOLOGY_DIR;
   await rm(dir, { recursive: true, force: true });
 });

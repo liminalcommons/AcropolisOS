@@ -5,10 +5,10 @@ import { loadOntology } from "./load";
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
 const SMALL_COMMUNITY = path.join(
   PKG_ROOT,
-  "seed",
-  "small-community",
+  "scenarios",
+  "small-community", "ontology",
 );
-const EMPTY = path.join(PKG_ROOT, "seed", "empty");
+const EMPTY = path.join(PKG_ROOT, "scenarios", "empty", "ontology");
 
 describe("seed: small-community", () => {
   it("loads and passes integrity check", async () => {

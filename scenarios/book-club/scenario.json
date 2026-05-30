@@ -1,0 +1,6 @@
+{
+  "name": "book-club",
+  "description": "A minimal book club: books and reading meetings.",
+  "default": false,
+  "version": "1.0.0"
+}

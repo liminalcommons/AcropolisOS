@@ -7,7 +7,7 @@ import { deriveVocabulary } from "../widgets/vocabulary";
 import { resolveTargetTable } from "./target-table";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const SEED_BOOK_CLUB = path.resolve(HERE, "../../seed/book-club");
+const SEED_BOOK_CLUB = path.resolve(HERE, "../../scenarios/book-club/ontology");
 
 describe("resolveTargetTable — ontology-derived, fail-closed", () => {
   it("resolves every type in the loaded (runtime) ontology to a real table", async () => {

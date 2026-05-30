@@ -16,8 +16,8 @@ import { loadOntology } from "../ontology/load";
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
 const SOURCE_SEED = path.join(
   PKG_ROOT,
-  "seed",
-  "small-community",
+  "scenarios",
+  "small-community", "ontology",
 );
 
 interface Sandbox {
@@ -29,7 +29,7 @@ interface Sandbox {
 async function makeSandbox(): Promise<Sandbox> {
   const root = await mkdtemp(path.join(tmpdir(), "apply-int-"));
   const packageRoot = path.join(root, "pkg");
-  const ontologyRoot = path.join(packageRoot, "seed", "small-community");
+  const ontologyRoot = path.join(packageRoot, "scenarios", "small-community", "ontology");
   await mkdir(path.dirname(ontologyRoot), { recursive: true });
   await cp(SOURCE_SEED, ontologyRoot, { recursive: true });
   // Also create empty lib/ontology, lib/agent, lib/db so codegen has output dirs.
@@ -191,13 +191,13 @@ describe("applyProposal — integration with real YAML + codegen adapters", () =
 
     // Seed + ingest sibling artifacts
     const seedFile = await readFile(
-      path.join(sb.packageRoot, "seed", "small-community", "seeds", "Thread.jsonl"),
+      path.join(sb.packageRoot, "scenarios", "small-community", "ontology", "seeds", "Thread.jsonl"),
       "utf8",
     );
     expect(seedFile).toMatch(/"id":"a"/);
 
     const ingestFile = await readFile(
-      path.join(sb.packageRoot, "seed", "small-community", "ingests", "email_to_thread.yaml"),
+      path.join(sb.packageRoot, "scenarios", "small-community", "ontology", "ingests", "email_to_thread.yaml"),
       "utf8",
     );
     expect(ingestFile).toMatch(/target_object_type: Thread/);

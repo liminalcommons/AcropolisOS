@@ -15,7 +15,7 @@ vi.mock("@/lib/agent/chat-runtime", async () => {
   const { InMemoryAuditStore } = await import("@/lib/audit/writer");
   const PKG_ROOT = path.resolve(__dirname, "..", "..", "..");
   const ontology = await loadOntology(
-    path.join(PKG_ROOT, "seed", "small-community"),
+    path.join(PKG_ROOT, "scenarios", "small-community", "ontology"),
   );
   return {
     buildChatRuntime: async () => {

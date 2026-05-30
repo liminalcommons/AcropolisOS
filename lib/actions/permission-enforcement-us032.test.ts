@@ -57,8 +57,8 @@ const SEED_DIR = path.join(
   __dirname,
   "..",
   "..",
-  "seed",
-  "small-community",
+  "scenarios",
+  "small-community", "ontology",
 );
 
 const FIXTURE_ROOT = path.join(__dirname, "__test_fixtures__");

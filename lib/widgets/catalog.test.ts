@@ -2,7 +2,7 @@
 //
 // The membership of config.type and the column/field whitelist are derived from
 // the LOADED ontology (deriveVocabulary), not from hostel literals. Proven with a
-// NON-hostel ontology (seed/book-club): a `book` over its column `title` is
+// NON-hostel ontology (scenarios/book-club/ontology): a `book` over its column `title` is
 // accepted; a hostel `bed` is rejected; an unknown column on a valid type is
 // rejected. Zero hostel leakage.
 //
@@ -19,7 +19,7 @@ import { validateWidgetConfig } from "@/lib/widgets/catalog";
 describe("validateWidgetConfig is ontology-aware", () => {
   let book: Ontology;
   beforeAll(async () => {
-    book = await loadOntology(path.resolve(__dirname, "../../seed/book-club"));
+    book = await loadOntology(path.resolve(__dirname, "../../scenarios/book-club/ontology"));
   });
 
   it("accepts a data_table over a type that exists in the loaded ontology", () => {
@@ -52,8 +52,8 @@ describe("validateWidgetConfig — calendar kind is ontology-derived (not hostel
   let hostelOntology: Ontology;
 
   beforeAll(async () => {
-    bookClubOntology = await loadOntology(path.resolve(__dirname, "../../seed/book-club"));
-    hostelOntology = await loadOntology(path.resolve(__dirname, "../../seed/hostel"));
+    bookClubOntology = await loadOntology(path.resolve(__dirname, "../../scenarios/book-club/ontology"));
+    hostelOntology = await loadOntology(path.resolve(__dirname, "../../scenarios/hostel/ontology"));
   });
 
   // REGRESSION SENTINEL: non-hostel type with a real date field must now be accepted.
@@ -80,7 +80,7 @@ describe("validateWidgetConfig — calendar kind is ontology-derived (not hostel
   });
 
   // Hostel path must continue to work after the fix.
-  // seed/hostel/object-types/event.yaml: starts_at is the date property.
+  // scenarios/hostel/ontology/object-types/event.yaml: starts_at is the date property.
   it("accepts a hostel calendar (event / starts_at) — hostel path still works", () => {
     const r = validateWidgetConfig(
       "calendar",

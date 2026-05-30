@@ -1,0 +1,6 @@
+{
+  "name": "empty",
+  "description": "A blank slate — roles only. Build your ontology from scratch by dropping in your own data.",
+  "default": false,
+  "version": "1.0.0"
+}

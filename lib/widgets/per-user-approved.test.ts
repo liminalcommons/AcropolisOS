@@ -6,7 +6,7 @@ import { deriveDefaultBoard } from "@/lib/widgets/derive-board";
 import { loadOntology } from "@/lib/ontology/load";
 import path from "node:path";
 
-const SMALL = path.resolve(__dirname, "..", "..", "seed", "small-community");
+const SMALL = path.resolve(__dirname, "..", "..", "scenarios", "small-community", "ontology");
 
 // This test pins the COMPOSITION used by resolvePerUserDashboard's floor branch:
 // derived floor → merge approved → run. We assert the composed descriptor list

@@ -35,8 +35,8 @@ import { loadOntology } from "./load";
 import type { Booking, Member } from "./types.generated";
 
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
-const SMALL_COMMUNITY = path.join(PKG_ROOT, "seed", "small-community");
-const HOSTEL_SEED = path.join(PKG_ROOT, "seed", "hostel");
+const SMALL_COMMUNITY = path.join(PKG_ROOT, "scenarios", "small-community", "ontology");
+const HOSTEL_SEED = path.join(PKG_ROOT, "scenarios", "hostel", "ontology");
 
 // Real v4 UUIDs (gotcha_acropolisos_zod4_uuid_strict).
 const MEMBER_A_ID = "11111111-1111-4111-8111-111111111111";

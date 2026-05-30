@@ -10,7 +10,7 @@ import { runOntologyCodegen } from "./codegen-runner";
 const fixtureRoot = path.resolve(__dirname, ".__codegen_fixture__");
 
 async function writeFixture(): Promise<void> {
-  const seedDir = path.join(fixtureRoot, "seed", "tiny", "ontology");
+  const seedDir = path.join(fixtureRoot, "scenarios", "tiny", "ontology");
   const objectsDir = path.join(seedDir, "object-types");
   const actionsDir = path.join(seedDir, "action-types");
   await mkdir(objectsDir, { recursive: true });
@@ -121,7 +121,7 @@ describe("runOntologyCodegen", () => {
     await writeFile(
       path.join(
         fixtureRoot,
-        "seed",
+        "scenarios",
         "tiny",
         "ontology",
         "object-types",

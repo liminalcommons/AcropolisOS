@@ -50,7 +50,7 @@ vi.mock("@/lib/agent/chat-runtime", async () => {
   const { loadOntology } = await import("@/lib/ontology/load");
   const PKG_ROOT_INNER = path.resolve(__dirname, "..", "..", "..");
   const ontology = await loadOntology(
-    path.join(PKG_ROOT_INNER, "seed", "small-community"),
+    path.join(PKG_ROOT_INNER, "scenarios", "small-community", "ontology"),
   );
   // Import the real notify-stdout + dispatchSideEffectAdapters factory so
   // the route's side-effect runtime fires through to the structured stdout

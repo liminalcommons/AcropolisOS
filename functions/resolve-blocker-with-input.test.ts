@@ -23,7 +23,7 @@ import type { Member, AgentBlocker } from "@/lib/ontology/types.generated";
 import type { Ontology } from "@/lib/ontology/schema";
 import type { SideEffectAdapters } from "@/lib/actions/side-effects";
 
-const SEED_ROOT = path.resolve(__dirname, "..", "seed", "small-community");
+const SEED_ROOT = path.resolve(__dirname, "..", "scenarios", "small-community", "ontology");
 const FUNCTIONS_DIR = path.resolve(__dirname, ".");
 
 const steward: Actor = {
