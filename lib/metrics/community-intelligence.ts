@@ -108,11 +108,19 @@ export const DEFAULT_ESCALATION_ACTIONS: readonly string[] = ["flag_blocker"];
  *   "action", always_confirm actions (human-initiated), and actions with no
  *   registered policy that are not escalation actions.
  */
-export function autonomyRatio(
+export interface AutonomyCounts {
+  autoApplied: number;
+  escalated: number;
+}
+
+// The raw split behind the ratio: auto_applied vs escalated agent-initiated
+// decisions. Rendering "N auto-applied · M escalated" needs the counts, not just
+// the ratio — so this is the single source both the ratio and the UI consume.
+export function autonomyCounts(
   audits: MetricAuditRow[],
   policyOf: PolicyOf,
   escalationActions: readonly string[] = DEFAULT_ESCALATION_ACTIONS
-): number | null {
+): AutonomyCounts {
   const escalationSet = new Set(escalationActions);
   let autoApplied = 0;
   let escalated = 0;
@@ -133,6 +141,15 @@ export function autonomyRatio(
     // they are human-initiated dispositions or not agent decisions.
   }
 
+  return { autoApplied, escalated };
+}
+
+export function autonomyRatio(
+  audits: MetricAuditRow[],
+  policyOf: PolicyOf,
+  escalationActions: readonly string[] = DEFAULT_ESCALATION_ACTIONS
+): number | null {
+  const { autoApplied, escalated } = autonomyCounts(audits, policyOf, escalationActions);
   const denominator = autoApplied + escalated;
   return denominator === 0 ? null : autoApplied / denominator;
 }

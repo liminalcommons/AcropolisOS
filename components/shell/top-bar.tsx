@@ -80,6 +80,14 @@ export function TopBar({
         >
           Organize
         </Link>
+        {canSwitch && (
+          <Link
+            href="/veto-queue"
+            className="rounded-md px-2.5 py-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            Decisions
+          </Link>
+        )}
       </nav>
 
       <div className="ml-auto flex items-center gap-3 shrink-0">
