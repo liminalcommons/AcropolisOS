@@ -37,8 +37,8 @@ describe("growDecisionToDiffs", () => {
     expect(structural).not.toBeNull();
     expect(Object.keys(structural!.new_object_types)).toEqual(["WorkshopSession"]);
     expect(structural!.new_object_types.WorkshopSession.properties).toEqual({
-      title: { type: "string" },
-      capacity_max: { type: "string" },
+      title: { type: "string", required: false },
+      capacity_max: { type: "string", required: false },
     });
   });
 
@@ -53,12 +53,13 @@ describe("growDecisionToDiffs", () => {
     const { additive, structural } = growDecisionToDiffs(decision, ontology);
     expect(structural).toBeNull();
     expect(additive).not.toBeNull();
-    expect(additive!.new_object_types.Guest.properties).toEqual({ dietary_pref: { type: "string" } });
-    expect(additive!.new_object_types.WorkTradeAgreement.properties).toEqual({ skill: { type: "string" } });
-    // additive fields must be OPTIONAL (no required: true -> nullable column, reversible)
+    expect(additive!.new_object_types.Guest.properties).toEqual({ dietary_pref: { type: "string", required: false } });
+    expect(additive!.new_object_types.WorkTradeAgreement.properties).toEqual({ skill: { type: "string", required: false } });
+    // grown fields must be EXPLICITLY optional (required: false -> nullable
+    // column, reversible; omitting it generates a NOT NULL column -> drift/truncate)
     for (const ot of Object.values(additive!.new_object_types)) {
       for (const p of Object.values(ot.properties)) {
-        expect((p as { required?: boolean }).required).toBeUndefined();
+        expect((p as { required?: boolean }).required).toBe(false);
       }
     }
   });

@@ -17,6 +17,7 @@ import { raw_inbox } from "@/lib/db/schema";
 import { isNull } from "drizzle-orm";
 import type { RawInboxRow } from "@/lib/db/schema";
 import { ProposalReviewList } from "./proposal-review-list";
+import { GrowPanel } from "@/components/organize/GrowPanel";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -76,7 +77,12 @@ export default async function OrganizePage(): Promise<React.ReactElement> {
             </p>
           </div>
         ) : (
-          <ProposalReviewList rows={unclassified} isSteward={isSteward} />
+          <>
+            {isSteward && (
+              <GrowPanel rows={unclassified.map((r) => ({ id: r.id, payload: r.payload }))} />
+            )}
+            <ProposalReviewList rows={unclassified} isSteward={isSteward} />
+          </>
         )}
 
       </div>

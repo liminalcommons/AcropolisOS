@@ -41,7 +41,13 @@ function existingPascal(ontology: Ontology, token: string): string | null {
   return Object.keys(ontology.object_types).find((k) => pascalToSnake(k) === snake) ?? null;
 }
 
-const optionalString = () => ({ type: "string" as const });
+// Grown fields MUST be explicitly optional. Codegen treats a field with NO
+// `required` key as NOT NULL (matching the ontology's convention — e.g. `notes`
+// carries `required: false`). Omitting it would generate a NOT NULL column the
+// ALTER adds as nullable -> generated-type/DB drift, and on a fresh push a NOT
+// NULL add triggers a CASCADE truncate. `required: false` keeps it nullable and
+// reversible.
+const optionalString = () => ({ type: "string" as const, required: false });
 
 export function growDecisionToDiffs(decision: GrowDecision, ontology: Ontology): GrowDiffs {
   let additive: ProposalDiff | null = null;
