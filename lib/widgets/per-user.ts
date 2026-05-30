@@ -29,6 +29,9 @@ import {
 import { createReadOnlyDataApi, type CanReadType } from "./read-api";
 import { type ResolvedWidget } from "./compose";
 import { deriveDefaultBoard } from "./derive-board";
+import { resolveApprovedViews } from "@/lib/views/resolve";
+import { mergeApprovedIntoFloor } from "@/lib/views/merge";
+import type { ApprovedViewsRegistry } from "@/lib/views/registry";
 import { resolveRefLabels } from "./resolve-refs";
 import { oneClickRowActionsForType } from "./row-actions";
 import { resolversForType, type RowResolver } from "./row-resolver";
@@ -57,6 +60,7 @@ export async function resolvePerUserDashboard(
   db: Database,
   member: { id: string; tier_role: string },
   canReadType: CanReadType,
+  registry: ApprovedViewsRegistry,
 ): Promise<ResolvedWidget[]> {
   // 1. Check for explicit pinned_widgets in member_context
   const rows = await db
@@ -95,9 +99,18 @@ export async function resolvePerUserDashboard(
   // 2. No explicit pinned_widgets → DERIVE the floor from the ontology,
   //    permission-scoped. Role differentiation is entirely via canReadType
   //    (the viewer's readable types), not a hand-curated per-role list.
+  //    Then merge steward-APPROVED views OVER the floor (precedence:
+  //    floor < approved < pins — pins already short-circuited above). The
+  //    approved set is itself fail-closed by canReadType in resolveApprovedViews.
   const ontology = await getRenderOntologyCached();
-  const spec = deriveDefaultBoard(ontology, canReadType);
-  return runDescriptors(db, spec, canReadType);
+  const floor = deriveDefaultBoard(ontology, canReadType);
+  const approved = await resolveApprovedViews(
+    registry,
+    { id: member.id, role: member.tier_role },
+    canReadType,
+  );
+  const merged = mergeApprovedIntoFloor(floor, approved);
+  return runDescriptors(db, merged, canReadType);
 }
 
 // ── Internal: run a list of descriptors through the read-only api ─────────────

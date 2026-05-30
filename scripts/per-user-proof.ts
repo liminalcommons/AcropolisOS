@@ -15,6 +15,7 @@
 
 import { getDb } from "@/lib/db/client";
 import { resolvePerUserDashboard } from "@/lib/widgets/per-user";
+import { InMemoryApprovedViewsRegistry } from "@/lib/views/registry";
 import { deriveDefaultBoard } from "@/lib/widgets/derive-board";
 import { CAN_READ_ALL, type CanReadType } from "@/lib/widgets/read-api";
 import { compose_dashboard } from "@/lib/widgets/compose";
@@ -52,6 +53,9 @@ function widgetTypes(widgets: Array<{ kind: string; config: unknown }>): string[
 
 async function main() {
   const db = getDb();
+  // Empty approved-views registry: the proof exercises the floor/pins precedence
+  // in isolation, so no steward-approved views should be merged into the floor.
+  const registry = new InMemoryApprovedViewsRegistry();
 
   // Load the SAME runtime ontology the app uses — the single source of the
   // derived default board. The proof oracle is deriveDefaultBoard, not a list.
@@ -105,14 +109,14 @@ async function main() {
   const broadBoard = await resolvePerUserDashboard(db, {
     id: probeMember.id,
     tier_role: probeMember.tier_role,
-  }, CAN_READ_ALL);
+  }, CAN_READ_ALL, registry);
 
   // Narrow reader: can read ONLY `guest` (a real ontology type).
   const guestOnly: CanReadType = (t) => t === "guest";
   const narrowBoard = await resolvePerUserDashboard(db, {
     id: probeMember.id,
     tier_role: probeMember.tier_role,
-  }, guestOnly);
+  }, guestOnly, registry);
 
   console.log(`\nBroad reader (CAN_READ_ALL) board:`);
   console.log(" ", widgetSummary(broadBoard));
@@ -205,7 +209,7 @@ async function main() {
   const withOverride = await resolvePerUserDashboard(db, {
     id: probeMember.id,
     tier_role: probeMember.tier_role,
-  }, CAN_READ_ALL);
+  }, CAN_READ_ALL, registry);
 
   const overrideResult = widgetSummary(withOverride);
   const derivedSummary = widgetSummary(broadBoard);
@@ -237,9 +241,9 @@ async function main() {
   // Then:
   .where(eq(memberTable.id, actor.userId))        // ← actor.userId from session, never a param
   // Then passed to:
-  widgets = await resolvePerUserDashboard(db, { id: me.id, tier_role: me.tier_role }, canReadType);
+  widgets = await resolvePerUserDashboard(db, { id: me.id, tier_role: me.tier_role }, canReadType, new PgApprovedViewsRegistry(db));
   // canReadType = buildCanReadType(actor, ontology) — the PERMISSION LENS.
-  // resolvePerUserDashboard signature: (db, member: { id, tier_role }, canReadType)
+  // resolvePerUserDashboard signature: (db, member: { id, tier_role }, canReadType, registry)
   // — no role/memberId params passed in from request body or URL; the board is
   //   derived from the ontology and scoped by the session actor's read permissions.
   `;
@@ -264,7 +268,7 @@ async function main() {
   const allInvalidWidgets = await resolvePerUserDashboard(db, {
     id: probeMember.id,
     tier_role: probeMember.tier_role,
-  }, CAN_READ_ALL);
+  }, CAN_READ_ALL, registry);
 
   console.log(`\nWith all-invalid pinned_widgets:`);
   console.log("  resolved:", widgetSummary(allInvalidWidgets));
@@ -303,7 +307,7 @@ async function main() {
   const partialWidgets = await resolvePerUserDashboard(db, {
     id: probeMember.id,
     tier_role: probeMember.tier_role,
-  }, CAN_READ_ALL);
+  }, CAN_READ_ALL, registry);
 
   console.log(`\nWith partial-invalid pinned_widgets (1 valid + 1 invalid):`);
   console.log("  resolved:", widgetSummary(partialWidgets));

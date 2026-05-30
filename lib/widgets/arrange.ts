@@ -6,6 +6,7 @@ import { type WidgetSelection } from "./compose";
 import { resolvePerUserDashboard } from "./per-user";
 import { deriveDefaultBoard } from "./derive-board";
 import { type CanReadType } from "./read-api";
+import type { ApprovedViewsRegistry } from "@/lib/views/registry";
 import type { Ontology } from "@/lib/ontology/schema";
 
 export interface ArrangeItem {
@@ -50,7 +51,8 @@ export async function currentArrangement(
   db: Database,
   member: { id: string; tier_role: string },
   canReadType: CanReadType,
+  registry: ApprovedViewsRegistry,
 ): Promise<ArrangeItem[]> {
-  const resolved = await resolvePerUserDashboard(db, member, canReadType);
+  const resolved = await resolvePerUserDashboard(db, member, canReadType, registry);
   return resolved.map((w) => ({ id: w.id, kind: w.kind, config: w.config }));
 }

@@ -21,6 +21,7 @@ import { member as memberTable } from "@/lib/db/schema.generated";
 import { eq } from "drizzle-orm";
 import { TODAY_LABEL } from "@/lib/me/today";
 import { resolvePerUserDashboard } from "@/lib/widgets/per-user";
+import { PgApprovedViewsRegistry } from "@/lib/views/registry-pg";
 import { buildCanReadType } from "@/lib/widgets/read-api";
 import { addableWidgets } from "@/lib/widgets/arrange";
 import { WidgetControls } from "@/components/dashboard/widget-controls";
@@ -98,7 +99,7 @@ export default async function Home(): Promise<React.ReactElement> {
     widgets = await resolvePerUserDashboard(db, {
       id: me.id,
       tier_role: me.tier_role,
-    }, canReadType);
+    }, canReadType, new PgApprovedViewsRegistry(db));
   } catch {
     // Non-fatal — renders empty dashboard if resolution fails
   }

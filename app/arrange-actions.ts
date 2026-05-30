@@ -16,12 +16,15 @@ import {
   addableWidgets,
 } from "@/lib/widgets/arrange";
 import { buildCanReadType, type CanReadType } from "@/lib/widgets/read-api";
+import { PgApprovedViewsRegistry } from "@/lib/views/registry-pg";
+import type { ApprovedViewsRegistry } from "@/lib/views/registry";
 import type { Ontology } from "@/lib/ontology/schema";
 
 async function resolveMember(): Promise<{
   db: ReturnType<typeof getDb>;
   member: { id: string; tier_role: string };
   canReadType: CanReadType;
+  registry: ApprovedViewsRegistry;
   ontology: Ontology;
 }> {
   const runtime = await buildChatRuntime();
@@ -35,7 +38,13 @@ async function resolveMember(): Promise<{
   if (rows.length === 0) throw new Error("no_member_row");
   // SECURITY: gate widget reads by the SESSION actor's per-type read permission.
   const canReadType = buildCanReadType(runtime.actor, runtime.ontology);
-  return { db, member: rows[0], canReadType, ontology: runtime.ontology };
+  return {
+    db,
+    member: rows[0],
+    canReadType,
+    registry: new PgApprovedViewsRegistry(db),
+    ontology: runtime.ontology,
+  };
 }
 
 // Selections here are always catalog-valid by construction (derived from
@@ -54,14 +63,14 @@ async function persist(
 }
 
 export async function moveWidgetAction(id: string, dir: "up" | "down"): Promise<void> {
-  const { db, member, canReadType } = await resolveMember();
-  const next = moveItem(await currentArrangement(db, member, canReadType), id, dir);
+  const { db, member, canReadType, registry } = await resolveMember();
+  const next = moveItem(await currentArrangement(db, member, canReadType, registry), id, dir);
   await persist(db, member.id, toSelections(next));
 }
 
 export async function removeWidgetAction(id: string): Promise<void> {
-  const { db, member, canReadType } = await resolveMember();
-  const next = removeItem(await currentArrangement(db, member, canReadType), id);
+  const { db, member, canReadType, registry } = await resolveMember();
+  const next = removeItem(await currentArrangement(db, member, canReadType, registry), id);
   await persist(db, member.id, toSelections(next));
 }
 
@@ -69,11 +78,11 @@ export async function removeWidgetAction(id: string): Promise<void> {
 // server-side so the client never sends a config blob (governance: arrange
 // within the permission-scoped derived catalog).
 export async function addWidgetAction(addableIndex: number): Promise<void> {
-  const { db, member, canReadType, ontology } = await resolveMember();
+  const { db, member, canReadType, registry, ontology } = await resolveMember();
   const menu = addableWidgets(ontology, canReadType);
   const sel = menu[addableIndex];
   if (!sel) throw new Error("invalid_addable_index");
-  const next = addItem(await currentArrangement(db, member, canReadType), sel);
+  const next = addItem(await currentArrangement(db, member, canReadType, registry), sel);
   await persist(db, member.id, toSelections(next));
 }
 

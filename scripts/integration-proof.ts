@@ -36,6 +36,7 @@ import {
 } from "@/lib/db/schema.generated";
 import { commitProposalCore } from "@/lib/organize/commit";
 import { resolvePerUserDashboard } from "@/lib/widgets/per-user";
+import { InMemoryApprovedViewsRegistry } from "@/lib/views/registry";
 import { createReadOnlyDataApi, CAN_READ_ALL } from "@/lib/widgets/read-api";
 import { loadOntology } from "@/lib/ontology/load";
 import { getRuntimeOntologyDir } from "@/lib/setup/paths";
@@ -93,6 +94,9 @@ async function getStewardCookie(): Promise<string> {
 
 async function main() {
   const db = getDb();
+  // Empty approved-views registry: this proof asserts the committed row flows
+  // through the DERIVED floor data_table, with no steward-approved views merged.
+  const registry = new InMemoryApprovedViewsRegistry();
 
   // Track IDs for cleanup
   let disposableInboxId: string | null = null;
@@ -144,7 +148,7 @@ async function main() {
   const baselineWidgets = await resolvePerUserDashboard(db, {
     id: managerMember.id,
     tier_role: managerMember.tier_role,
-  }, CAN_READ_ALL);
+  }, CAN_READ_ALL, registry);
 
   const baselineGuestRows = guestRowsFrom(baselineWidgets);
   const V0 = baselineGuestRows.length;
@@ -417,7 +421,7 @@ async function main() {
   const afterWidgets = await resolvePerUserDashboard(db, {
     id: managerMember.id,
     tier_role: managerMember.tier_role,
-  }, CAN_READ_ALL);
+  }, CAN_READ_ALL, registry);
 
   const afterGuestRows = guestRowsFrom(afterWidgets);
   const presentAfter = afterGuestRows.some(
