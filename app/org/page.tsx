@@ -22,6 +22,9 @@ import { getDb } from "@/lib/db/client";
 import { resolveDescriptors } from "@/lib/widgets/per-user";
 import { buildCanReadType } from "@/lib/widgets/read-api";
 import { readOrgDashboard, adminDefaultBoard } from "@/lib/org-dashboard/store";
+import { resolveApprovedViews } from "@/lib/views/resolve";
+import { mergeApprovedIntoFloor } from "@/lib/views/merge";
+import { PgApprovedViewsRegistry } from "@/lib/views/registry-pg";
 import { readOrgProfile } from "@/lib/org-profile/store";
 import { OrgNameEditor } from "@/components/org/org-name-editor";
 import { ResolvedWidgetCard } from "@/components/dashboard/ResolvedWidgetCard";
@@ -80,10 +83,22 @@ export default async function OrgPage(): Promise<React.ReactElement> {
     // Stored (steward-composed) widgets win; absent → the DERIVED admin floor
     // (veto-queue + per-type metrics/tables), resolved through the same fence.
     const stored = await readOrgDashboard();
-    const descriptors =
-      stored.widgets.length > 0
-        ? stored.widgets
-        : adminDefaultBoard(chatRuntime.ontology, canReadType);
+    let descriptors: unknown[];
+    if (stored.widgets.length > 0) {
+      descriptors = stored.widgets;
+    } else {
+      // No stored steward composition → DERIVED admin floor, then layer any
+      // org-scope APPROVED views over it (governed proposal output). Approved
+      // views are resolved fail-closed by the steward actor's per-type read
+      // permission — the SAME canReadType the render fence enforces below.
+      const floor = adminDefaultBoard(chatRuntime.ontology, canReadType);
+      const approved = await resolveApprovedViews(
+        new PgApprovedViewsRegistry(db),
+        { id: chatRuntime.actor.userId, role: chatRuntime.actor.role },
+        canReadType,
+      );
+      descriptors = mergeApprovedIntoFloor(floor, approved);
+    }
     widgets = await resolveDescriptors(db, descriptors, canReadType);
   } catch {
     // Non-fatal — renders empty state if resolution fails
