@@ -1,6 +1,6 @@
 // components/shell/theme-switcher.tsx
 //
-// LeftNav theme control: a PICKER of curated presets (no prompt). Clicking a
+// Shell theme control: a PICKER of curated presets (no prompt). Clicking a
 // swatch live-previews it across the whole shell (CSS vars on #app-shell-root)
 // and persists the choice to member_context.theme_pref. The default preset
 // stores no override (resetThemeAction → null) so it tracks the base palette.
@@ -34,18 +34,18 @@ export function ThemeSwitcher(): React.ReactElement {
   }
 
   return (
-    <div className="mt-2">
+    <div className="relative">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
+        className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
       >
         <Palette className="h-4 w-4" /> Theme
         {pending && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin" />}
       </button>
 
       {open && (
-        <div className="mt-2 rounded-lg border border-border bg-card p-2.5">
+        <div className="absolute right-0 z-50 mt-2 w-60 rounded-lg border border-border bg-card p-2.5 shadow-lg">
           <p className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">Pick a theme</p>
           <div className="grid grid-cols-2 gap-2">
             {THEME_PRESETS.map((p) => {

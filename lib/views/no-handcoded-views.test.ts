@@ -13,9 +13,9 @@ describe("no hand-coded domain views", () => {
     expect(existsSync(path.join(PKG, "app", "day", "page.tsx"))).toBe(false);
   });
 
-  it("the left nav no longer links to /day", () => {
+  it("the shell nav no longer links to /day", () => {
     const nav = readFileSync(
-      path.join(PKG, "components", "shell", "left-nav.tsx"),
+      path.join(PKG, "components", "shell", "top-bar.tsx"),
       "utf8",
     );
     expect(nav).not.toMatch(/["'`]\/day["'`]/);

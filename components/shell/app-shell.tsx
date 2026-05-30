@@ -6,7 +6,7 @@ import { BASE_TOKENS } from "@/lib/theme/tokens";
 import { tokenSetToCssVars } from "@/lib/theme/css";
 import { resolveOrgDisplayName } from "@/lib/org-profile/shared";
 import { readOrgProfile } from "@/lib/org-profile/store";
-import { LeftNav } from "./left-nav";
+import { TopBar } from "./top-bar";
 import { CoPilotDock } from "./co-pilot-dock";
 import type { BuiltInRole } from "@/lib/auth/users";
 
@@ -63,11 +63,13 @@ export async function AppShell({ children, actor, modelName }: Props): Promise<R
     <div
       id="app-shell-root"
       style={tokenSetToCssVars(tokens)}
-      className="flex h-screen overflow-hidden bg-background text-foreground"
+      className="flex flex-col h-screen overflow-hidden bg-background text-foreground"
     >
-      <LeftNav memberName={memberName} role={role} orgName={orgName} />
-      <main className="flex-1 overflow-y-auto">{children}</main>
-      <CoPilotDock actorRole={actor.role} actorEmail={actor.email} modelName={modelName} />
+      <TopBar memberName={memberName} role={role} orgName={orgName} />
+      <div className="flex flex-1 overflow-hidden">
+        <main className="flex-1 overflow-y-auto">{children}</main>
+        <CoPilotDock actorRole={actor.role} actorEmail={actor.email} modelName={modelName} />
+      </div>
     </div>
   );
 }

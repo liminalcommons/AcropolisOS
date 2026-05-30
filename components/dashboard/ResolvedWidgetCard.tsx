@@ -6,7 +6,13 @@
 // This is NOT a new rendering path: it IS the rendering path previously
 // defined in app/page.tsx, promoted to a shared component. app/page.tsx
 // imports from here; app/org/page.tsx imports from here. One path, two callers.
+//
+// Cards are NAVIGABLE: the board is the navigation (no fixed nav tabs). A card's
+// title links to its full collection at /[type]; a plain data_table's rows link
+// to the detail at /[type]/[id]. The link uses config.type (the snake token);
+// the /[type] route resolves either the token or the PascalCase key.
 
+import Link from "next/link";
 import type { ResolvedWidget } from "@/lib/widgets/compose";
 import type {
   MetricData,
@@ -21,6 +27,37 @@ import {
   invokeRowConfirmForm,
 } from "@/lib/widgets/row-action.server";
 import { parseConfirmAction } from "@/lib/widgets/row-confirm";
+
+// ── CardTitle ─────────────────────────────────────────────────────────────────
+// A card's title. When the widget is bound to an ontology type, the title links
+// to that type's full collection view (/[type]) — this is how the board doubles
+// as the navigation. Untyped widgets render a plain label.
+function CardTitle({
+  type,
+  label,
+  className,
+}: {
+  type?: string;
+  label: string;
+  className: string;
+}) {
+  if (type) {
+    return (
+      <Link
+        href={`/${type}`}
+        className={`${className} inline-flex items-center gap-1 hover:text-foreground transition-colors`}
+      >
+        {label}
+        <span aria-hidden className="opacity-40">
+          →
+        </span>
+      </Link>
+    );
+  }
+  return <p className={className}>{label}</p>;
+}
+
+const TITLE_CLS = "text-xs uppercase tracking-widest text-muted-foreground";
 
 // ── MetricWidget ──────────────────────────────────────────────────────────────
 
@@ -43,9 +80,7 @@ function MetricWidget({ widget }: { widget: ResolvedWidget }) {
 
   return (
     <div className="rounded-lg border border-border bg-card p-5">
-      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-        {label}
-      </p>
+      <CardTitle type={config.type} label={label} className={`${TITLE_CLS} mb-2`} />
       <p className="text-4xl font-bold tabular-nums text-foreground">
         {data.display ?? data.value}
       </p>
@@ -93,9 +128,7 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
   if (data.rows.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card p-5">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-          {label}
-        </p>
+        <CardTitle type={config.type} label={label} className={`${TITLE_CLS} mb-2`} />
         <p className="text-xs text-muted-foreground">No rows.</p>
       </div>
     );
@@ -103,9 +136,7 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
 
   return (
     <div className="rounded-lg border border-border bg-card p-5">
-      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
-        {label}
-      </p>
+      <CardTitle type={config.type} label={label} className={`${TITLE_CLS} mb-3`} />
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -117,7 +148,9 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
               ))}
               {hasRowActions ? (
                 <th className="font-normal pb-2 pr-4">Actions</th>
-              ) : null}
+              ) : (
+                <th className="font-normal pb-2" aria-hidden></th>
+              )}
             </tr>
           </thead>
           <tbody className="text-foreground">
@@ -217,7 +250,16 @@ function DataTableWidget({ widget }: { widget: ResolvedWidget }) {
                         })}
                       </div>
                     </td>
-                  ) : null}
+                  ) : (
+                    <td className="py-1 align-top text-right">
+                      <Link
+                        href={`/${config.type}/${rowId}`}
+                        className="text-primary hover:text-primary/80 whitespace-nowrap"
+                      >
+                        open →
+                      </Link>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -238,9 +280,7 @@ function RosterWidget({ widget }: { widget: ResolvedWidget }) {
   if (data.entries.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card p-5">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-          {label}
-        </p>
+        <CardTitle type={config.type} label={label} className={`${TITLE_CLS} mb-2`} />
         <p className="text-xs text-muted-foreground">No entries.</p>
       </div>
     );
@@ -248,9 +288,7 @@ function RosterWidget({ widget }: { widget: ResolvedWidget }) {
 
   return (
     <div className="rounded-lg border border-border bg-card p-5">
-      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
-        {label}
-      </p>
+      <CardTitle type={config.type} label={label} className={`${TITLE_CLS} mb-3`} />
       <ul className="space-y-2">
         {data.entries.map((entry, i) => (
           <li
@@ -287,9 +325,7 @@ function CalendarWidget({ widget }: { widget: ResolvedWidget }) {
   if (bucketKeys.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card p-5">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-          {emptyLabel}
-        </p>
+        <CardTitle type={config.type} label={emptyLabel} className={`${TITLE_CLS} mb-2`} />
         <p className="text-xs text-muted-foreground">No events.</p>
       </div>
     );
@@ -297,9 +333,7 @@ function CalendarWidget({ widget }: { widget: ResolvedWidget }) {
 
   return (
     <div className="rounded-lg border border-border bg-card p-5">
-      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
-        {populatedLabel}
-      </p>
+      <CardTitle type={config.type} label={populatedLabel} className={`${TITLE_CLS} mb-3`} />
       <ul className="space-y-2">
         {bucketKeys.slice(0, 10).map((date) => (
           <li key={date} className="text-xs">

@@ -11,6 +11,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["**/*.test.ts", "**/*.test.tsx"],
-    exclude: ["node_modules", ".next"],
+    // book-club-instance is a gitignored runtime copy of lib/ (the :3031 demo) —
+    // its duplicated *.test.ts must not run here (mirrors the tsconfig exclude).
+    exclude: ["node_modules", ".next", "**/book-club-instance/**"],
   },
 });

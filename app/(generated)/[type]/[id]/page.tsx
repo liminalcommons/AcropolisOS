@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadOntology } from "@/lib/ontology/load";
 import { getRuntimeOntologyDir } from "@/lib/setup/paths";
+import { pascalToSnake } from "@/lib/ontology/casing";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { prettify } from "@/lib/prettify";
 
@@ -26,8 +27,8 @@ function formatValue(v: unknown): string {
 export default async function ObjectDetailPage(
   { params }: PageProps,
 ): Promise<React.ReactElement> {
-  const { type, id } = await params;
-  if (!isValidIdent(type)) notFound();
+  const { type: typeParam, id } = await params;
+  if (!isValidIdent(typeParam)) notFound();
 
   const chatRuntime = await buildChatRuntime();
   if (isAnonymous(chatRuntime.actor)) notFound();
@@ -36,6 +37,13 @@ export default async function ObjectDetailPage(
     () => null,
   );
   if (!ontology) notFound();
+  // Accept the PascalCase key or the snake token (board cards link with the token).
+  const type = ontology.object_types[typeParam]
+    ? typeParam
+    : Object.keys(ontology.object_types).find(
+        (k) => pascalToSnake(k) === typeParam,
+      );
+  if (!type) notFound();
   const objectType = ontology.object_types[type];
   if (!objectType) notFound();
 
