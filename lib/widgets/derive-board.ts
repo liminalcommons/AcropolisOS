@@ -6,6 +6,8 @@ import type { Ontology } from "@/lib/ontology/schema";
 import { pascalToSnake } from "@/lib/ontology/casing";
 import type { CatalogKind } from "./catalog";
 import type { CanReadType } from "./read-api";
+import { resolversForType } from "./row-resolver";
+import { confirmsForType } from "./row-confirm";
 
 export interface SliceDescriptor {
   kind: CatalogKind;
@@ -33,6 +35,19 @@ function isPrimaryKey(fieldName: string, def: unknown): boolean {
   return !!(def && typeof def === "object" && (def as { primary_key?: boolean }).primary_key);
 }
 
+// When a data_table opts into row_actions, the read fence selects ONLY the
+// requested columns — so the HIDDEN columns the row affordances read from must
+// be requested explicitly, or Dismiss/pathway/confirm render dead. Derive them
+// from the ontology's own row-action definitions (no domain literals): the row
+// id (action target), each resolver's choices column, each confirm's source
+// column. These are stripped from the visible table by the renderer.
+function rowActionColumns(token: string, ontology: Ontology): string[] {
+  const cols = new Set<string>(["id"]);
+  for (const r of resolversForType(token, ontology)) cols.add(r.choicesFrom);
+  for (const c of confirmsForType(token, ontology)) cols.add(c.source);
+  return [...cols];
+}
+
 export function deriveDefaultBoard(
   ontology: Ontology,
   canReadType: CanReadType,
@@ -44,12 +59,14 @@ export function deriveDefaultBoard(
   if (opts.admin) {
     const hasBlocker = objectTypes.some((n) => pascalToSnake(n) === "agent_blocker");
     if (hasBlocker && canReadType("agent_blocker")) {
+      const visible = ["summary", "reason_kind", "status"];
+      const hidden = rowActionColumns("agent_blocker", ontology).filter((c) => !visible.includes(c));
       board.push({
         kind: "data_table",
         title: "Awaiting your decision",
         config: {
           type: "agent_blocker",
-          columns: ["summary", "reason_kind", "status"],
+          columns: [...visible, ...hidden],
           filter: { field: "status", value: "open" },
           row_actions: true,
           limit: 50,

@@ -331,5 +331,9 @@ describe("adminDefaultBoard — derived admin floor", () => {
     expect((board[0].config as { filter?: { field: string; value: string } }).filter)
       .toEqual({ field: "status", value: "open" });
     expect(board.some((d) => d.kind === "metric")).toBe(true);
+    const vqCols = (board[0].config as { columns: string[] }).columns;
+    expect(vqCols).toContain("id");            // row-id action target
+    expect(vqCols).toContain("pathways");      // resolver choices source
+    expect(vqCols).toContain("confirm_action");// confirm source
   });
 });

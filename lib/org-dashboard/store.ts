@@ -90,10 +90,10 @@ export async function writeOrgDashboard(cfg: OrgDashboardConfig): Promise<void> 
 // Append the descriptor, OR replace an existing widget with the same id (so
 // "show me X again" replaces that widget rather than duplicating it — decision
 // #2: calling compose_view again with the same type replaces that widget).
-// First composition starts from a CLEAN, EMPTY slate (readOrgDashboardOrEmpty,
-// not the derived floor) so the steward's composed dashboard is theirs.
+// First composition starts from a CLEAN, EMPTY slate (absent file → empty), not
+// the derived floor, so the steward's composed dashboard is theirs.
 export async function addOrgWidget(descriptor: WidgetDescriptor): Promise<void> {
-  const current = await readOrgDashboardOrEmpty();
+  const current = await readOrgDashboard();
   const idx = current.widgets.findIndex((w) => w.id === descriptor.id);
   if (idx >= 0) {
     current.widgets[idx] = descriptor;
@@ -109,7 +109,8 @@ export async function addOrgWidget(descriptor: WidgetDescriptor): Promise<void> 
 // the id was present (idempotent — removing an absent id is not an error). Dumb
 // persistence: NO authorization here (auth lives in compose-view.ts).
 export async function removeOrgWidget(id: string): Promise<boolean> {
-  const current = await readOrgDashboardOrEmpty();
+  // Operates on the clean slate (absent file → empty); no derived floor.
+  const current = await readOrgDashboard();
   const next = current.widgets.filter((w) => w.id !== id);
   const existed = next.length !== current.widgets.length;
   await writeOrgDashboard({ widgets: next });
@@ -127,32 +128,4 @@ export async function clearOrgDashboard(): Promise<void> {
   } catch {
     // already absent — nothing to clear
   }
-}
-
-// ── internal ────────────────────────────────────────────────────────────────────
-
-// Reads the persisted file as-is; returns an EMPTY config when absent. Used by
-// addOrgWidget so the first composed widget starts a clean, steward-owned
-// dashboard. (readOrgDashboard ALSO returns empty when absent now — this helper
-// is retained for the explicit "compose from clean" intent at the call site.)
-async function readOrgDashboardOrEmpty(): Promise<OrgDashboardConfig> {
-  let raw: string;
-  try {
-    raw = await fs.readFile(ORG_DASHBOARD_PATH, "utf8");
-  } catch {
-    return { widgets: [] };
-  }
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      Array.isArray((parsed as OrgDashboardConfig).widgets)
-    ) {
-      return { widgets: (parsed as OrgDashboardConfig).widgets };
-    }
-  } catch {
-    // corrupt — treat as empty so a fresh compose starts clean
-  }
-  return { widgets: [] };
 }

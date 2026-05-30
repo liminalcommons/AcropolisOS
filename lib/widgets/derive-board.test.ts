@@ -33,6 +33,10 @@ describe("deriveDefaultBoard — hostel ontology", () => {
     expect((board[0].config as { type: string }).type).toBe("agent_blocker");
     expect((board[0].config as { filter?: { field: string; value: string } }).filter).toEqual({ field: "status", value: "open" });
     expect(board.some((d) => d.kind === "metric" && (d.config as { type: string }).type === "member")).toBe(true);
+    const vqCols = (board[0].config as { columns: string[] }).columns;
+    expect(vqCols).toContain("id");            // row-id action target
+    expect(vqCols).toContain("pathways");      // resolver choices source
+    expect(vqCols).toContain("confirm_action");// confirm source
   });
 
   it("permission-filters: a viewer who can read nothing gets an empty board (floor)", () => {
