@@ -6,6 +6,8 @@ import { BASE_TOKENS } from "@/lib/theme/tokens";
 import { tokenSetToCssVars } from "@/lib/theme/css";
 import { resolveOrgDisplayName } from "@/lib/org-profile/shared";
 import { readOrgProfile } from "@/lib/org-profile/store";
+import { loadCustomRoleNames } from "@/lib/ontology/roles";
+import { getRuntimeOntologyDir } from "@/lib/setup/paths";
 import { TopBar } from "./top-bar";
 import { CoPilotDock } from "./co-pilot-dock";
 import type { BuiltInRole } from "@/lib/auth/users";
@@ -59,13 +61,25 @@ export async function AppShell({ children, actor, modelName }: Props): Promise<R
   const tokens = resolveTheme({ memberPref: themePref, role, orgSeed: null });
   const orgName = resolveOrgDisplayName(await readOrgProfile());
 
+  // Stewards can preview any role's board via the header "view as" switch
+  // (the storyboard's role tabs). Roles = built-ins + the ontology's custom roles.
+  const canSwitch = actor.role === "steward";
+  let roles: string[] = [];
+  if (canSwitch) {
+    try {
+      roles = ["steward", ...(await loadCustomRoleNames(getRuntimeOntologyDir())), "member"];
+    } catch {
+      roles = ["steward", "member"];
+    }
+  }
+
   return (
     <div
       id="app-shell-root"
       style={tokenSetToCssVars(tokens)}
       className="flex flex-col h-screen overflow-hidden bg-background text-foreground"
     >
-      <TopBar memberName={memberName} role={role} orgName={orgName} />
+      <TopBar memberName={memberName} role={role} orgName={orgName} roles={roles} canSwitch={canSwitch} />
       <div className="flex flex-1 overflow-hidden">
         <main className="flex-1 overflow-y-auto">{children}</main>
         <CoPilotDock actorRole={actor.role} actorEmail={actor.email} modelName={modelName} />

@@ -4,28 +4,61 @@
 // IS the navigation (its widget cards link to /[type] collections + details);
 // the chat dock is the command/compose/ingest surface. This header carries only
 // the irreducible kernel: org identity (→ home board), the two non-data places
-// (the model + the assimilation queue), and utilities. No feature tabs.
+// (the model + the assimilation queue), a steward "view as" role switch (the
+// storyboard's role tabs), and utilities. No feature tabs.
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { ThemeSwitcher } from "./theme-switcher";
 import { signOutAction } from "@/lib/auth/sign-out-action";
+
+// Ontology-derived "view as" switch (steward-only). Selecting a role re-derives
+// the home board through that role's permission lens (?as=<role>) — the same
+// render function, a different viewer. "your board" is the steward's own view.
+function RoleSwitch({ roles }: { roles: string[] }) {
+  const router = useRouter();
+  return (
+    <label className="hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="opacity-70">view as</span>
+      <select
+        defaultValue="steward"
+        onChange={(e) => {
+          const r = e.target.value;
+          router.push(r === "steward" ? "/" : `/?as=${encodeURIComponent(r)}`);
+        }}
+        aria-label="View the board as a role"
+        className="rounded border border-border bg-input px-1.5 py-1 text-xs text-foreground focus:outline-none focus:border-ring"
+      >
+        {roles.map((r) => (
+          <option key={r} value={r}>
+            {r === "steward" ? "your board" : r}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 export function TopBar({
   memberName,
   role,
   orgName,
+  roles = [],
+  canSwitch = false,
 }: {
   memberName: string;
   role: string;
   orgName: string;
+  roles?: string[];
+  canSwitch?: boolean;
 }): React.ReactElement {
   return (
     <header className="flex items-center gap-3 shrink-0 border-b border-border bg-card/60 px-4 py-2.5 text-card-foreground">
       <Link href="/" className="flex items-center gap-2 min-w-0 shrink-0">
         <span className="text-lg font-bold text-foreground">◆</span>
         <span
-          className="font-semibold tracking-tight truncate max-w-[36vw]"
+          className="font-semibold tracking-tight truncate max-w-[30vw]"
           title={orgName}
         >
           {orgName}
@@ -50,6 +83,7 @@ export function TopBar({
       </nav>
 
       <div className="ml-auto flex items-center gap-3 shrink-0">
+        {canSwitch && roles.length > 1 ? <RoleSwitch roles={roles} /> : null}
         <Link
           href="/inbox"
           aria-label="Notifications"

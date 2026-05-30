@@ -320,6 +320,45 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
       expect(can("booking")).toBe(false);
     });
   });
+
+  describe("buildCanReadType 'view as' role override (steward preview lens)", () => {
+    // A steward previews another role's board via ?as=<role>. The override
+    // synthesizes a viewer carrying ONLY that role's authority, so the lens admits
+    // exactly that role's slice — the SAME render() function, a different viewer.
+    // The CALLER (app/page.tsx) enforces steward-only; these prove the lens math:
+    // the preview must never leak MORE than the previewed role can read.
+
+    it("steward viewing as member DOWNGRADES: bed allow, booking deny, guest deny", () => {
+      const can = buildCanReadType(steward, ontology, "member");
+      expect(can("bed")).toBe(true);
+      // The steward's own access must NOT leak through the member preview.
+      expect(can("booking")).toBe(false);
+      expect(can("guest")).toBe(false);
+    });
+
+    it("steward viewing as a custom role (manager) admits that role's slice: booking allow", () => {
+      // booking read:[steward, manager] — the manager lens carries the custom role
+      // (customRoles:["manager"]) so the booking slice opens, where a member's
+      // would not. Proves a custom role previews its real authority.
+      const can = buildCanReadType(steward, ontology, "manager");
+      expect(can("booking")).toBe(true);
+      expect(can("bed")).toBe(true);
+    });
+
+    it("steward viewing as steward is a no-op: full access retained", () => {
+      const can = buildCanReadType(steward, ontology, "steward");
+      expect(can("booking")).toBe(true);
+      expect(can("guest")).toBe(true);
+    });
+
+    it("an unknown preview role is fail-closed to public ['*'] types: bed allow, booking deny", () => {
+      // A role whose name appears in no read list matches nothing restricted —
+      // the synthetic member-base + unknown-custom-role admits only read:["*"].
+      const can = buildCanReadType(steward, ontology, "totally_made_up_role");
+      expect(can("bed")).toBe(true);
+      expect(can("booking")).toBe(false);
+    });
+  });
 });
 
 describe("read-api is ontology-derived (non-hostel)", () => {

@@ -89,9 +89,24 @@ export const CAN_READ_ALL: CanReadType = () => true;
 export function buildCanReadType(
   actor: Actor | null,
   ontology: Ontology,
+  viewerRole?: string,
 ): CanReadType {
   const permissions = buildObjectPermissionsMap(ontology);
   const vocab = deriveVocabulary(ontology);
+  // "View as <role>" preview (steward-only — the CALLER must enforce that the
+  // requesting actor is a steward before passing an override). Presents a
+  // synthetic actor carrying the chosen role so the lens admits exactly that
+  // role's slice — the same render() function, a different viewer.
+  const lensActor: Actor | null = viewerRole
+    ? ({
+        ...(actor ?? { id: "preview" }),
+        role: viewerRole === "steward" ? "steward" : "member",
+        customRoles:
+          viewerRole === "steward" || viewerRole === "member"
+            ? []
+            : [viewerRole],
+      } as Actor)
+    : actor;
   return (catalogType: string): boolean => {
     // not even a type present in the loaded ontology → deny (membership gate)
     if (!vocab.validTypes.includes(catalogType)) return false;
@@ -99,7 +114,7 @@ export function buildCanReadType(
     const perms = permissions[objectTypeName];
     // FAIL CLOSED: no permissions entry → deny (mirrors wrapObjectAccess(!perms)).
     if (!perms) return false;
-    return actorMatchesTokens(actor, perms.read, null, objectTypeName);
+    return actorMatchesTokens(lensActor, perms.read, null, objectTypeName);
   };
 }
 
