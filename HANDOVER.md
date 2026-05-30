@@ -60,7 +60,7 @@ docker exec acropolisos-app npx tsx scripts/integration-proof.ts
 |---|---|---|---|
 | V1 | typed widget catalog `{configSchema, queryBinding}` (metric/data_table/roster/calendar) + `compose_dashboard`/`resolveDashboard`; in-binding type+field whitelist | `lib/widgets/catalog.ts`, `lib/widgets/compose.ts` | `scripts/widget-proof.ts`, `widget-hardening-proof.ts` |
 | V2 | scoped **read-only** data API — `createReadOnlyDataApi` exposes only `count/select/byDate`; bindings get the api, not `db` (write is structurally impossible) | `lib/widgets/read-api.ts` | `scripts/read-api-proof.ts` |
-| V3 | **per-user dashboard**: `resolvePerUserDashboard` composes from the member's role `SLICE_SPEC`; explicit `pinned_widgets` override; role-default is the floor if pins go stale; role from session, never a param | `lib/widgets/per-user.ts`, `app/page.tsx` | `scripts/per-user-proof.ts` |
+| V3 | **per-user dashboard**: `resolvePerUserDashboard` derives the floor via `deriveDefaultBoard(ontology, canReadType)` (permission-lens — role is a display label; differentiation is by what `canReadType` admits, no per-role curation); explicit `pinned_widgets` override; derived floor if pins go stale; actor from session, never a param | `lib/widgets/per-user.ts`, `lib/widgets/derive-board.ts`, `app/page.tsx` | `scripts/per-user-proof.ts` |
 
 **Integration:** `scripts/integration-proof.ts` (I1, the product walkthrough). I2 deleted the dead F7 no-show chooser.
 
@@ -82,7 +82,7 @@ docker exec acropolisos-app npx tsx scripts/integration-proof.ts
 - **Proof scripts open the db pool → they don't self-exit.** End them with `process.exit(0)`, or run via `… > /tmp/x.out 2>&1; cat /tmp/x.out` (a `timeout`-killed pipe loses block-buffered stdout → looks like a false "hang").
 - **Live DB check:** `docker exec acropolisos-app sh -c 'psql "$DATABASE_URL" -tAc "select …"'` (the var must expand *inside* the container).
 - `.env` is gitignored (LLM key lives there). Don't commit it.
-- Roles in `SLICE_SPEC` map to `member.tier_role` (manager/supervisor/staff/work_trader); unknown/null role degrades to `staff`.
+- The per-user and `/org` admin default boards are DERIVED from the ontology (`deriveDefaultBoard`/`adminDefaultBoard`), permission-scoped by `canReadType`; `member.tier_role` is now a display label only (no per-role widget curation — that moves to slice 3's AI-proposed / steward-pinned views).
 
 ---
 

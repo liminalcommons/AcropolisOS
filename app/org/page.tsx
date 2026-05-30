@@ -67,12 +67,13 @@ export default async function OrgPage(): Promise<React.ReactElement> {
     );
   }
 
-  // Resolve the fixed admin dashboard through the governed widget path.
-  // resolveDescriptors validates configs against WIDGET_CATALOG schemas,
-  // then calls queryBinding(config, ReadOnlyDataApi) — no raw SQL, no db handle.
+  // Resolve the org dashboard through the governed widget path: stored steward
+  // composition if present, else the DERIVED admin floor. resolveDescriptors
+  // validates configs against WIDGET_CATALOG schemas, then calls
+  // queryBinding(config, ReadOnlyDataApi) — no raw SQL, no db handle.
   const db = getDb();
-  // SECURITY: gate the widget read path by the steward actor's per-type read
-  // permission (fail-closed). bed is read:["*"] so it resolves for the steward.
+  // SECURITY: gate the read path by the steward actor's per-type read permission
+  // (fail-closed); the same canReadType also scopes which types the floor admits.
   const canReadType = buildCanReadType(chatRuntime.actor, chatRuntime.ontology);
   let widgets: ResolvedWidget[] = [];
   try {
