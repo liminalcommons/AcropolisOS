@@ -2,6 +2,7 @@
 // Single write-path resolution chokepoint. Mirrors lib/widgets/read-api.ts
 // (resolveType / tableFor): both read and write resolve type -> table through
 // the IDENTICAL ontology-derived lookup, so neither can drift to a literal.
+import { getTableName } from "drizzle-orm";
 import { guest as guestTable, TABLES } from "@/lib/db/schema.generated";
 import type { Ontology } from "@/lib/ontology/schema";
 import { deriveVocabulary } from "@/lib/widgets/vocabulary";
@@ -28,5 +29,9 @@ export function resolveTargetTable(
   if (objectType === undefined) return null;
   const table = (TABLES as Record<string, unknown>)[objectType];
   if (table === undefined || table === null) return null;
-  return { token: targetType, objectType, table: table as unknown as typeof guestTable };
+  // Defense in depth: a present-but-non-drizzle TABLES value would yield an
+  // undefined table name and a malformed insert. Treat it as missing (fail-closed).
+  const candidate = table as Parameters<typeof getTableName>[0];
+  if (!getTableName(candidate)) return null;
+  return { token: targetType, objectType, table: candidate as unknown as typeof guestTable };
 }
