@@ -132,7 +132,7 @@ async function runDescriptors(
   const ontology = await getRenderOntologyCached();
   // SECURITY: the api is gated by the VIEWER's per-type read permission AND its
   // structural whitelist is DERIVED from this loaded ontology. A widget bound to a
-  // restricted type (e.g. booking) returns safe-empty for a viewer not permitted to
+  // restricted type returns safe-empty for a viewer not permitted to
   // read it — fail-closed, before any SQL. REUSES the same `api` for fetching
   // target labels, so resolution is fail-closed on the TARGET type's read permission.
   const api = createReadOnlyDataApi(db, canReadType, ontology);
