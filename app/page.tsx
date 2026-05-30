@@ -1,18 +1,17 @@
-// V3: per-user ontological dashboard.
+// Per-user ontological dashboard — the PERMISSION-LENS model.
 //
 // THE THESIS (ARCHITECTURE §1): every user has their own ontological awareness.
-// The same code composes a DIFFERENT dashboard depending on the member's
-// tier_role (their ontological slice). Steward/manager sees org-wide overview;
-// staff/supervisor sees operational slice; work_trader sees their own slice.
+// The default board is DERIVED from the loaded ontology (deriveDefaultBoard) and
+// scoped by the viewer's per-type read permissions. A role sees a different slice
+// ONLY because canReadType admits different types — not because of a hand-curated
+// per-role list. Same derivation, different lens.
 //
 // FENCE (ARCHITECTURE §2/§7): resolvePerUserDashboard is strictly READ-ONLY.
-// The page never writes to the world-model — only reads via the V2 read-only api.
+// The page never writes to the world-model — only reads via the read-only api.
 //
 // SESSION: member resolved from buildChatRuntime() → actor.userId → member row.
-// NEVER from a request param. memberId/role are session-derived only.
-//
-// Replaces: the hardcoded "Hostal Solana manager dashboard" (F5) that showed
-// the same Daniyar no-show / Sofía WTA / bed grid / open shift to every user.
+// NEVER from a request param. memberId is session-derived only; tier_role is used
+// only as a display label.
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -23,7 +22,7 @@ import { eq } from "drizzle-orm";
 import { TODAY_LABEL } from "@/lib/me/today";
 import { resolvePerUserDashboard } from "@/lib/widgets/per-user";
 import { buildCanReadType } from "@/lib/widgets/read-api";
-import { addableForRole } from "@/lib/widgets/arrange";
+import { addableWidgets } from "@/lib/widgets/arrange";
 import { WidgetControls } from "@/components/dashboard/widget-controls";
 import { ResolvedWidgetCard } from "@/components/dashboard/ResolvedWidgetCard";
 import type { ResolvedWidget } from "@/lib/widgets/compose";
@@ -86,10 +85,11 @@ export default async function Home(): Promise<React.ReactElement> {
 
   const me = memberRows[0];
 
-  // V3: compose THIS member's ontological slice.
-  // resolvePerUserDashboard uses SLICE_SPEC[me.tier_role] (role default)
-  // unless explicit pinned_widgets are set — in which case those take precedence.
-  // FENCE: read-only via V2 ReadOnlyDataApi — no writes.
+  // Compose THIS member's ontological slice.
+  // resolvePerUserDashboard derives the default board from the ontology, scoped
+  // by the viewer's read permissions (permission-lens) — unless explicit
+  // pinned_widgets are set, in which case those take precedence.
+  // FENCE: read-only via ReadOnlyDataApi — no writes.
   // SECURITY: gate the widget read path by the session actor's per-type read
   // permission (fail-closed). Built from the SAME source as ctx.objects.
   const canReadType = buildCanReadType(actor, chatRuntime.ontology);
@@ -124,10 +124,10 @@ export default async function Home(): Promise<React.ReactElement> {
           Your ontological slice · {me.tier_role}
         </div>
 
-        {/* Arrangement controls — Tier-2: arrange within the role's catalog */}
+        {/* Arrangement controls — Tier-2: arrange within your permission-scoped catalog */}
         <WidgetControls
           widgets={widgets.map((w) => ({ id: w.id, label: widgetLabel(w.kind, w.config) }))}
-          addable={addableForRole(me.tier_role).map((s, index) => ({
+          addable={addableWidgets(chatRuntime.ontology, canReadType).map((s, index) => ({
             index,
             label: widgetLabel(s.kind, s.config),
           }))}
@@ -137,7 +137,7 @@ export default async function Home(): Promise<React.ReactElement> {
         {widgets.length === 0 ? (
           <div className="rounded-lg border border-border bg-card/20 p-8 text-center">
             <p className="text-sm text-muted-foreground">
-              No widgets configured for your role ({me.tier_role}).
+              No widgets available for what you can currently read.
             </p>
             <p className="text-xs text-muted-foreground mt-2">
               Ask the agent to add a widget below.

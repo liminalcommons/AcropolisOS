@@ -1,21 +1,30 @@
-// V3 proof script: per-user ontological dashboard.
+// Proof script: per-user ontological dashboard — the PERMISSION-LENS model.
 //
-// Cases:
-// 1. Two roles → different widgets from same function (same code, different cards)
-// 2. Both render live data via the read-only api (widget value === live SQL count)
-// 3. pinned_widgets override: explicit pinned > role default
-// 4. Session-derived (code check): paste the relevant line
-// 5. Cleanup
+// The default board is DERIVED from the ontology (deriveDefaultBoard) and scoped
+// by the viewer's read permissions. A role differs ONLY by what canReadType
+// admits — there is no hand-curated per-role list. The proof therefore exercises:
+//
+// CASE 1. Permission lens: SAME function, two different canReadType predicates →
+//         different boards (broad reader sees more types than a narrow reader).
+// CASE 2. The derived board renders live data via the read-only api.
+// CASE 3. pinned_widgets override: explicit pinned > derived default.
+// CASE 4. Session-derived (code check): paste the relevant line.
+// CASE 6. all-invalid pinned → derived-default floor (member always sees SOMETHING).
+// CASE 7. partial-invalid pinned → keep valid only, no fallback.
+// CASE 5. Cleanup.
 
 import { getDb } from "@/lib/db/client";
-import { resolvePerUserDashboard, SLICE_SPEC } from "@/lib/widgets/per-user";
-import { CAN_READ_ALL } from "@/lib/widgets/read-api";
+import { resolvePerUserDashboard } from "@/lib/widgets/per-user";
+import { deriveDefaultBoard } from "@/lib/widgets/derive-board";
+import { CAN_READ_ALL, type CanReadType } from "@/lib/widgets/read-api";
 import { compose_dashboard } from "@/lib/widgets/compose";
+import { loadOntology } from "@/lib/ontology/load";
+import { getRuntimeOntologyDir } from "@/lib/setup/paths";
 import {
   member as memberTable,
   member_context as memberContextTable,
 } from "@/lib/db/schema.generated";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,17 +37,25 @@ function fail(label: string, detail?: unknown) {
   process.exit(1);
 }
 
-function widgetSummary(widgets: Array<{ id: string; kind: string; config: unknown; data: unknown }>) {
+function widgetSummary(widgets: Array<{ id: string; kind: string; config: unknown; data?: unknown }>) {
   return widgets.map((w) => {
     const cfg = w.config as Record<string, unknown>;
     return `${w.kind}(type=${cfg.type ?? "?"})`;
   }).join(", ");
 }
 
+function widgetTypes(widgets: Array<{ kind: string; config: unknown }>): string[] {
+  return widgets.map((w) => String((w.config as { type?: string }).type ?? ""));
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
   const db = getDb();
+
+  // Load the SAME runtime ontology the app uses — the single source of the
+  // derived default board. The proof oracle is deriveDefaultBoard, not a list.
+  const ontology = await loadOntology(getRuntimeOntologyDir());
 
   // ── Baseline: live counts for assertion ──────────────────────────────────
 
@@ -47,161 +64,159 @@ async function main() {
     ? guestCountRow.count
     : Number(guestCountRow.count ?? 0);
 
-  const [memberCountRow] = await db.execute(sql`SELECT COUNT(*)::int AS count FROM "member"`) as Array<{ count: unknown }>;
-  const liveMemberCount = typeof memberCountRow.count === "number"
-    ? memberCountRow.count
-    : Number(memberCountRow.count ?? 0);
+  console.log(`\nBaseline: guest=${liveGuestCount}`);
 
-  console.log(`\nBaseline: guest=${liveGuestCount}, member=${liveMemberCount}`);
-
-  // ── Get seed members ──────────────────────────────────────────────────────
+  // ── Get a seed member (any role — role no longer changes the board) ────────
 
   const allMembers = await db.select().from(memberTable);
-  const managerMember = allMembers.find((m) => m.tier_role === "manager");
-  const workTraderMember = allMembers.find((m) => m.tier_role === "work_trader");
+  const probeMember = allMembers.find((m) => m.tier_role === "manager") ?? allMembers[0];
 
-  if (!managerMember || !workTraderMember) {
-    fail("Could not find seed members with tier_role=manager and work_trader",
+  if (!probeMember) {
+    fail("No seed members found — cannot run the per-user proof",
       { found: allMembers.map((m) => ({ name: m.full_name, tier_role: m.tier_role })) });
     return;
   }
 
-  console.log(`\nManager member: ${managerMember.full_name} (${managerMember.id})`);
-  console.log(`Work-trader member: ${workTraderMember.full_name} (${workTraderMember.id})`);
+  console.log(`\nProbe member: ${probeMember.full_name} (${probeMember.id}, role=${probeMember.tier_role})`);
 
-  // ── CASE 1: Two roles, different dashboards, SAME function ───────────────
+  // ── CASE 1: permission lens — SAME function, different canReadType ─────────
 
-  console.log("\n── CASE 1: Two roles → different widgets from SAME function ──");
+  console.log("\n── CASE 1: permission lens → different canReadType, different board ──");
 
-  // Clear any existing pinned_widgets for clean test (so role default fires)
-  // Save originals for cleanup
-  const originalContexts: Array<{ id: string; member_id: string; pinned_widgets: string }> = [];
-  for (const m of [managerMember, workTraderMember]) {
-    const existing = await db
-      .select()
-      .from(memberContextTable)
-      .where(eq(memberContextTable.member_id, m.id))
-      .limit(1);
-    if (existing.length > 0) {
-      originalContexts.push({
-        id: existing[0].id,
-        member_id: m.id,
-        pinned_widgets: existing[0].pinned_widgets,
-      });
-      // Clear pinned_widgets so role default fires
-      await db
-        .update(memberContextTable)
-        .set({ pinned_widgets: "[]", updated_at: new Date() })
-        .where(eq(memberContextTable.member_id, m.id));
-    }
+  // Clear pinned_widgets so the derived default fires. Save originals for cleanup.
+  const originalContexts: Array<{ member_id: string; pinned_widgets: string }> = [];
+  const existing = await db
+    .select()
+    .from(memberContextTable)
+    .where(eq(memberContextTable.member_id, probeMember.id))
+    .limit(1);
+  if (existing.length > 0) {
+    originalContexts.push({
+      member_id: probeMember.id,
+      pinned_widgets: existing[0].pinned_widgets,
+    });
+    await db
+      .update(memberContextTable)
+      .set({ pinned_widgets: "[]", updated_at: new Date() })
+      .where(eq(memberContextTable.member_id, probeMember.id));
   }
 
-  // Call SAME function with different members
-  const managerWidgets = await resolvePerUserDashboard(db, {
-    id: managerMember.id,
-    tier_role: managerMember.tier_role,
+  // Broad reader: can read everything.
+  const broadBoard = await resolvePerUserDashboard(db, {
+    id: probeMember.id,
+    tier_role: probeMember.tier_role,
   }, CAN_READ_ALL);
 
-  const workTraderWidgets = await resolvePerUserDashboard(db, {
-    id: workTraderMember.id,
-    tier_role: workTraderMember.tier_role,
-  }, CAN_READ_ALL);
+  // Narrow reader: can read ONLY `guest` (a real ontology type).
+  const guestOnly: CanReadType = (t) => t === "guest";
+  const narrowBoard = await resolvePerUserDashboard(db, {
+    id: probeMember.id,
+    tier_role: probeMember.tier_role,
+  }, guestOnly);
 
-  console.log(`\nManager (${managerMember.tier_role}) widgets:`);
-  console.log(" ", widgetSummary(managerWidgets));
-  console.log(`\nWork-trader (${workTraderMember.tier_role}) widgets:`);
-  console.log(" ", widgetSummary(workTraderWidgets));
+  console.log(`\nBroad reader (CAN_READ_ALL) board:`);
+  console.log(" ", widgetSummary(broadBoard));
+  console.log(`\nNarrow reader (guest-only) board:`);
+  console.log(" ", widgetSummary(narrowBoard));
 
-  if (managerWidgets.length === 0) {
-    fail("CASE 1: manager got 0 widgets (should have SLICE_SPEC[manager] defaults)");
+  if (broadBoard.length === 0) {
+    fail("CASE 1: broad reader got 0 widgets (derived default should be non-empty)");
   }
-  if (workTraderWidgets.length === 0) {
-    fail("CASE 1: work_trader got 0 widgets (should have SLICE_SPEC[work_trader] defaults)");
+  if (narrowBoard.length === 0) {
+    fail("CASE 1: narrow (guest-only) reader got 0 widgets (guest is readable → should be non-empty)");
   }
 
-  // Assert they differ — different kinds or configs
-  const managerSummary = widgetSummary(managerWidgets);
-  const workTraderSummary = widgetSummary(workTraderWidgets);
-
-  if (managerSummary === workTraderSummary) {
-    fail("CASE 1: manager and work_trader got IDENTICAL widgets — not per-user", {
-      manager: managerSummary,
-      work_trader: workTraderSummary,
+  // The narrow board must be a STRICT subset of the broad board's type-set:
+  // only guest-typed widgets, and never a type the narrow reader can't read.
+  const narrowTypes = new Set(widgetTypes(narrowBoard));
+  if (![...narrowTypes].every((t) => t === "guest")) {
+    fail("CASE 1: narrow (guest-only) board leaked a non-guest type", {
+      narrowTypes: [...narrowTypes],
+    });
+  }
+  if (broadBoard.length <= narrowBoard.length) {
+    fail("CASE 1: broad reader should see MORE widgets than the guest-only reader", {
+      broad: broadBoard.length,
+      narrow: narrowBoard.length,
     });
   }
 
-  pass(`CASE 1 — same function resolvePerUserDashboard, DIFFERENT cards:\n  manager(${managerMember.tier_role}): ${managerSummary}\n  work_trader(${workTraderMember.tier_role}): ${workTraderSummary}`);
+  pass(`CASE 1 — permission lens via SAME function: broad sees ${broadBoard.length} widgets across many types, guest-only sees ${narrowBoard.length} (guest-typed only)`);
 
-  // ── CASE 2: Both render live data via the read-only api ───────────────────
+  // ── CASE 1b: the board matches the pure deriveDefaultBoard oracle ──────────
+
+  console.log("\n── CASE 1b: rendered board shape == deriveDefaultBoard(ontology, canReadType) ──");
+
+  // The pure derivation is the spec. The rendered board may drop widgets whose
+  // binding throws on empty data, but it must never INVENT a type the oracle
+  // didn't propose, and every rendered type must be in the oracle's type-set.
+  const oracleTypes = new Set(widgetTypes(deriveDefaultBoard(ontology, CAN_READ_ALL)));
+  const renderedTypes = widgetTypes(broadBoard);
+  if (!renderedTypes.every((t) => oracleTypes.has(t))) {
+    fail("CASE 1b: rendered board contains a type the derive-board oracle did not propose", {
+      rendered: [...new Set(renderedTypes)],
+      oracle: [...oracleTypes],
+    });
+  }
+  if (oracleTypes.size === 0) {
+    fail("CASE 1b: deriveDefaultBoard(ontology, CAN_READ_ALL) produced an empty oracle");
+  }
+
+  pass(`CASE 1b — every rendered widget type is admitted by the deriveDefaultBoard oracle (${oracleTypes.size} types)`);
+
+  // ── CASE 2: derived board renders live data via the read-only api ─────────
 
   console.log("\n── CASE 2: Live data from read-only api ──");
 
-  // Manager should have metric(guest) and metric(member)
-  const managerGuestMetric = managerWidgets.find(
-    (w) => w.kind === "metric" && (w.config as { type: string }).type === "guest"
+  // The derived default emits a data_table for guest. Its row count must reflect
+  // live data (capped by the descriptor limit). Prove it is a real query result.
+  const guestTable = broadBoard.find(
+    (w) => w.kind === "data_table" && (w.config as { type: string }).type === "guest",
   );
-  const managerMemberMetric = managerWidgets.find(
-    (w) => w.kind === "metric" && (w.config as { type: string }).type === "member"
-  );
-
-  if (!managerGuestMetric) {
-    fail("CASE 2: manager missing metric(guest)");
+  if (!guestTable) {
+    fail("CASE 2: derived board missing data_table(guest)", { board: widgetSummary(broadBoard) });
   }
-  if (!managerMemberMetric) {
-    fail("CASE 2: manager missing metric(member)");
-  }
+  const guestRows = (guestTable!.data as { rows: unknown[] }).rows;
+  const limit = (guestTable!.config as { limit?: number }).limit ?? Infinity;
+  const expectedRows = Math.min(liveGuestCount, limit);
+  console.log(`Guest data_table rows: ${guestRows.length} (live count=${liveGuestCount}, limit=${limit}, expected=${expectedRows})`);
 
-  const guestMetricValue = (managerGuestMetric!.data as { value: number }).value;
-  const memberMetricValue = (managerMemberMetric!.data as { value: number }).value;
-
-  console.log(`Manager guest metric value: ${guestMetricValue} (live count: ${liveGuestCount})`);
-  console.log(`Manager member metric value: ${memberMetricValue} (live count: ${liveMemberCount})`);
-
-  if (guestMetricValue !== liveGuestCount) {
-    fail(`CASE 2: manager guest metric ${guestMetricValue} !== live count ${liveGuestCount}`);
-  }
-  if (memberMetricValue !== liveMemberCount) {
-    fail(`CASE 2: manager member metric ${memberMetricValue} !== live count ${liveMemberCount}`);
+  if (guestRows.length !== expectedRows) {
+    fail(`CASE 2: guest data_table rows ${guestRows.length} !== min(liveCount, limit)=${expectedRows}`);
   }
 
-  // Work-trader should have roster(shift) — check it resolved some data shape
-  const wtRoster = workTraderWidgets.find((w) => w.kind === "roster");
-  if (!wtRoster) {
-    fail("CASE 2: work_trader missing roster widget");
-  }
-  const wtEntries = (wtRoster!.data as { entries: unknown[] }).entries;
-  console.log(`Work-trader shift roster: ${wtEntries.length} entries`);
-
-  pass(`CASE 2 — live data verified: guest metric=${guestMetricValue}==count ${liveGuestCount}, member metric=${memberMetricValue}==count ${liveMemberCount}, work_trader roster=${wtEntries.length} entries`);
+  pass(`CASE 2 — live data verified: guest data_table=${guestRows.length} rows == min(liveCount ${liveGuestCount}, limit ${limit})`);
 
   // ── CASE 3: pinned_widgets override ──────────────────────────────────────
 
-  console.log("\n── CASE 3: explicit pinned_widgets override role default ──");
+  console.log("\n── CASE 3: explicit pinned_widgets override derived default ──");
 
-  // Pin a DIFFERENT set for the manager — supervisor's spec (narrower)
-  const overrideSelections = SLICE_SPEC["supervisor"];
+  // Pin a SINGLE explicit widget — distinct from the multi-widget derived floor.
+  const overrideSelections = [
+    { kind: "metric" as const, config: { type: "guest", agg: "count" } },
+  ];
   const overrideSummary = overrideSelections.map((d) => {
     const cfg = d.config as Record<string, unknown>;
     return `${d.kind}(type=${cfg.type ?? "?"})`;
   }).join(", ");
 
-  await compose_dashboard(db, managerMember.id, overrideSelections);
+  await compose_dashboard(db, probeMember.id, overrideSelections);
 
-  const managerWithOverride = await resolvePerUserDashboard(db, {
-    id: managerMember.id,
-    tier_role: managerMember.tier_role,
+  const withOverride = await resolvePerUserDashboard(db, {
+    id: probeMember.id,
+    tier_role: probeMember.tier_role,
   }, CAN_READ_ALL);
 
-  const overrideResult = widgetSummary(managerWithOverride);
-  console.log(`\nManager with pinned override (supervisor spec): ${overrideResult}`);
-  console.log(`Manager role default was: ${managerSummary}`);
+  const overrideResult = widgetSummary(withOverride);
+  const derivedSummary = widgetSummary(broadBoard);
+  console.log(`\nWith pinned override: ${overrideResult}`);
+  console.log(`Derived default was:  ${derivedSummary}`);
 
-  // The override should differ from role default
-  if (overrideResult === managerSummary) {
-    fail("CASE 3: pinned_widgets override returned role default — override not respected");
+  // The override should differ from the derived default…
+  if (overrideResult === derivedSummary) {
+    fail("CASE 3: pinned_widgets override returned the derived default — override not respected");
   }
-
-  // The override should match the supervisor spec we pinned
+  // …and match exactly the single widget we pinned.
   if (overrideResult !== overrideSummary) {
     fail(`CASE 3: override result doesn't match pinned spec`, {
       got: overrideResult,
@@ -209,13 +224,12 @@ async function main() {
     });
   }
 
-  pass(`CASE 3 — pinned_widgets override works: explicit '${overrideResult}' != role default '${managerSummary}'`);
+  pass(`CASE 3 — pinned_widgets override works: explicit '${overrideResult}' != derived default '${derivedSummary}'`);
 
   // ── CASE 4: Session-derived (code check) ─────────────────────────────────
 
-  console.log("\n── CASE 4: Session-derived member/role ──");
+  console.log("\n── CASE 4: Session-derived member ──");
 
-  // Quote the exact line from app/page.tsx that shows session derivation
   const sessionDerivedLine = `
   // From app/page.tsx — the ONLY source of actor is buildChatRuntime():
   const chatRuntime = await buildChatRuntime();   // ← session
@@ -223,151 +237,119 @@ async function main() {
   // Then:
   .where(eq(memberTable.id, actor.userId))        // ← actor.userId from session, never a param
   // Then passed to:
-  widgets = await resolvePerUserDashboard(db, { id: me.id, tier_role: me.tier_role }, CAN_READ_ALL);
-  // resolvePerUserDashboard signature: (db, member: { id: string; tier_role: string })
-  // — no role/memberId params passed in from request body or URL.
+  widgets = await resolvePerUserDashboard(db, { id: me.id, tier_role: me.tier_role }, canReadType);
+  // canReadType = buildCanReadType(actor, ontology) — the PERMISSION LENS.
+  // resolvePerUserDashboard signature: (db, member: { id, tier_role }, canReadType)
+  // — no role/memberId params passed in from request body or URL; the board is
+  //   derived from the ontology and scoped by the session actor's read permissions.
   `;
 
   console.log(sessionDerivedLine);
-  pass("CASE 4 — member/role from buildChatRuntime() session, not a request param (see line above)");
+  pass("CASE 4 — member from buildChatRuntime() session, board scoped by the actor's canReadType (see line above)");
 
-  // ── CASE 6: all-invalid pinned → role-default floor ──────────────────────
+  // ── CASE 6: all-invalid pinned → derived-default floor ───────────────────
 
-  console.log("\n── CASE 6: all-invalid pinned_widgets → role-default floor ──");
+  console.log("\n── CASE 6: all-invalid pinned_widgets → derived-default floor ──");
 
-  // Set manager's pinned_widgets to a parseable but ALL-INVALID config
-  // (references a nonexistent column — validateWidgetConfig will reject it)
+  // Parseable but ALL-INVALID (references a nonexistent column → rejected).
   const allInvalidPinned = JSON.stringify([
     { id: "x", kind: "data_table", config: { type: "guest", columns: ["nonexistent_col"], limit: 10 } },
   ]);
 
-  // Ensure manager has a member_context row to update (create if missing)
-  const managerCtxRow = await db
-    .select()
-    .from(memberContextTable)
-    .where(eq(memberContextTable.member_id, managerMember.id))
-    .limit(1);
+  await db
+    .update(memberContextTable)
+    .set({ pinned_widgets: allInvalidPinned, updated_at: new Date() })
+    .where(eq(memberContextTable.member_id, probeMember.id));
 
-  if (managerCtxRow.length === 0) {
-    // Insert a fresh context row with the all-invalid pinned config
-    await db.insert(memberContextTable).values({
-      member_id: managerMember.id,
-      pinned_widgets: allInvalidPinned,
-      created_at: new Date(),
-      updated_at: new Date(),
-    });
-  } else {
-    await db
-      .update(memberContextTable)
-      .set({ pinned_widgets: allInvalidPinned, updated_at: new Date() })
-      .where(eq(memberContextTable.member_id, managerMember.id));
-  }
-
-  const managerAllInvalidWidgets = await resolvePerUserDashboard(db, {
-    id: managerMember.id,
-    tier_role: managerMember.tier_role,
+  const allInvalidWidgets = await resolvePerUserDashboard(db, {
+    id: probeMember.id,
+    tier_role: probeMember.tier_role,
   }, CAN_READ_ALL);
 
-  console.log(`\nManager with all-invalid pinned_widgets:`);
-  console.log("  resolved:", widgetSummary(managerAllInvalidWidgets));
-  console.log("  expected (manager default):", managerSummary);
+  console.log(`\nWith all-invalid pinned_widgets:`);
+  console.log("  resolved:", widgetSummary(allInvalidWidgets));
+  console.log("  expected (derived default):", derivedSummary);
 
-  if (managerAllInvalidWidgets.length === 0) {
-    fail("CASE 6: all-invalid pinned returned [] — did NOT fall back to role default");
+  if (allInvalidWidgets.length === 0) {
+    fail("CASE 6: all-invalid pinned returned [] — did NOT fall back to derived default");
   }
 
-  const case6Summary = widgetSummary(managerAllInvalidWidgets);
-  if (case6Summary !== managerSummary) {
-    fail(`CASE 6: fell back but not to manager SLICE_SPEC`, {
+  const case6Summary = widgetSummary(allInvalidWidgets);
+  if (case6Summary !== derivedSummary) {
+    fail(`CASE 6: fell back but not to the derived default`, {
       got: case6Summary,
-      expected: managerSummary,
+      expected: derivedSummary,
     });
   }
 
-  pass(`CASE 6 — all-invalid pinned falls back to role default: resolved == manager SLICE_SPEC '${case6Summary}'`);
+  pass(`CASE 6 — all-invalid pinned falls back to the derived default: '${case6Summary}'`);
 
   // ── CASE 7: partial-invalid pinned → keep valid only, no fallback ─────────
 
   console.log("\n── CASE 7: partial-invalid pinned → keep valid only, no fallback ──");
 
-  // One VALID descriptor + one INVALID descriptor
   const partialInvalidPinned = JSON.stringify([
-    // Valid: metric(guest, count) — this IS in WIDGET_CATALOG and valid config
+    // Valid: metric(guest, count) — in WIDGET_CATALOG and valid config.
     { id: "valid-1", kind: "metric", config: { type: "guest", agg: "count" } },
-    // Invalid: data_table with nonexistent column — validateWidgetConfig rejects it
+    // Invalid: data_table with nonexistent column — validateWidgetConfig rejects.
     { id: "invalid-1", kind: "data_table", config: { type: "guest", columns: ["nonexistent_col"], limit: 10 } },
   ]);
 
   await db
     .update(memberContextTable)
     .set({ pinned_widgets: partialInvalidPinned, updated_at: new Date() })
-    .where(eq(memberContextTable.member_id, managerMember.id));
+    .where(eq(memberContextTable.member_id, probeMember.id));
 
-  const managerPartialWidgets = await resolvePerUserDashboard(db, {
-    id: managerMember.id,
-    tier_role: managerMember.tier_role,
+  const partialWidgets = await resolvePerUserDashboard(db, {
+    id: probeMember.id,
+    tier_role: probeMember.tier_role,
   }, CAN_READ_ALL);
 
-  console.log(`\nManager with partial-invalid pinned_widgets (1 valid + 1 invalid):`);
-  console.log("  resolved:", widgetSummary(managerPartialWidgets));
-  console.log("  manager SLICE_SPEC default:", managerSummary);
+  console.log(`\nWith partial-invalid pinned_widgets (1 valid + 1 invalid):`);
+  console.log("  resolved:", widgetSummary(partialWidgets));
+  console.log("  derived default:", derivedSummary);
 
-  if (managerPartialWidgets.length === 0) {
+  if (partialWidgets.length === 0) {
     fail("CASE 7: partial-invalid returned [] — should have kept the valid widget");
   }
 
-  // Must return ONLY the valid one (the metric) — NOT fall back to full role default
-  if (managerPartialWidgets.length !== 1) {
-    fail(`CASE 7: expected exactly 1 valid widget (metric), got ${managerPartialWidgets.length}`, {
-      widgets: widgetSummary(managerPartialWidgets),
+  // Must return ONLY the valid one (the metric) — NOT fall back to the derived floor.
+  if (partialWidgets.length !== 1) {
+    fail(`CASE 7: expected exactly 1 valid widget (metric), got ${partialWidgets.length}`, {
+      widgets: widgetSummary(partialWidgets),
     });
   }
 
-  const validWidget = managerPartialWidgets[0];
+  const validWidget = partialWidgets[0];
   if (validWidget.kind !== "metric" || (validWidget.config as { type: string }).type !== "guest") {
-    fail("CASE 7: surviving widget is not the expected metric(guest)", {
-      got: validWidget,
-    });
+    fail("CASE 7: surviving widget is not the expected metric(guest)", { got: validWidget });
   }
 
-  // Must NOT equal the full role default (that would mean it fell back)
-  const case7Summary = widgetSummary(managerPartialWidgets);
-  if (case7Summary === managerSummary) {
-    fail("CASE 7: result matches full role default — incorrectly fell back instead of keeping valid widget");
+  const case7Summary = widgetSummary(partialWidgets);
+  if (case7Summary === derivedSummary) {
+    fail("CASE 7: result matches the derived default — incorrectly fell back instead of keeping the valid widget");
   }
 
-  pass(`CASE 7 — partial-invalid: only valid widget survives '${case7Summary}', no fallback to role default '${managerSummary}'`);
+  pass(`CASE 7 — partial-invalid: only valid widget survives '${case7Summary}', no fallback to derived default '${derivedSummary}'`);
 
   // ── CASE 5: Cleanup ───────────────────────────────────────────────────────
 
   console.log("\n── CASE 5: Cleanup ──");
 
-  // Restore original pinned_widgets
-  for (const orig of originalContexts) {
-    await db
-      .update(memberContextTable)
-      .set({ pinned_widgets: orig.pinned_widgets, updated_at: new Date() })
-      .where(eq(memberContextTable.member_id, orig.member_id));
-  }
-
-  // Remove any member_context rows that didn't exist before the test
-  // (for members that had no context row, we may have created one via compose_dashboard)
-  const originalMemberIds = new Set(originalContexts.map((o) => o.member_id));
-  for (const m of [managerMember, workTraderMember]) {
-    if (!originalMemberIds.has(m.id)) {
-      // This member had no context before — remove the one we created
+  if (originalContexts.length > 0) {
+    // Restore original pinned_widgets.
+    for (const orig of originalContexts) {
       await db
-        .delete(memberContextTable)
-        .where(eq(memberContextTable.member_id, m.id));
+        .update(memberContextTable)
+        .set({ pinned_widgets: orig.pinned_widgets, updated_at: new Date() })
+        .where(eq(memberContextTable.member_id, orig.member_id));
     }
-  }
-
-  // Also clean up the manager context if we created it fresh for CASE 6/7
-  // (if it wasn't in originalContexts it means it didn't exist before)
-  if (!originalMemberIds.has(managerMember.id)) {
+  } else {
+    // The probe member had no context row before — remove the one compose_dashboard
+    // created during CASE 3.
     await db
       .delete(memberContextTable)
-      .where(eq(memberContextTable.member_id, managerMember.id));
+      .where(eq(memberContextTable.member_id, probeMember.id));
   }
 
   console.log("cleanup done");

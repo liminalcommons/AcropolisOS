@@ -1,6 +1,8 @@
 // lib/widgets/arrange.test.ts
 import { describe, it, expect } from "vitest";
-import { moveItem, removeItem, addItem, toSelections, addableForRole, type ArrangeItem } from "./arrange";
+import path from "node:path";
+import { moveItem, removeItem, addItem, toSelections, addableWidgets, type ArrangeItem } from "./arrange";
+import { loadOntology } from "@/lib/ontology/load";
 
 const items: ArrangeItem[] = [
   { id: "a", kind: "metric", config: { type: "guest", agg: "count" } },
@@ -50,13 +52,18 @@ describe("toSelections", () => {
   });
 });
 
-describe("addableForRole", () => {
-  it("returns the role's SLICE_SPEC as selections", () => {
-    const m = addableForRole("manager");
-    expect(m.length).toBeGreaterThan(0);
-    expect(m.every((s) => typeof s.kind === "string")).toBe(true);
-  });
-  it("unknown role falls back to staff", () => {
-    expect(addableForRole("nope")).toEqual(addableForRole("staff"));
+describe("addableWidgets", () => {
+  it("derives addable selections from the ontology, permission-scoped", async () => {
+    const onto = await loadOntology(path.resolve(__dirname, "../../ontology"));
+    const all = addableWidgets(onto, () => true);
+    expect(all.length).toBeGreaterThan(0);
+    expect(all.every((s) => typeof s.kind === "string")).toBe(true);
+    // permission lens: a viewer who can only read `guest` gets only guest widgets
+    const guestOnly = addableWidgets(onto, (t) => t === "guest");
+    const types = guestOnly.map((s) => (s.config as { type?: string }).type);
+    expect(types).toContain("guest");
+    expect(types).not.toContain("member");
+    // reading nothing → empty (the floor)
+    expect(addableWidgets(onto, () => false)).toEqual([]);
   });
 });

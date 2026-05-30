@@ -5,7 +5,9 @@
  * Proves the slices compose as a PRODUCT on one fresh, disposable row.
  *
  * Steps:
- *   1. Baseline  — live guest count + manager's per-user dashboard guest metric (V0).
+ *   1. Baseline  — live guest count + the manager's per-user dashboard guest
+ *                  data_table (derived default board; permission-lens). Record
+ *                  that the disposable name is NOT yet present (V0).
  *   2. CSV drop  — POST `name,email\nZZIntegration Tester,zzintegration@test.local\n`
  *                  to /api/connect/csv (steward session); assert 1 raw_inbox row.
  *   3. /organize — assert inbox_id is in the unclassified set (classified_as IS NULL).
@@ -13,9 +15,10 @@
  *                  with name→full_name (real LLM; fixed-proposal fallback on timeout, disclosed).
  *   5. Commit    — commitProposalCore(db, "steward", stewardId, proposal)
  *                  → assert committed + real guest row + provenance stamped.
- *   6. ★ Per-user dashboard — resolvePerUserDashboard(db, managerMember) guest metric
- *                  is now V0+1. ALSO assert createReadOnlyDataApi.select("guest", …)
- *                  returns the new row by full_name. PRINT both.
+ *   6. ★ Per-user dashboard — resolvePerUserDashboard(db, managerMember) guest
+ *                  data_table now CONTAINS the committed row (absent before).
+ *                  ALSO assert createReadOnlyDataApi.select("guest", …) returns
+ *                  the new row by full_name. PRINT both.
  *   7. Cleanup   — delete disposable guest row + raw_inbox row.
  *
  * Usage: docker exec acropolisos-app npx tsx scripts/integration-proof.ts
@@ -95,8 +98,29 @@ async function main() {
   let disposableInboxId: string | null = null;
   let disposableGuestId: string | null = null;
 
+  // Helper: pull the guest data_table rows from the manager's derived per-user
+  // dashboard. The default board is DERIVED from the ontology + read permissions
+  // (deriveDefaultBoard) — for a readable type it emits a data_table (and a
+  // calendar), NOT a metric. So we prove flow-through via the data_table rows.
+  function guestRowsFrom(
+    widgets: Awaited<ReturnType<typeof resolvePerUserDashboard>>,
+  ): Array<Record<string, unknown>> {
+    const table = widgets.find(
+      (w) => w.kind === "data_table" && (w.config as { type: string }).type === "guest",
+    );
+    if (!table) {
+      fail("Manager derived dashboard has no data_table(guest) — cannot establish V0", {
+        widgets: widgets.map((w) => ({
+          kind: w.kind,
+          type: (w.config as { type?: string }).type,
+        })),
+      });
+    }
+    return (table!.data as { rows: Array<Record<string, unknown>> }).rows;
+  }
+
   // ── STEP 1: Baseline ────────────────────────────────────────────────────────
-  console.log("\n=== STEP 1: Baseline — live count + manager dashboard guest metric (V0) ===");
+  console.log("\n=== STEP 1: Baseline — live count + manager dashboard guest data_table (V0) ===");
 
   // Find the manager member
   const allMembers = await db.select().from(memberTable);
@@ -116,30 +140,23 @@ async function main() {
     ? countRow.count
     : Number(countRow.count ?? 0);
 
-  // Manager per-user dashboard — guest metric
+  // Manager per-user dashboard — guest data_table (derived default board)
   const baselineWidgets = await resolvePerUserDashboard(db, {
     id: managerMember.id,
     tier_role: managerMember.tier_role,
   }, CAN_READ_ALL);
 
-  const baselineGuestMetric = baselineWidgets.find(
-    (w) => w.kind === "metric" && (w.config as { type: string }).type === "guest",
+  const baselineGuestRows = guestRowsFrom(baselineWidgets);
+  const V0 = baselineGuestRows.length;
+  const presentBefore = baselineGuestRows.some(
+    (r) => r["full_name"] === DISPOSABLE_NAME,
   );
-  if (!baselineGuestMetric) {
-    fail("Manager SLICE_SPEC has no metric(guest) — cannot establish V0", {
-      widgets: baselineWidgets.map((w) => ({
-        kind: w.kind,
-        type: (w.config as { type: string }).type,
-      })),
-    });
-  }
-
-  const V0 = (baselineGuestMetric.data as { value: number }).value;
   console.log(`  Live SELECT count(*) FROM guest = ${liveCount}`);
-  console.log(`  Manager dashboard metric(guest) = ${V0}`);
+  console.log(`  Manager dashboard guest data_table rows = ${V0}`);
+  console.log(`  Disposable '${DISPOSABLE_NAME}' present before? ${presentBefore}`);
   assert(
-    V0 === liveCount,
-    `Baseline: dashboard guest metric (${V0}) === live SQL count (${liveCount})`,
+    !presentBefore,
+    `Baseline: disposable guest '${DISPOSABLE_NAME}' NOT yet on the manager dashboard`,
   );
 
   // ── STEP 2: CSV drop ────────────────────────────────────────────────────────
@@ -393,30 +410,28 @@ async function main() {
   }));
 
   // ── STEP 6: ★ Per-user dashboard + read-only api ─────────────────────────────
-  console.log("\n=== STEP 6: ★ Per-user dashboard — guest metric V0→V0+1 + read-only api ===");
+  console.log("\n=== STEP 6: ★ Per-user dashboard — committed row appears in guest data_table + read-only api ===");
 
-  // 6a: resolvePerUserDashboard — the committed row must flow through to the metric
+  // 6a: resolvePerUserDashboard — the committed row must flow through to the
+  // DERIVED guest data_table (the default board emits a data_table, not a metric).
   const afterWidgets = await resolvePerUserDashboard(db, {
     id: managerMember.id,
     tier_role: managerMember.tier_role,
   }, CAN_READ_ALL);
 
-  const afterGuestMetric = afterWidgets.find(
-    (w) => w.kind === "metric" && (w.config as { type: string }).type === "guest",
+  const afterGuestRows = guestRowsFrom(afterWidgets);
+  const presentAfter = afterGuestRows.some(
+    (r) => r["full_name"] === DISPOSABLE_NAME,
   );
-  if (!afterGuestMetric) {
-    fail("Manager dashboard no longer has metric(guest) after commit — unexpected regression");
-  }
-
-  const V1 = (afterGuestMetric.data as { value: number }).value;
-  console.log(`  Manager dashboard metric(guest) BEFORE = V0=${V0}`);
-  console.log(`  Manager dashboard metric(guest) AFTER  = V1=${V1}`);
+  console.log(`  Disposable '${DISPOSABLE_NAME}' present before? false (asserted in STEP 1)`);
+  console.log(`  Disposable '${DISPOSABLE_NAME}' present after?  ${presentAfter}`);
+  console.log(`  Guest data_table rows BEFORE=${V0} AFTER=${afterGuestRows.length}`);
 
   assert(
-    V1 === V0 + 1,
-    `★ Dashboard guest metric V0→V0+1: ${V0}→${V1} (expected ${V0 + 1})`,
+    presentAfter,
+    `★ Committed guest '${DISPOSABLE_NAME}' now appears in the derived per-user dashboard guest data_table`,
   );
-  pass(`★ The committed row flowed to the per-user dashboard (resolvePerUserDashboard guest metric ${V0}→${V1})`);
+  pass(`★ The committed row flowed to the per-user dashboard (derived guest data_table now contains it)`);
 
   // 6b: createReadOnlyDataApi — the new row must be visible through the read-only view path.
   // Trusted proof context: structural whitelist derived from the loaded ontology.
@@ -469,14 +484,14 @@ async function main() {
 
   // ── Summary ───────────────────────────────────────────────────────────────────
   console.log("\n╔══ I1 INTEGRATION PROOF COMPLETE ══╗");
-  console.log(`║  Classify mode : ${classifyMode}`);
-  console.log(`║  V0 (before)   : ${V0}`);
-  console.log(`║  V1 (after)    : ${V1}`);
+  console.log(`║  Classify mode      : ${classifyMode}`);
+  console.log(`║  Guest table rows V0: ${V0} (disposable absent)`);
+  console.log(`║  Guest table rows V1: ${afterGuestRows.length} (disposable present)`);
   console.log("║  All 7 steps passed.");
   console.log("║");
   console.log("║  CSV drop → raw_inbox → /organize unclassified →");
   console.log("║  classify → commitProposalCore → typed guest row →");
-  console.log("║  resolvePerUserDashboard metric V0→V0+1 →");
+  console.log("║  resolvePerUserDashboard derived guest data_table now contains it →");
   console.log("║  visible via createReadOnlyDataApi.select()");
   console.log("╚══════════════════════════════════╝");
 
