@@ -1,6 +1,7 @@
 // lib/db/approved-views-migration.test.ts
 import { describe, expect, it } from "vitest";
 import { getTableColumns } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -37,5 +38,15 @@ describe("0008_approved_views migration", () => {
         "updated_at",
       ]),
     );
+  });
+
+  it("the schema.ts builder declares the (scope, scope_key) unique constraint matching the migration NAME — so a future drizzle-kit generate cannot DROP it", async () => {
+    const mod = await import("./schema");
+    const config = getTableConfig(mod.approved_views);
+    const unique = config.uniqueConstraints.find(
+      (u) => u.name === "approved_views_scope_key_unique",
+    );
+    expect(unique).toBeDefined();
+    expect(unique!.columns.map((c) => c.name).sort()).toEqual(["scope", "scope_key"]);
   });
 });

@@ -7,7 +7,7 @@
 // reality doesn't justify). Concept-level/lossy has a HARD always-escalate
 // ceiling — no autonomy graduation (§4.3 / §11.4).
 import type { Ontology } from "@/lib/ontology/schema";
-import { pascalToSnake } from "@/lib/ontology/casing";
+import { pascalToSnake, snakeToPascal } from "@/lib/ontology/casing";
 
 export interface GrowSignal {
   target_type: string; // snake token, e.g. "member"
@@ -44,8 +44,13 @@ export function evaluateGrow(signal: GrowSignal, ontology: Ontology): GrowDecisi
   }
   const known = knownTypeTokens(ontology);
 
+  // Normalize the incoming target_type to the same snake casing as the known
+  // tokens. A Pascal-cased token (e.g. "Member") would otherwise miss the
+  // `.has()` check and spuriously escalate an existing type as new_type.
+  const targetToken = pascalToSnake(signal.target_type);
+
   // Concept-level: the target type itself does not exist → new type → ESCALATE.
-  if (!known.has(signal.target_type)) {
+  if (!known.has(targetToken)) {
     return {
       autoApply: [],
       escalate: [
@@ -59,12 +64,18 @@ export function evaluateGrow(signal: GrowSignal, ontology: Ontology): GrowDecisi
     };
   }
 
-  // Existing type: each unfit field is an additive, reversible, optional field → AUTO.
-  const autoApply: GrowOp[] = Object.keys(signal.unfit_fields).map((field) => ({
-    kind: "add_optional_field",
-    object_type: signal.target_type,
-    field,
-    evidence: signal.evidence_rows,
-  }));
+  // Existing type: only GENUINELY-NEW fields are additive/reversible → AUTO.
+  // A field that already exists on the type is a redefinition (not additive,
+  // not reversible) and must NOT auto-apply — skip it. Look up the type's
+  // declared properties from the ontology to filter.
+  const existingProps = ontology.object_types[snakeToPascal(targetToken)]?.properties ?? {};
+  const autoApply: GrowOp[] = Object.keys(signal.unfit_fields)
+    .filter((field) => !(field in existingProps))
+    .map((field) => ({
+      kind: "add_optional_field",
+      object_type: signal.target_type,
+      field,
+      evidence: signal.evidence_rows,
+    }));
   return { autoApply, escalate: [] };
 }

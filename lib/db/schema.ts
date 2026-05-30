@@ -1,4 +1,4 @@
-import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // Re-export YAML-derived object/link tables so drizzle-kit sees them when
@@ -96,15 +96,24 @@ export type RawInboxInsert = typeof raw_inbox.$inferInsert;
 // the role name for role, the member id for viewer. descriptors is the same
 // widget-descriptor list shape the render path consumes. One active row per
 // (scope, scope_key).
-export const approved_views = pgTable("approved_views", {
-  id: uuid("id").primaryKey().defaultRandom().notNull(),
-  scope: text("scope").notNull(),
-  scope_key: text("scope_key").notNull(),
-  descriptors: jsonb("descriptors").notNull().default(sql`'[]'::jsonb`),
-  created_by: text("created_by").notNull(),
-  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const approved_views = pgTable(
+  "approved_views",
+  {
+    id: uuid("id").primaryKey().defaultRandom().notNull(),
+    scope: text("scope").notNull(),
+    scope_key: text("scope_key").notNull(),
+    descriptors: jsonb("descriptors").notNull().default(sql`'[]'::jsonb`),
+    created_by: text("created_by").notNull(),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // One active view per (scope, scope_key). The constraint NAME must match
+  // drizzle/0008_approved_views.sql so ORM and DB agree — otherwise a future
+  // `drizzle-kit generate` would emit a DROP for the "unknown" DB constraint.
+  (t) => ({
+    scopeKeyUnique: unique("approved_views_scope_key_unique").on(t.scope, t.scope_key),
+  }),
+);
 
 export type ApprovedViewRow = typeof approved_views.$inferSelect;
 export type ApprovedViewInsert = typeof approved_views.$inferInsert;
