@@ -12,7 +12,7 @@
 import path from "node:path";
 import { describe, expect, it, beforeAll, afterEach } from "vitest";
 import { composeOrgView, removeOrgView, clearOrgView } from "./compose-view";
-import { readOrgDashboard, clearOrgDashboard } from "./store";
+import { readOrgDashboard, clearOrgDashboard, adminDefaultBoard } from "./store";
 import { buildCanReadType } from "@/lib/widgets/read-api";
 import { loadOntology } from "@/lib/ontology/load";
 import type { Ontology } from "@/lib/ontology/schema";
@@ -40,7 +40,8 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  // Reset the store file so each test starts from the default.
+  // Reset the store file so each test starts from empty (the floor is derived
+  // at the /org page, not in the store).
   await clearOrgDashboard();
 });
 
@@ -88,7 +89,7 @@ describe("composeOrgView — governed + fail-closed", () => {
     if (result.ok) return;
     expect(result.reason).toContain("Not authorized to modify the org dashboard");
 
-    // Nothing for booking was persisted — store returns the default (bed list).
+    // Nothing for booking was persisted — the absent store returns empty.
     const dashboard = await readOrgDashboard();
     expect(
       dashboard.widgets.some((w) => w.id === "compose-booking-data_table"),
@@ -105,7 +106,7 @@ describe("composeOrgView — governed + fail-closed", () => {
     expect(result.ok).toBe(false);
 
     const dashboard = await readOrgDashboard();
-    // Only the default bed-list descriptor — nothing composed.
+    // The absent store returns empty — nothing composed.
     expect(dashboard.widgets.every((w) => !w.id.startsWith("compose-"))).toBe(true);
   });
 
@@ -229,7 +230,7 @@ describe("removeOrgView — gated, fail-closed, idempotent", () => {
 });
 
 describe("clearOrgView — gated, fail-closed", () => {
-  it("with write-auth → dashboard returns to the default", async () => {
+  it("with write-auth → dashboard returns to empty (floor derived at the page)", async () => {
     const canReadType = buildCanReadType(steward, ontology);
     await composeOrgView(
       { kind: "data_table", type: "shift", columns: ["label"] },
@@ -239,10 +240,10 @@ describe("clearOrgView — gated, fail-closed", () => {
     const r = await clearOrgView({ canWriteDashboard: true });
     expect(r.ok).toBe(true);
 
+    // After clear the store is empty; the admin floor is derived at the /org
+    // page (adminDefaultBoard), not returned by the store.
     const dashboard = await readOrgDashboard();
-    // Default = bed-list, no composed widgets.
-    expect(dashboard.widgets.every((w) => !w.id.startsWith("compose-"))).toBe(true);
-    expect(dashboard.widgets.some((w) => w.id === "admin-bed-list")).toBe(true);
+    expect(dashboard.widgets).toHaveLength(0);
   });
 
   it("without write-auth → {ok:false} and the dashboard is unchanged", async () => {
@@ -319,5 +320,16 @@ describe("multiple widgets coexist (append, not replace)", () => {
       filter?: { field: string; value: string };
     };
     expect(persistedCfg?.filter).toEqual({ field: "from_date", value: "@today" });
+  });
+});
+
+describe("adminDefaultBoard — derived admin floor", () => {
+  it("leads with the open-agent_blocker veto-queue and has a count metric per type", () => {
+    const board = adminDefaultBoard(ontology, () => true);
+    expect(board[0].kind).toBe("data_table");
+    expect((board[0].config as { type: string }).type).toBe("agent_blocker");
+    expect((board[0].config as { filter?: { field: string; value: string } }).filter)
+      .toEqual({ field: "status", value: "open" });
+    expect(board.some((d) => d.kind === "metric")).toBe(true);
   });
 });

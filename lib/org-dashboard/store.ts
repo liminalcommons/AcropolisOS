@@ -8,12 +8,16 @@
 //
 // The config is a list of widget DESCRIPTORS — the exact { id, kind, config }
 // shape the /org page already feeds to resolveDescriptors. When the file is
-// absent the store returns the DEFAULT (the current bed-list descriptor) so the
-// page looks identical until the steward composes something.
+// absent the store returns EMPTY; the admin FLOOR (veto-queue + per-type
+// metrics/tables) is DERIVED from the ontology by the /org page via
+// adminDefaultBoard — no longer a hand-listed default in this store.
 
 import path from "node:path";
 import fs from "node:fs/promises";
 import type { CatalogKind } from "@/lib/widgets/catalog";
+import { deriveDefaultBoard, type SliceDescriptor } from "@/lib/widgets/derive-board";
+import type { Ontology } from "@/lib/ontology/schema";
+import type { CanReadType } from "@/lib/widgets/read-api";
 
 // A persisted widget descriptor — same shape as ADMIN_DASHBOARD_DESCRIPTORS /
 // StoredDescriptor (compose.ts): kind + config + a stable id.
@@ -33,89 +37,32 @@ export interface OrgDashboardConfig {
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 const ORG_DASHBOARD_PATH = path.join(UPLOADS_DIR, "org-dashboard.json");
 
-// ── DEFAULT ───────────────────────────────────────────────────────────────────
-//
-// The steward's default surface, returned verbatim when no view has been
-// composed. The "awaiting your decision" queue (OPEN AgentBlocker rows —
-// agent-to-human escalations) renders FIRST so the steward sees pending
-// decisions before inventory; the bed-inventory data_table follows. Both are
-// governed data_table descriptors resolved through ReadOnlyDataApi.
-export const DEFAULT_ORG_DASHBOARD: OrgDashboardConfig = {
-  widgets: [
-    {
-      // The headline "M awaiting you" count — the at-a-glance number of
-      // agent→human escalations the steward still owes a decision on. Governed
-      // metric (api.count over agent_blocker, filtered status=open); the detail
-      // list follows below.
-      id: "admin-escalation-count",
-      kind: "metric",
-      title: "Awaiting your decision",
-      config: {
-        type: "agent_blocker",
-        agg: "count",
-        filter: { field: "status", value: "open" },
-      },
-    },
-    {
-      id: "admin-veto-queue",
-      kind: "data_table",
-      title: "Open escalations",
-      config: {
-        // "id" is FIRST so the renderer has the action target; it is filtered
-        // out of the VISIBLE columns and used only as the row key + objectId.
-        // "id" is FIRST so the renderer has the action target; "pathways" is
-        // fetched so the per-row CHOICE picker (row_resolver) can read each
-        // blocker's curated options, and "confirm_action" so the per-row BINARY
-        // CONFIRM (row_confirm) can read each blocker's single proposed action —
-        // all three are hidden from the VISIBLE columns.
-        type: "agent_blocker",
-        columns: ["id", "summary", "reason_kind", "blocked_actor_id", "resolution_mode", "created_at", "pathways", "confirm_action"],
-        filter: { field: "status", value: "open" },
-        limit: 50,
-        // Derive row affordances from the ontology: the one-click Dismiss
-        // (row_action) AND the per-row pathway picker (row_resolver).
-        row_actions: true,
-      },
-    },
-    {
-      // "Today" operational context, governed via the @today relative-date
-      // filter: bookings whose from_date == the current date (resolved at query
-      // time in read-api). Demonstrates relative-date composition — the first
-      // step toward /day as a generated composition.
-      id: "admin-arrivals-today",
-      kind: "data_table",
-      title: "Arrivals today",
-      config: {
-        type: "booking",
-        columns: ["label", "guest", "bed", "from_date", "to_date"],
-        filter: { field: "from_date", value: "@today" },
-        limit: 50,
-      },
-    },
-    {
-      id: "admin-bed-list",
-      kind: "data_table",
-      title: "Bed inventory",
-      config: {
-        type: "bed",
-        columns: ["code", "room", "is_bottom_bunk", "out_of_service", "notes"],
-        limit: 100,
-      },
-    },
-  ],
-};
+// ── adminDefaultBoard ───────────────────────────────────────────────────────
+// The steward's DERIVED admin floor (replaces the old hand-listed
+// DEFAULT_ORG_DASHBOARD): the open-agent_blocker veto-queue (decision board)
+// first, then a count metric per readable type (living-ontology overview), then
+// per-type tables/calendars — all from the ontology, permission-scoped, no
+// domain literals. Returned when nothing is stored; the /org page resolves it
+// through the SAME read-only fence as composed views.
+export function adminDefaultBoard(
+  ontology: Ontology,
+  canReadType: CanReadType,
+): SliceDescriptor[] {
+  return deriveDefaultBoard(ontology, canReadType, { admin: true });
+}
 
 // ── readOrgDashboard ────────────────────────────────────────────────────────────
 //
-// Returns the persisted config, or DEFAULT_ORG_DASHBOARD when the file is
-// absent / corrupt. Never throws on a missing or malformed file — the dashboard
-// always has SOMETHING to render (the default is the floor).
+// Returns the persisted config, or an EMPTY config when the file is absent /
+// corrupt. Never throws on a missing or malformed file. The admin FLOOR is no
+// longer a hand-listed default here — it is DERIVED by the /org page via
+// adminDefaultBoard when this returns empty.
 export async function readOrgDashboard(): Promise<OrgDashboardConfig> {
   let raw: string;
   try {
     raw = await fs.readFile(ORG_DASHBOARD_PATH, "utf8");
   } catch {
-    return cloneDefault();
+    return { widgets: [] };
   }
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -127,9 +74,9 @@ export async function readOrgDashboard(): Promise<OrgDashboardConfig> {
       return { widgets: (parsed as OrgDashboardConfig).widgets };
     }
   } catch {
-    // corrupt JSON — fall through to default
+    // corrupt JSON — fall through to empty
   }
-  return cloneDefault();
+  return { widgets: [] };
 }
 
 // ── writeOrgDashboard ───────────────────────────────────────────────────────────
@@ -143,8 +90,8 @@ export async function writeOrgDashboard(cfg: OrgDashboardConfig): Promise<void> 
 // Append the descriptor, OR replace an existing widget with the same id (so
 // "show me X again" replaces that widget rather than duplicating it — decision
 // #2: calling compose_view again with the same type replaces that widget).
-// First composition starts from a CLEAN slate (drops the bed-list default) so
-// the steward's composed dashboard is theirs, not default-plus-composed.
+// First composition starts from a CLEAN, EMPTY slate (readOrgDashboardOrEmpty,
+// not the derived floor) so the steward's composed dashboard is theirs.
 export async function addOrgWidget(descriptor: WidgetDescriptor): Promise<void> {
   const current = await readOrgDashboardOrEmpty();
   const idx = current.widgets.findIndex((w) => w.id === descriptor.id);
@@ -171,8 +118,9 @@ export async function removeOrgWidget(id: string): Promise<boolean> {
 
 // ── clearOrgDashboard ───────────────────────────────────────────────────────────
 //
-// Reset to the default (delete the file). Next readOrgDashboard returns the
-// bed-list default. Decision #2: easy to clear.
+// Reset (delete the file). Next readOrgDashboard returns EMPTY, so the /org page
+// falls back to the DERIVED admin floor (adminDefaultBoard). Decision #2: easy
+// to clear.
 export async function clearOrgDashboard(): Promise<void> {
   try {
     await fs.unlink(ORG_DASHBOARD_PATH);
@@ -183,9 +131,10 @@ export async function clearOrgDashboard(): Promise<void> {
 
 // ── internal ────────────────────────────────────────────────────────────────────
 
-// Reads the persisted file as-is; returns an EMPTY config (not the default) when
-// absent. Used by addOrgWidget so the first composed widget starts a clean,
-// steward-owned dashboard instead of being appended after the bed-list default.
+// Reads the persisted file as-is; returns an EMPTY config when absent. Used by
+// addOrgWidget so the first composed widget starts a clean, steward-owned
+// dashboard. (readOrgDashboard ALSO returns empty when absent now — this helper
+// is retained for the explicit "compose from clean" intent at the call site.)
 async function readOrgDashboardOrEmpty(): Promise<OrgDashboardConfig> {
   let raw: string;
   try {
@@ -206,13 +155,4 @@ async function readOrgDashboardOrEmpty(): Promise<OrgDashboardConfig> {
     // corrupt — treat as empty so a fresh compose starts clean
   }
   return { widgets: [] };
-}
-
-function cloneDefault(): OrgDashboardConfig {
-  return {
-    widgets: DEFAULT_ORG_DASHBOARD.widgets.map((w) => ({
-      ...w,
-      config: structuredClone(w.config),
-    })),
-  };
 }

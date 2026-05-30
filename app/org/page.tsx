@@ -21,7 +21,7 @@ import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { getDb } from "@/lib/db/client";
 import { resolveDescriptors } from "@/lib/widgets/per-user";
 import { buildCanReadType } from "@/lib/widgets/read-api";
-import { readOrgDashboard } from "@/lib/org-dashboard/store";
+import { readOrgDashboard, adminDefaultBoard } from "@/lib/org-dashboard/store";
 import { readOrgProfile } from "@/lib/org-profile/store";
 import { OrgNameEditor } from "@/components/org/org-name-editor";
 import { ResolvedWidgetCard } from "@/components/dashboard/ResolvedWidgetCard";
@@ -32,10 +32,11 @@ export const runtime = "nodejs";
 
 // ── Org dashboard config ──────────────────────────────────────────────────────
 //
-// Step-2b: the dashboard descriptors now come from the persisted org-dashboard
-// config (readOrgDashboard). When the steward has composed nothing the store
-// returns its DEFAULT — the bed-inventory data_table — so this page looks
-// identical until a view is composed via the compose_view chat tool.
+// The dashboard descriptors come from the persisted org-dashboard config
+// (readOrgDashboard) when the steward has composed something. When nothing is
+// stored the page falls back to the DERIVED admin floor (adminDefaultBoard):
+// the open-agent_blocker veto-queue, then a count metric + table/calendar per
+// readable type — composed from the ontology, no domain literals.
 //
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -75,8 +76,14 @@ export default async function OrgPage(): Promise<React.ReactElement> {
   const canReadType = buildCanReadType(chatRuntime.actor, chatRuntime.ontology);
   let widgets: ResolvedWidget[] = [];
   try {
-    const dashboard = await readOrgDashboard();
-    widgets = await resolveDescriptors(db, dashboard.widgets, canReadType);
+    // Stored (steward-composed) widgets win; absent → the DERIVED admin floor
+    // (veto-queue + per-type metrics/tables), resolved through the same fence.
+    const stored = await readOrgDashboard();
+    const descriptors =
+      stored.widgets.length > 0
+        ? stored.widgets
+        : adminDefaultBoard(chatRuntime.ontology, canReadType);
+    widgets = await resolveDescriptors(db, descriptors, canReadType);
   } catch {
     // Non-fatal — renders empty state if resolution fails
   }
