@@ -192,59 +192,6 @@ describe("generateRefineRoutes — create form surfaces add_X action params", ()
   });
 });
 
-describe("generateRefineRoutes — custom view overrides", () => {
-  it("when views/<Type>/list.tsx is declared, the list page imports it instead of the inferencer", async () => {
-    const onto = await loadOntology(SEED_DIR);
-    const files = generateRefineRoutes(onto, {
-      customViews: { Member: ["list"] },
-    });
-    const f = findFile(files, "app/(generated)/Member/page.tsx");
-    expect(f.content).toMatch(/from\s+"@\/views\/Member\/list"/);
-    // Inferencer must NOT be imported when the override is in play.
-    expect(f.content).not.toMatch(/@refinedev\/inferencer/);
-  });
-
-  it("custom detail.tsx shadows only the detail page", async () => {
-    const onto = await loadOntology(SEED_DIR);
-    const files = generateRefineRoutes(onto, {
-      customViews: { Event: ["detail"] },
-    });
-    const detail = findFile(files, "app/(generated)/Event/[id]/page.tsx");
-    expect(detail.content).toMatch(/from\s+"@\/views\/Event\/detail"/);
-    expect(detail.content).not.toMatch(/@refinedev\/inferencer/);
-
-    // list/edit/new for Event still use the inferencer.
-    const list = findFile(files, "app/(generated)/Event/page.tsx");
-    expect(list.content).toMatch(/@refinedev\/inferencer/);
-    expect(list.content).not.toMatch(/from\s+"@\/views\/Event\/list"/);
-  });
-
-  it("custom edit.tsx shadows the edit page", async () => {
-    const onto = await loadOntology(SEED_DIR);
-    const files = generateRefineRoutes(onto, {
-      customViews: { MeetingMinute: ["edit"] },
-    });
-    const f = findFile(files, "app/(generated)/MeetingMinute/[id]/edit/page.tsx");
-    expect(f.content).toMatch(/from\s+"@\/views\/MeetingMinute\/edit"/);
-    expect(f.content).not.toMatch(/@refinedev\/inferencer/);
-  });
-
-  it("custom-view override does not affect other object types", async () => {
-    const onto = await loadOntology(SEED_DIR);
-    const files = generateRefineRoutes(onto, {
-      customViews: { Member: ["list", "detail", "edit"] },
-    });
-    // Other types still use the inferencer for all three views.
-    for (const path of [
-      "app/(generated)/Event/page.tsx",
-      "app/(generated)/Event/[id]/page.tsx",
-      "app/(generated)/Event/[id]/edit/page.tsx",
-    ]) {
-      expect(findFile(files, path).content).toMatch(/@refinedev\/inferencer/);
-    }
-  });
-});
-
 describe("generateRefineRoutes — stability", () => {
   it("produces byte-identical output across repeat invocations", async () => {
     const onto = await loadOntology(SEED_DIR);

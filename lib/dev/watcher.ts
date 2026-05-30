@@ -53,8 +53,8 @@ export interface WatcherOptions {
   onChange: DebouncedCallback;
   debounceMs?: number;
   // Filter that decides which files matter. Default: any path under the
-  // watched root counts; callers narrow via globs (ontology yamls, view
-  // tsx files) by passing a predicate.
+  // watched root counts; callers narrow via globs (ontology yamls) by
+  // passing a predicate.
   match?: (relPath: string) => boolean;
 }
 
@@ -99,11 +99,11 @@ export function createWatcher(options: WatcherOptions): Watcher {
   };
 }
 
-// Default matcher for the acropolisOS hot-reload spec: ontology yamls +
-// view tsx files. Exposed so other call sites can compose it.
+// Default matcher for the acropolisOS hot-reload spec: ontology yamls.
+// Views are governed config, not tsx files, so only the ontology source
+// triggers a reload. Exposed so other call sites can compose it.
 export function defaultArtifactMatcher(relPath: string): boolean {
   const norm = relPath.replace(/\\/g, "/");
   if (norm.endsWith(".yaml") || norm.endsWith(".yml")) return true;
-  if (norm.endsWith(".tsx") && norm.includes("views/")) return true;
   return false;
 }

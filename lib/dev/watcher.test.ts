@@ -70,8 +70,7 @@ describe("defaultArtifactMatcher", () => {
   it.each([
     ["object-types/member.yaml", true],
     ["link-types.yml", true],
-    ["views/Member/list.tsx", true],
-    ["views/Member/detail.tsx", true],
+    ["views/Member/list.tsx", false],
     ["app/page.tsx", false],
     ["lib/utils.ts", false],
     ["README.md", false],
@@ -80,7 +79,6 @@ describe("defaultArtifactMatcher", () => {
   });
 
   it("handles backslash paths on Windows", () => {
-    expect(defaultArtifactMatcher("views\\Member\\list.tsx")).toBe(true);
     expect(defaultArtifactMatcher("object-types\\member.yaml")).toBe(true);
   });
 });
