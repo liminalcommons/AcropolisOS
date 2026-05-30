@@ -8,6 +8,7 @@ import {
   type Proposal,
 } from "./store";
 import { InMemoryAuditStore } from "../audit/writer";
+import { InMemoryApprovedViewsRegistry } from "../views/registry";
 import { FsYamlWriter } from "./adapters/yaml-writer";
 import { GeneratedFilesCodegen } from "./adapters/codegen";
 import { loadOntology } from "../ontology/load";
@@ -100,6 +101,7 @@ function buildDeps(sb: Sandbox, opts: {
         statusRef.count++;
       },
     },
+    viewRegistry: new InMemoryApprovedViewsRegistry(),
     tx: {
       async run(fn) {
         return fn({ tag: "fake" });

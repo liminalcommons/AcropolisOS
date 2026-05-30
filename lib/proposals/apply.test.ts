@@ -16,6 +16,7 @@ import {
   type Proposal,
 } from "./store";
 import { InMemoryAuditStore } from "../audit/writer";
+import { InMemoryApprovedViewsRegistry } from "../views/registry";
 import type { ProposalDiff } from "./diff";
 
 async function finalizedProposal(): Promise<Proposal> {
@@ -144,6 +145,7 @@ function makeDeps(
     inbox,
     audit: auditStore,
     proposals,
+    viewRegistry: new InMemoryApprovedViewsRegistry(),
     tx,
     ontologyRoot: "/tmp/seed/x",
     actor: { id: "steward-1", role: "steward" },

@@ -12,6 +12,7 @@ import {
   PgProposalStatusStore,
   PgTransactionRunner,
 } from "@/lib/proposals/adapters/runtime";
+import { InMemoryApprovedViewsRegistry } from "@/lib/views/registry";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +64,7 @@ export async function POST(
     inbox: new PgInboxMigrator(),
     audit: new PgAuditStore(db),
     proposals: new PgProposalStatusStore(),
+    viewRegistry: new InMemoryApprovedViewsRegistry(),
     tx: new PgTransactionRunner(db),
     ontologyRoot,
     actor: { id: actorId, role: actorRole },

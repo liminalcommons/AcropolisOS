@@ -1,6 +1,7 @@
 import type { AuditStore } from "../audit/writer";
 import type { ProposalDiff } from "./diff";
 import type { Proposal } from "./store";
+import type { ViewScope, ApprovedViewDescriptor } from "../views/registry";
 
 export interface FileSnapshotEntry {
   path: string;
@@ -50,6 +51,14 @@ export interface ProposalStatusStore {
   markApplied(tx: Tx, proposalId: string): Promise<void>;
 }
 
+export interface ViewRegistryWriter {
+  upsert(
+    scope: ViewScope,
+    descriptors: ApprovedViewDescriptor[],
+    createdBy: string,
+  ): Promise<void>;
+}
+
 export interface TransactionRunner {
   run<T>(fn: (tx: Tx) => Promise<T>): Promise<T>;
 }
@@ -66,6 +75,7 @@ export interface ApplyDeps {
   inbox: InboxMigrator;
   audit: AuditStore;
   proposals: ProposalStatusStore;
+  viewRegistry: ViewRegistryWriter;
   tx: TransactionRunner;
   ontologyRoot: string;
   actor: ApplyActor;
@@ -149,6 +159,13 @@ export async function applyProposal(
     await deps.tx.run(async (tx) => {
       await deps.migrations.apply(tx, migrationPlan);
       inboxRowsMigrated = await deps.inbox.migrate(tx, proposal.diff.new_ingests, proposal.id);
+      for (const vc of Object.values(proposal.diff.new_view_configs)) {
+        await deps.viewRegistry.upsert(
+          { scope: vc.scope, scope_key: vc.scope_key },
+          vc.descriptors,
+          deps.actor.id,
+        );
+      }
       await deps.audit.insertOntologyAudit({
         actor: deps.actor.id,
         actor_role: deps.actor.role,
