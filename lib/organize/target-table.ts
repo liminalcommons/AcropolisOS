@@ -6,11 +6,6 @@ import { guest as guestTable, TABLES } from "@/lib/db/schema.generated";
 import type { Ontology } from "@/lib/ontology/schema";
 import { deriveVocabulary } from "@/lib/widgets/vocabulary";
 
-/** Type-membership gate — replaces the hostel-literal TARGET_TYPE_ENUM. */
-export function isValidTargetType(ontology: Ontology, targetType: string): boolean {
-  return deriveVocabulary(ontology).validTypes.includes(targetType);
-}
-
 export interface ResolvedTarget {
   token: string; // validated snake_case token
   objectType: string; // PascalCase ontology key

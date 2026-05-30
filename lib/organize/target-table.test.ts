@@ -4,21 +4,13 @@ import { describe, expect, it } from "vitest";
 import { loadOntology } from "../ontology/load";
 import { getRuntimeOntologyDir } from "../setup/paths";
 import { deriveVocabulary } from "../widgets/vocabulary";
-import { isValidTargetType, resolveTargetTable } from "./target-table";
+import { resolveTargetTable } from "./target-table";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SEED_BOOK_CLUB = path.resolve(HERE, "../../seed/book-club");
 
-describe("isValidTargetType — de-contamination litmus (no TABLES, no DB)", () => {
-  it("accepts a type in the loaded ontology and rejects a hostel literal", async () => {
-    const ontology = await loadOntology(SEED_BOOK_CLUB);
-    expect(isValidTargetType(ontology, "book")).toBe(true);
-    expect(isValidTargetType(ontology, "bed")).toBe(false); // hostel leakage gone
-  });
-});
-
-describe("resolveTargetTable — dynamic + fail-closed against the runtime ontology", () => {
-  it("resolves every type in the loaded ontology to a real table", async () => {
+describe("resolveTargetTable — ontology-derived, fail-closed", () => {
+  it("resolves every type in the loaded (runtime) ontology to a real table", async () => {
     const ontology = await loadOntology(getRuntimeOntologyDir());
     const vocab = deriveVocabulary(ontology);
     expect(vocab.validTypes.length).toBeGreaterThan(0);
@@ -26,8 +18,16 @@ describe("resolveTargetTable — dynamic + fail-closed against the runtime ontol
       expect(resolveTargetTable(ontology, t)).not.toBeNull();
     }
   });
-  it("returns null for a type absent from the loaded ontology", async () => {
+
+  it("returns null for an unknown token (not in the ontology)", async () => {
     const ontology = await loadOntology(getRuntimeOntologyDir());
     expect(resolveTargetTable(ontology, "definitely_not_a_type")).toBeNull();
+  });
+
+  it("returns null for a type valid in the ontology but absent from TABLES (schema drift)", async () => {
+    // book-club ontology defines `book`, but the generated TABLES registry
+    // (hostel-genned) has no Book table → fail-closed on ontology<->schema drift.
+    const ontology = await loadOntology(SEED_BOOK_CLUB);
+    expect(resolveTargetTable(ontology, "book")).toBeNull();
   });
 });
