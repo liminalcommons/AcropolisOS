@@ -217,7 +217,7 @@ describe("propose_view tool", () => {
           scope: "role",
           scope_key: "steward",
           descriptors: [
-            { id: "v1", kind: "metric", config: { type: "Thread", agg: "count" } },
+            { id: "v1", kind: "metric", config: { type: "member", agg: "count" } },
           ],
         },
       },
@@ -393,7 +393,7 @@ describe("integration: round-trip with all proposal types", () => {
           scope: "role",
           scope_key: "steward",
           descriptors: [
-            { id: "v1", kind: "roster", config: { type: "Thread" } },
+            { id: "v1", kind: "roster", config: { type: "thread", fields: ["title"] } },
           ],
         },
       },

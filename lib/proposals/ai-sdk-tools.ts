@@ -24,6 +24,10 @@ import type {
 } from "./diff";
 import type { ProposalDraftStore } from "./store";
 import type { InboxStore } from "../inbox/store";
+import {
+  validateViewProposalAgainstLiveOntology,
+  InvalidViewProposalError,
+} from "./validate-view-proposal";
 
 export function buildAiSdkProposalTools(
   store: ProposalDraftStore,
@@ -114,6 +118,22 @@ export function buildAiSdkProposalTools(
         "Stage a governed view CONFIG (not TSX): a scope plus a list of widget descriptors. scope is org|role|viewer (org requires empty scope_key); each descriptor is {id, kind, config, title?} where kind is metric|data_table|roster|calendar. render() consumes the config — you never hand-code markup.",
       inputSchema: ViewConfigProposal,
       execute: async (proposal: ViewConfigProposal) => {
+        // Fence (C4): reject a descriptor whose config references a non-existent
+        // type/field LOUDLY here, before it reaches the steward queue — instead
+        // of approving + persisting it then silently no-op'ing at render.
+        // Validates against the live ontology overlaid with object types
+        // proposed earlier in THIS draft.
+        const currentDraft = await store.getDraft(session_id);
+        const validation = await validateViewProposalAgainstLiveOntology(
+          proposal,
+          currentDraft,
+        );
+        if (!validation.ok) {
+          throw new InvalidViewProposalError(
+            validation.error,
+            validation.detail,
+          );
+        }
         const draft = await store.appendView(session_id, proposal);
         return { ok: true, draft };
       },

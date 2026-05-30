@@ -15,6 +15,10 @@ import {
   ViewConfigProposal,
 } from "./diff";
 import type { ProposalDraftStore } from "./store";
+import {
+  validateViewProposalAgainstLiveOntology,
+  InvalidViewProposalError,
+} from "./validate-view-proposal";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyMastraTool = Tool<any, any, any, any, any, string, any>;
@@ -160,10 +164,21 @@ export function buildProposalTools(store: ProposalDraftStore): ProposalTools {
     }),
     outputSchema: proposalDraftOutput,
     execute: async (input) => {
-      const draft = await store.appendView(
-        input.session_id,
-        ViewConfigProposal.parse(input.proposal),
+      const proposal = ViewConfigProposal.parse(input.proposal);
+      // Fence (C4): reject a descriptor whose config references a non-existent
+      // type/field LOUDLY here, before it ever reaches the steward queue —
+      // instead of letting it be approved + persisted then silently no-op at
+      // render. Validates against the live ontology overlaid with object types
+      // proposed earlier in THIS draft.
+      const currentDraft = await store.getDraft(input.session_id);
+      const validation = await validateViewProposalAgainstLiveOntology(
+        proposal,
+        currentDraft,
       );
+      if (!validation.ok) {
+        throw new InvalidViewProposalError(validation.error, validation.detail);
+      }
+      const draft = await store.appendView(input.session_id, proposal);
       return { ok: true as const, draft };
     },
   });
