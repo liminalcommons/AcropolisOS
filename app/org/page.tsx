@@ -44,7 +44,7 @@ export const runtime = "nodejs";
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function OrgPage(): Promise<React.ReactElement> {
-  // Auth gate — mirrors /day and /me.
+  // Auth gate — mirrors /me.
   const chatRuntime = await buildChatRuntime();
   if (isAnonymous(chatRuntime.actor)) {
     return (
