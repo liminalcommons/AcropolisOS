@@ -5,14 +5,17 @@
 // /api/chat streams via ai-sdk v6 `streamText({tools})` which requires the
 // `ai.tool({...})` shape, not Mastra's.
 //
-// Scope (demo subset): we surface only the agent-useful read operations:
-//   - query_<type>  : list with WHERE/limit ("what members do we have")
-//   - read_<type>   : get-by-id
+// Scope: we surface all six agent-useful READ operations:
+//   - query_<type>   : list with WHERE/limit ("what members do we have")
+//   - read_<type>    : get-by-id
 //   - describe_<type>: show the schema (helps the agent understand fields)
+//   - traverse_<type>: follow links to related rows
+//   - sample_<type>  : pull representative rows to inspect real values
+//   - audit_<type>   : enumerate the audit trail for a type
 //
-// We deliberately skip traverse/sample/audit for now — the agent rarely needs
-// them in a chat-first UX, and they add to tool-record size which can hurt
-// model latency. Wire them in a follow-up if a user flow demands it.
+// traverse/sample/audit are now surfaced (slice-3) so the agent can GROUND its
+// view/ontology proposals in real rows — citing traversal/sample/audit evidence
+// in proposals (§6.3 evidence-gated grounding) rather than guessing at shape.
 
 import { tool, type Tool } from "ai";
 import type { ZodTypeAny } from "zod";
@@ -21,7 +24,7 @@ import type { Ontology } from "../ontology/schema";
 import type { OntologyCtx } from "../ontology/ctx";
 import { buildReadToolsForActor } from "./read-tools";
 
-const AGENT_READ_OPS = ["query", "read", "describe"] as const;
+const AGENT_READ_OPS = ["query", "read", "describe", "traverse", "sample", "audit"] as const;
 
 export interface BuildReadToolsAiSdkInput {
   ontology: Ontology;
