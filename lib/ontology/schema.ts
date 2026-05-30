@@ -79,11 +79,34 @@ export type PropertyDefinition = z.infer<typeof PropertyDefinition>;
 export const SharedPropertyRegistry = z.record(z.string(), InlineProperty);
 export type SharedPropertyRegistry = z.infer<typeof SharedPropertyRegistry>;
 
+// The universal-organization element classification (kernel primitive). Every
+// org reduces to the same kinds — agents (loci of action), resources (value
+// whose state is tended), events (time-stamped state changes), commitments
+// (future obligations binding an agent), with `concept` as the catch-all for a
+// type that is none of the above (or not yet classified). This is the FORM the
+// kernel reasons over (e.g. "this link IS a commitment"); the concrete domain
+// type names remain adaptive. Assigned by the GROW step, confirmed by the
+// steward. OPTIONAL for backward-compat: an ontology authored before kinds
+// existed parses unchanged (absent = unclassified, treated as `concept`).
+export const ELEMENT_KINDS = [
+  "agent",
+  "resource",
+  "event",
+  "commitment",
+  "concept",
+] as const;
+export const ElementKind = z.enum(ELEMENT_KINDS);
+export type ElementKind = z.infer<typeof ElementKind>;
+
 export const ObjectType = z
   .object({
     description: z.string().optional(),
     title_property: z.string().optional(),
     permissions: PermissionsBlock.optional(),
+    // The universal element this type embodies (agent | resource | event |
+    // commitment | concept). Lets the kernel reason about the type's role in
+    // coordination without naming a domain. Optional (absent = unclassified).
+    kind: ElementKind.optional(),
     // When true, codegen emits a Postgres trigger on the generated table that
     // mirrors every INSERT/UPDATE/DELETE into the generic data_audit table.
     // Opt-in per object type (US-034).
@@ -110,6 +133,10 @@ export const LinkType = z
     to: z.string().min(1),
     cardinality: LinkCardinality,
     description: z.string().optional(),
+    // A link can itself be a universal element — most often a `commitment`
+    // (e.g. a "booked" link binds a guest to a stay). Optional; absent =
+    // unclassified. Same ElementKind vocabulary as ObjectType.kind.
+    kind: ElementKind.optional(),
     properties: z.record(z.string(), PropertyDefinition).optional(),
     // When true, the injected FK column on the "to" side of a one-to-one or
     // one-to-many link is emitted as nullable (no .notNull()). Use when the
