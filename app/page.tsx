@@ -33,6 +33,7 @@ import { buildCanReadType } from "@/lib/widgets/read-api";
 import { addableWidgets } from "@/lib/widgets/arrange";
 import { readOrgProfile } from "@/lib/org-profile/store";
 import { OrgNameEditor } from "@/components/org/org-name-editor";
+import { OrgPurposeEditor } from "@/components/org/org-purpose-editor";
 import { WidgetControls } from "@/components/dashboard/widget-controls";
 import { ResolvedWidgetCard } from "@/components/dashboard/ResolvedWidgetCard";
 import type { ResolvedWidget } from "@/lib/widgets/compose";
@@ -163,8 +164,11 @@ export default async function Home({
               </Link>
             </p>
           ) : (
-            <div className="rounded-lg border border-border bg-card/20 p-4">
+            <div className="rounded-lg border border-border bg-card/20 p-4 space-y-4">
               <OrgNameEditor initialName={orgProfile?.name ?? ""} />
+              <div className="border-t border-border pt-4">
+                <OrgPurposeEditor initialPurpose={orgProfile?.purpose ?? ""} />
+              </div>
             </div>
           )}
 

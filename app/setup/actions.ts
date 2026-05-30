@@ -10,7 +10,7 @@
 // /api/setup/steward. The old stubbed saveLLMKey no-op was deleted (Clean-Break).
 
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
-import { validateOrgName } from "@/lib/org-profile/shared";
+import { validateOrgName, validateOrgPurpose } from "@/lib/org-profile/shared";
 import { writeOrgProfile } from "@/lib/org-profile/store";
 import { z } from "zod";
 
@@ -86,4 +86,37 @@ export async function saveOrgName(formData: FormData): Promise<SaveOrgNameResult
   );
 
   return { ok: true, name: validated.value };
+}
+
+// ─── saveOrgPurpose ─────────────────────────────────────────────────────────────
+//
+// Steward-only — sets the org's GOAL/telos (gap ② of the substrate spec). The
+// purpose is injected into the AI's reasoning context so it can weigh proposals
+// and answers by fit-to-purpose. Steward-gated like saveOrgName; merges into the
+// profile so name/description are preserved.
+
+export type SaveOrgPurposeResult =
+  | { ok: true; purpose: string }
+  | { ok: false; error: string };
+
+export async function saveOrgPurpose(formData: FormData): Promise<SaveOrgPurposeResult> {
+  const runtime = await buildChatRuntime();
+  if (isAnonymous(runtime.actor)) {
+    return { ok: false, error: "Not authenticated" };
+  }
+  if (runtime.actor?.role !== "steward") {
+    return { ok: false, error: "Only stewards can set the organization's purpose" };
+  }
+
+  const validated = validateOrgPurpose(formData.get("purpose"));
+  if (!validated.ok) {
+    return { ok: false, error: validated.error };
+  }
+
+  await writeOrgProfile(
+    { purpose: validated.value },
+    { updated_by: runtime.actor?.email ?? "unknown" },
+  );
+
+  return { ok: true, purpose: validated.value };
 }

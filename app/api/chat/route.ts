@@ -34,6 +34,8 @@ import { buildN8nReadTools } from "@/lib/agent/n8n-tools";
 import { designTheme } from "@/lib/theme/design";
 import { getOrCreateMemberContext } from "@/lib/me/fetchers/member-context";
 import { buildCanReadType } from "@/lib/widgets/read-api";
+import { readOrgProfile } from "@/lib/org-profile/store";
+import { orgPurposePreamble } from "@/lib/org-profile/shared";
 import {
   composeOrgView,
   removeOrgView,
@@ -299,9 +301,13 @@ export async function POST(req: Request): Promise<Response> {
     clear_dashboard,
   };
 
+  // Gap ②: inject the org's PURPOSE so the agent weighs proposals + answers by
+  // fit-to-purpose (rank, not just validate). Read-only context; absent = omitted.
+  const purposePreamble = orgPurposePreamble((await readOrgProfile())?.purpose);
+
   const result = streamText({
     model: buildLanguageModel(),
-    system: `${AGENT_INSTRUCTIONS}${APPLY_ACTION_INSTRUCTIONS}`,
+    system: `${purposePreamble}${AGENT_INSTRUCTIONS}${APPLY_ACTION_INSTRUCTIONS}`,
     messages: await convertToModelMessages(body.messages),
     tools,
     stopWhen: stepCountIs(8),
