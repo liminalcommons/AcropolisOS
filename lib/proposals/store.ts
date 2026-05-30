@@ -3,13 +3,13 @@ import {
   emptyDraft,
   normalizeDraft,
   recomputeImpactedTables,
-  viewKey,
+  viewConfigKey,
   type FunctionProposal,
   type IngestProposal,
   type ProposalDiff,
   type ProposalStatus,
   type SeedProposal,
-  type ViewProposal,
+  type ViewConfigProposal,
 } from "./diff";
 import type {
   ActionType,
@@ -58,7 +58,7 @@ export interface ProposalDraftStore {
   ): Promise<ProposalDiff>;
   appendView(
     session_id: string,
-    proposal: ViewProposal,
+    proposal: ViewConfigProposal,
   ): Promise<ProposalDiff>;
   appendSeed(
     session_id: string,
@@ -162,10 +162,10 @@ export class InMemoryProposalDraftStore implements ProposalDraftStore {
 
   async appendView(
     session_id: string,
-    proposal: ViewProposal,
+    proposal: ViewConfigProposal,
   ): Promise<ProposalDiff> {
     const draft = this.ensureDraft(session_id);
-    draft.new_views[viewKey(proposal.object_type, proposal.view)] = proposal;
+    draft.new_view_configs[viewConfigKey(proposal)] = proposal;
     return draft;
   }
 

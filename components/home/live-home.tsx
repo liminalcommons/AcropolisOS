@@ -55,7 +55,7 @@ function hasDataLanding(diff: ProposalDiff): boolean {
 export function classifyProposal(diff: ProposalDiff): ProposalIntent {
   if (hasSchemaChanges(diff)) return "review";
   if (hasDataLanding(diff)) return "approve";
-  if (n(diff.new_views) > 0) return "assign";
+  if (n(diff.new_view_configs) > 0) return "assign";
   return "review";
 }
 
@@ -79,10 +79,11 @@ function pickEntityKey(diff: ProposalDiff): string | null {
     const ingest = diff.new_ingests[ingestKeys[0]!];
     return ingest?.target_object_type ?? ingestKeys[0]!;
   }
-  const viewKeys = Object.keys(diff.new_views);
+  const viewKeys = Object.keys(diff.new_view_configs);
   if (viewKeys.length > 0) {
-    const view = diff.new_views[viewKeys[0]!];
-    return view?.object_type ?? viewKeys[0]!;
+    // Config views are scoped (org|role:<key>), not object-typed. Surface the
+    // scope key as the entity label for the summary line.
+    return viewKeys[0]!;
   }
   const linkKeys = Object.keys(diff.new_link_types);
   if (linkKeys.length > 0) return linkKeys[0]!;
@@ -101,7 +102,8 @@ function distinctTypesTouched(diff: ProposalDiff): number {
   for (const seed of Object.values(diff.new_seeds)) set.add(seed.object_type);
   for (const ingest of Object.values(diff.new_ingests))
     set.add(ingest.target_object_type);
-  for (const view of Object.values(diff.new_views)) set.add(view.object_type);
+  for (const view of Object.values(diff.new_view_configs))
+    set.add(`${view.scope}:${view.scope_key}`);
   return set.size;
 }
 
@@ -112,7 +114,7 @@ function distinctTypesTouched(diff: ProposalDiff): number {
 //   schema add action:      "add invite_member action"
 //   data seed:              "seed 3 rows"
 //   data ingest:            "ingest 2 items"
-//   view:                   "add summary view"
+//   view config:            "role:steward — 2 widgets: metric, roster"
 //   fallback:               "update"
 function describeChange(diff: ProposalDiff): string {
   const sharedKeys = Object.keys(diff.new_shared_properties);
@@ -153,10 +155,15 @@ function describeChange(diff: ProposalDiff): string {
     const ingest = diff.new_ingests[ingestKeys[0]!]!;
     return `ingest ${ingest.inbox_ids.length} item${ingest.inbox_ids.length === 1 ? "" : "s"}`;
   }
-  const viewKeys = Object.keys(diff.new_views);
+  const viewKeys = Object.keys(diff.new_view_configs);
   if (viewKeys.length > 0) {
-    const view = diff.new_views[viewKeys[0]!]!;
-    return `add ${view.view} view`;
+    const view = diff.new_view_configs[viewKeys[0]!]!;
+    const count = view.descriptors.length;
+    const kinds = view.descriptors.map((d) => d.kind).join(", ");
+    const scope = `${view.scope}:${view.scope_key}`;
+    return `${scope} — ${count} widget${count === 1 ? "" : "s"}${
+      kinds ? `: ${kinds}` : ""
+    }`;
   }
   return "update";
 }

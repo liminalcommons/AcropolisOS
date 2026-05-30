@@ -19,7 +19,7 @@ function fakeDiff(): ProposalDiff {
     modified_properties: {},
     new_action_types: {},
     new_functions: {},
-    new_views: {},
+    new_view_configs: {},
     new_seeds: {},
     new_ingests: {},
     impacted_tables: [],

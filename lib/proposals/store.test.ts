@@ -146,14 +146,16 @@ describe("InMemoryProposalDraftStore", () => {
     expect(draft.new_functions["f.ts"].ts_body).toBe("export const x = 1;");
   });
 
-  it("appendView keys by object_type:view composite", async () => {
+  it("appendView stores a config view (scope + descriptors) in the draft", async () => {
     const store = new InMemoryProposalDraftStore();
     const draft = await store.appendView("s1", {
-      object_type: "Thread",
-      view: "detail",
-      tsx_body: "<div/>",
+      scope: "role",
+      scope_key: "steward",
+      descriptors: [
+        { id: "v1", kind: "metric", config: { type: "member", agg: "count" } },
+      ],
     });
-    expect(draft.new_views["Thread:detail"].tsx_body).toBe("<div/>");
+    expect(draft.new_view_configs["role:steward"].descriptors[0].id).toBe("v1");
   });
 
   it("appendSeed keys by object_type and marks the table as impacted", async () => {
@@ -231,7 +233,7 @@ describe("InMemoryProposalDraftStore", () => {
         modified_properties: {},
         new_action_types: {},
         new_functions: {},
-        new_views: {},
+        new_view_configs: {},
         new_seeds: {},
         new_ingests: {},
         impacted_tables: [],

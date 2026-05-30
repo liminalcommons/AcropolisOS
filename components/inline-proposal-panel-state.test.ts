@@ -50,11 +50,11 @@ describe("summarizeProposalDiff", () => {
       new_functions: {
         "hello.ts": { filename: "hello.ts", ts_body: "x".repeat(5000) },
       },
-      new_views: {
-        "Event:list": {
-          object_type: "Event",
-          view: "list",
-          tsx_body: "<div/>",
+      new_view_configs: {
+        "role:steward": {
+          scope: "role",
+          scope_key: "steward",
+          descriptors: [{ id: "v1", kind: "metric", config: {} }],
         },
       },
       new_seeds: {

@@ -12,7 +12,7 @@ import {
   ProposalDiff,
   ProposalStatus,
   SeedProposal,
-  ViewProposal,
+  ViewConfigProposal,
 } from "./diff";
 import type { ProposalDraftStore } from "./store";
 
@@ -153,20 +153,17 @@ export function buildProposalTools(store: ProposalDraftStore): ProposalTools {
   const propose_view = createTool({
     id: "propose_view",
     description:
-      "Stage a custom TSX view for an object type (e.g. list, detail, form). Body is stored verbatim; not compiled.",
+      "Stage a governed view CONFIG (not TSX): a scope plus a list of widget descriptors. render() consumes the config — never hand-code markup.",
     inputSchema: z.object({
       session_id: z.string().min(1),
-      object_type: z.string().min(1),
-      view: z.string().min(1),
-      tsx_body: z.string(),
+      proposal: ViewConfigProposal,
     }),
     outputSchema: proposalDraftOutput,
     execute: async (input) => {
-      const draft = await store.appendView(input.session_id, {
-        object_type: input.object_type,
-        view: input.view,
-        tsx_body: input.tsx_body,
-      } satisfies ViewProposal);
+      const draft = await store.appendView(
+        input.session_id,
+        ViewConfigProposal.parse(input.proposal),
+      );
       return { ok: true as const, draft };
     },
   });

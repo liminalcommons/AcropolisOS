@@ -25,7 +25,7 @@ describe("ProposalDiff schema", () => {
     expect(draft.modified_properties).toEqual({});
     expect(draft.new_action_types).toEqual({});
     expect(draft.new_functions).toEqual({});
-    expect(draft.new_views).toEqual({});
+    expect(draft.new_view_configs).toEqual({});
     expect(draft.new_seeds).toEqual({});
     expect(draft.new_ingests).toEqual({});
     expect(draft.impacted_tables).toEqual([]);

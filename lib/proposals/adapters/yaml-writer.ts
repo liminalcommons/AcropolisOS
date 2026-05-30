@@ -150,18 +150,10 @@ export class FsYamlWriter implements YamlWriter {
       await writeStable(file, body.ts_body);
     }
 
-    // views/<object_type>/<view>.tsx — verbatim TSX body
-    for (const view of Object.values(diff.new_views)) {
-      const file = path.join(
-        ontologyRoot,
-        "..",
-        "views",
-        view.object_type,
-        `${view.view}.tsx`,
-      );
-      entries.push(await snapshotPath(file));
-      await writeStable(file, view.tsx_body);
-    }
+    // Config views (diff.new_view_configs) never touch disk — they
+    // materialize into the view registry inside the apply tx (Task 7),
+    // not as TSX files. The yaml-writer is for ontology YAML + verbatim
+    // function/seed/ingest payloads only.
 
     // seeds/<object_type>.jsonl — verbatim
     for (const seed of Object.values(diff.new_seeds)) {

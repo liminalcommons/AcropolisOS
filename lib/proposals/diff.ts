@@ -7,6 +7,7 @@ import {
   type PropertyReference,
   type SharedPropertyRegistry,
 } from "../ontology/schema";
+import { ViewConfigProposal, viewConfigKey } from "../views/view-proposal";
 
 export const ProposalStatus = z.enum(["pending", "approved", "rejected"]);
 export type ProposalStatus = z.infer<typeof ProposalStatus>;
@@ -18,15 +19,6 @@ export const FunctionProposal = z
   })
   .strict();
 export type FunctionProposal = z.infer<typeof FunctionProposal>;
-
-export const ViewProposal = z
-  .object({
-    object_type: z.string().min(1),
-    view: z.string().min(1),
-    tsx_body: z.string(),
-  })
-  .strict();
-export type ViewProposal = z.infer<typeof ViewProposal>;
 
 export const SeedProposal = z
   .object({
@@ -52,7 +44,7 @@ export const ProposalDiff = z.object({
   modified_properties: z.record(z.string(), InlineProperty),
   new_action_types: z.record(z.string(), ActionType),
   new_functions: z.record(z.string(), FunctionProposal),
-  new_views: z.record(z.string(), ViewProposal),
+  new_view_configs: z.record(z.string(), ViewConfigProposal),
   new_seeds: z.record(z.string(), SeedProposal),
   new_ingests: z.record(z.string(), IngestProposal),
   impacted_tables: z.array(z.string()),
@@ -67,16 +59,14 @@ export function emptyDraft(): ProposalDiff {
     modified_properties: {},
     new_action_types: {},
     new_functions: {},
-    new_views: {},
+    new_view_configs: {},
     new_seeds: {},
     new_ingests: {},
     impacted_tables: [],
   };
 }
 
-export function viewKey(object_type: string, view: string): string {
-  return `${object_type}:${view}`;
-}
+export { ViewConfigProposal, viewConfigKey };
 
 // Rewrite inline object-type properties to PropertyReference (`{ref: name}`)
 // whenever the same proposal declares a shared property with the same name and

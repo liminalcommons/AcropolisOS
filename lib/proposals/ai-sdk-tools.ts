@@ -16,11 +16,11 @@ import {
   LinkType,
   ObjectType,
 } from "../ontology/schema";
+import { ViewConfigProposal } from "./diff";
 import type {
   FunctionProposal,
   IngestProposal,
   SeedProposal,
-  ViewProposal,
 } from "./diff";
 import type { ProposalDraftStore } from "./store";
 import type { InboxStore } from "../inbox/store";
@@ -111,18 +111,10 @@ export function buildAiSdkProposalTools(
 
     propose_view: tool({
       description:
-        "Stage a custom TSX view for an object type (list, detail, form). Body is stored verbatim; not compiled.",
-      inputSchema: z.object({
-        object_type: z.string().min(1),
-        view: z.string().min(1),
-        tsx_body: z.string(),
-      }),
-      execute: async ({ object_type, view, tsx_body }) => {
-        const draft = await store.appendView(session_id, {
-          object_type,
-          view,
-          tsx_body,
-        } satisfies ViewProposal);
+        "Stage a governed view CONFIG (not TSX): a scope plus a list of widget descriptors. scope is org|role|viewer (org requires empty scope_key); each descriptor is {id, kind, config, title?} where kind is metric|data_table|roster|calendar. render() consumes the config — you never hand-code markup.",
+      inputSchema: ViewConfigProposal,
+      execute: async (proposal: ViewConfigProposal) => {
+        const draft = await store.appendView(session_id, proposal);
         return { ok: true, draft };
       },
     }),

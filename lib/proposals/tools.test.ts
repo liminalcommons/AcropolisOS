@@ -207,23 +207,30 @@ describe("propose_function tool", () => {
 });
 
 describe("propose_view tool", () => {
-  it("keys views by object_type:view and preserves tsx_body", async () => {
+  it("keys config views by scope:scope_key and preserves descriptors", async () => {
     const store = new InMemoryProposalDraftStore();
     const { propose_view } = buildProposalTools(store);
-    const tsx = "export default () => <div>hi</div>;";
     const result = (await propose_view.execute!(
       {
         session_id: SESSION,
-        object_type: "Thread",
-        view: "list",
-        tsx_body: tsx,
+        proposal: {
+          scope: "role",
+          scope_key: "steward",
+          descriptors: [
+            { id: "v1", kind: "metric", config: { type: "Thread", agg: "count" } },
+          ],
+        },
       },
       {},
     )) as {
       ok: true;
-      draft: { new_views: Record<string, { tsx_body: string }> };
+      draft: {
+        new_view_configs: Record<string, { descriptors: { id: string }[] }>;
+      };
     };
-    expect(result.draft.new_views["Thread:list"].tsx_body).toBe(tsx);
+    expect(result.draft.new_view_configs["role:steward"].descriptors[0].id).toBe(
+      "v1",
+    );
   });
 });
 
@@ -382,9 +389,13 @@ describe("integration: round-trip with all proposal types", () => {
     await propose_view.execute!(
       {
         session_id: SESSION,
-        object_type: "Thread",
-        view: "list",
-        tsx_body: "export default () => <ul />;",
+        proposal: {
+          scope: "role",
+          scope_key: "steward",
+          descriptors: [
+            { id: "v1", kind: "roster", config: { type: "Thread" } },
+          ],
+        },
       },
       {},
     );
@@ -420,7 +431,10 @@ describe("integration: round-trip with all proposal types", () => {
           new_shared_properties: Record<string, unknown>;
           new_action_types: Record<string, unknown>;
           new_functions: Record<string, { ts_body: string }>;
-          new_views: Record<string, { tsx_body: string }>;
+          new_view_configs: Record<
+            string,
+            { descriptors: { id: string }[] }
+          >;
           new_seeds: Record<string, { rows_jsonl: string }>;
           new_ingests: Record<
             string,
@@ -447,8 +461,9 @@ describe("integration: round-trip with all proposal types", () => {
       finalized.proposal.diff.new_functions["createThread.ts"].ts_body,
     ).toContain("createThread");
     expect(
-      finalized.proposal.diff.new_views["Thread:list"].tsx_body,
-    ).toContain("<ul />");
+      finalized.proposal.diff.new_view_configs["role:steward"].descriptors[0]
+        .id,
+    ).toBe("v1");
     expect(finalized.proposal.diff.new_seeds["Thread"].rows_jsonl).toContain(
       "Welcome",
     );

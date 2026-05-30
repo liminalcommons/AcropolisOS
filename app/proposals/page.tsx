@@ -15,7 +15,8 @@ function summarize(diff: Proposal["diff"]): string {
     counts.push(`${n(diff.new_action_types)} action(s)`);
   if (n(diff.new_shared_properties) > 0)
     counts.push(`${n(diff.new_shared_properties)} property(ies)`);
-  if (n(diff.new_views) > 0) counts.push(`${n(diff.new_views)} view(s)`);
+  if (n(diff.new_view_configs) > 0)
+    counts.push(`${n(diff.new_view_configs)} view(s)`);
   if (n(diff.new_seeds) > 0) counts.push(`${n(diff.new_seeds)} seed(s)`);
   if (n(diff.new_ingests) > 0) counts.push(`${n(diff.new_ingests)} ingest(s)`);
   return counts.length > 0 ? counts.join(" · ") : "empty diff";

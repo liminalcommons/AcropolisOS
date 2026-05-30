@@ -33,7 +33,7 @@ export function summarizeProposalDiff(diff: ProposalDiff): ProposalDiffSummary {
   const modified_properties = Object.keys(diff.modified_properties).sort();
   const new_action_types = Object.keys(diff.new_action_types).sort();
   const function_count = Object.keys(diff.new_functions).length;
-  const view_count = Object.keys(diff.new_views).length;
+  const view_count = Object.keys(diff.new_view_configs).length;
   const seed_count = Object.keys(diff.new_seeds).length;
   const ingest_count = Object.keys(diff.new_ingests).length;
   const impacted_tables = [...diff.impacted_tables].sort();
