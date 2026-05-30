@@ -71,6 +71,11 @@ export interface ProposalDraftStore {
   ): Promise<ProposalDiff>;
   getDraft(session_id: string): Promise<ProposalDiff | null>;
   finalize(session_id: string): Promise<Proposal>;
+  // Mint a PENDING proposal directly from a built ProposalDiff (no draft
+  // round-trip). Normalizes + recomputes impacted_tables so the row is identical
+  // to a chat-finalized one. Used by programmatic producers (e.g. the §6 GROW
+  // ingest path) that already hold a complete diff.
+  createPending(session_id: string, diff: ProposalDiff): Promise<Proposal>;
   listProposals(): Promise<Proposal[]>;
   getProposal(id: string): Promise<Proposal | null>;
   updateProposalDiff(id: string, diff: ProposalDiff): Promise<Proposal>;
@@ -206,6 +211,20 @@ export class InMemoryProposalDraftStore implements ProposalDraftStore {
     };
     this.proposals.push(proposal);
     this.drafts.delete(session_id);
+    return proposal;
+  }
+
+  async createPending(session_id: string, diff: ProposalDiff): Promise<Proposal> {
+    const normalized = normalizeDraft(diff);
+    normalized.impacted_tables = recomputeImpactedTables(normalized);
+    const proposal: Proposal = {
+      id: randomUUID(),
+      session_id,
+      diff: normalized,
+      status: "pending",
+      created_at: new Date().toISOString(),
+    };
+    this.proposals.push(proposal);
     return proposal;
   }
 

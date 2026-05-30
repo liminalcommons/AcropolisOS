@@ -185,6 +185,16 @@ export class PgProposalDraftStore implements ProposalDraftStore {
     return rowToProposal(inserted);
   }
 
+  async createPending(session_id: string, diff: ProposalDiff): Promise<Proposal> {
+    const normalized = normalizeDraft(diff);
+    normalized.impacted_tables = recomputeImpactedTables(normalized);
+    const [inserted] = await this.db
+      .insert(proposals)
+      .values({ session_id, diff: normalized, status: "pending" })
+      .returning();
+    return rowToProposal(inserted);
+  }
+
   async listProposals(): Promise<Proposal[]> {
     const rows = await this.db
       .select()
