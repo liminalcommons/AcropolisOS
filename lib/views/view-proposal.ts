@@ -1,7 +1,6 @@
 // The view PAYLOAD kind for the proposal loop. CONFIG, not code: a scope plus a
-// list of widget descriptors (kind + config). Replaces the old ViewProposal
-// (object_type/view/tsx_body) — §11 invariant 2/3: the AI never hand-codes TSX;
-// a view is governed config that render() consumes.
+// list of widget descriptors (kind + config). §11 invariant 2/3: the AI never
+// hand-codes TSX; a view is governed config that render() consumes.
 import { z } from "zod";
 
 // C1: the `derived-<index>` id namespace is RESERVED for floor slots in
