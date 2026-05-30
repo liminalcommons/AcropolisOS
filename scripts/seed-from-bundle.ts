@@ -1,5 +1,5 @@
-// seed-from-bundle.ts — load a seed bundle's data/*.json into Postgres,
-// validated against the bundle's ontology YAML.
+// seed-from-bundle.ts — load a scenario bundle's seed data (*.json) into
+// Postgres, validated against the bundle's ontology YAML.
 //
 // Usage:
 //   tsx scripts/seed-from-bundle.ts <bundle-name> [--emit-sql] [--insert]
@@ -7,7 +7,7 @@
 //
 // Modes:
 //   default     dry-run only: parse + validate, report violations, exit
-//   --emit-sql  also write seed/<bundle>/<bundle>.generated.sql with CREATE
+//   --emit-sql  also write scenarios/<bundle>/seed/<bundle>.generated.sql with CREATE
 //               SCHEMA + CREATE TABLE + INSERT statements (no DB touched)
 //   --insert    emit SQL then execute it against Postgres via `docker exec
 //               acropolisos-postgres psql -U acropolisos -d acropolisos`
@@ -16,8 +16,8 @@
 // with --schema=<name>.
 //
 // The bundle is expected at:
-//   packages/acropolisos/seed/<bundle-name>/{properties,roles,link-types}.yaml
-//   packages/acropolisos/seed/<bundle-name>/{object-types,action-types}/*.yaml
+//   packages/acropolisos/scenarios/<bundle-name>/ontology/{properties,roles,link-types}.yaml
+//   packages/acropolisos/scenarios/<bundle-name>/ontology/{object-types,action-types}/*.yaml
 //   packages/acropolisos/seed/<bundle-name>/data/*.json
 //
 // Each data file is named for the object type it represents

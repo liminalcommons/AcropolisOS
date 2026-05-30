@@ -6,7 +6,7 @@
 // listForRecipient (newest first), unreadCount, markRead, markAllRead.
 //
 // Persisted rows live in the `notification` table generated from
-// seed/small-community/object-types/notification.yaml — see
+// scenarios/small-community/ontology/object-types/notification.yaml — see
 // lib/db/schema.generated.ts.
 //
 // M4.1 cleanup (#27): listForRecipient / markRead / unreadCount now require
