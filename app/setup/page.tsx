@@ -15,9 +15,13 @@ import { redirect } from "next/navigation";
 import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { readOrgProfile } from "@/lib/org-profile/store";
 import { getDb } from "@/lib/db/client";
+import { isSetupComplete } from "@/lib/setup/state";
+import { getSetupFile } from "@/lib/setup/config";
+import { listScenarioChoices } from "@/lib/setup/scenario-choices";
 import { SetupStep } from "@/components/setup/SetupStep";
 import { LLMKeyForm } from "@/components/setup/SetupForms";
 import { OrgProfileForm } from "@/components/setup/SetupForms";
+import { ScenarioPicker } from "@/components/setup/ScenarioPicker";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,9 +51,11 @@ export default async function SetupPage(): Promise<React.ReactElement> {
     redirect("/signin");
   }
 
-  const [dbStatus, profile] = await Promise.all([
+  const [dbStatus, profile, scenarios, setupComplete] = await Promise.all([
     checkDatabase(),
     readOrgProfile(),
+    listScenarioChoices(),
+    isSetupComplete(getSetupFile()),
   ]);
   const initialName = profile?.name ?? "";
   const initialDescription = profile?.description ?? "";
@@ -60,7 +66,7 @@ export default async function SetupPage(): Promise<React.ReactElement> {
 
         {/* Eyebrow */}
         <p className="text-[10px] uppercase tracking-widest text-muted-foreground text-center mb-8">
-          Setup · 3 steps to a usable system
+          Setup · 4 steps to a usable system
         </p>
 
         {/* Step cards */}
@@ -120,6 +126,16 @@ export default async function SetupPage(): Promise<React.ReactElement> {
               initialName={initialName}
               initialDescription={initialDescription}
             />
+          </SetupStep>
+
+          {/* Step 4 — Choose a starting scenario (discovery-driven) */}
+          <SetupStep
+            step={4}
+            title="Choose a starting scenario"
+            status={setupComplete ? "ok" : "pending"}
+            defaultExpanded={!setupComplete}
+          >
+            <ScenarioPicker choices={scenarios} alreadyComplete={setupComplete} />
           </SetupStep>
 
         </div>
