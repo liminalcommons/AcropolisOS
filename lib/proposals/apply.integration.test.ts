@@ -168,9 +168,12 @@ describe("applyProposal — integration with real YAML + codegen adapters", () =
     // Loader picks up the new ontology and integrity check passes
     const reloaded = await loadOntology(sb.ontologyRoot);
     expect(Object.keys(reloaded.object_types).sort()).toEqual([
+      "AgentBlocker",
       "Event",
       "MeetingMinute",
       "Member",
+      "MemberContext",
+      "Notification",
       "Thread",
     ]);
     expect(reloaded.link_types.thread_replies.cardinality).toBe("one-to-many");
@@ -191,13 +194,13 @@ describe("applyProposal — integration with real YAML + codegen adapters", () =
 
     // Seed + ingest sibling artifacts
     const seedFile = await readFile(
-      path.join(sb.packageRoot, "scenarios", "small-community", "ontology", "seeds", "Thread.jsonl"),
+      path.join(sb.packageRoot, "scenarios", "small-community", "seeds", "Thread.jsonl"),
       "utf8",
     );
     expect(seedFile).toMatch(/"id":"a"/);
 
     const ingestFile = await readFile(
-      path.join(sb.packageRoot, "scenarios", "small-community", "ontology", "ingests", "email_to_thread.yaml"),
+      path.join(sb.packageRoot, "scenarios", "small-community", "ingests", "email_to_thread.yaml"),
       "utf8",
     );
     expect(ingestFile).toMatch(/target_object_type: Thread/);
@@ -254,9 +257,12 @@ describe("applyProposal — integration with real YAML + codegen adapters", () =
     // Reloading the seed must still succeed (no broken state left behind)
     const reloaded = await loadOntology(sb.ontologyRoot);
     expect(Object.keys(reloaded.object_types).sort()).toEqual([
+      "AgentBlocker",
       "Event",
       "MeetingMinute",
       "Member",
+      "MemberContext",
+      "Notification",
     ]);
   });
 });
