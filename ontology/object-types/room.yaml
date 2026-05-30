@@ -10,12 +10,15 @@ Room:
       primary_key: true
     code:
       type: string
+      default: imported
       description: Short code, e.g. "D3" or "P5"
     kind:
       type: enum
       values: [dorm_mixed, dorm_female, dorm_male, private, staff]
+      default: dorm_mixed
     capacity:
       type: decimal
+      default: 0
     floor:
       type: decimal
       required: false

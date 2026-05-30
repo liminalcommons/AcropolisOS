@@ -11,6 +11,7 @@ WorkTradeAgreement:
       primary_key: true
     label:
       type: string
+      default: "Imported agreement"
     guest:
       type: ref
       target: Guest
@@ -24,8 +25,10 @@ WorkTradeAgreement:
       default: 20
     start_date:
       type: date
+      default: "@today"
     end_date:
       type: date
+      default: "@today+30d"
     status:
       type: enum
       values: [pending, active, completed, terminated]

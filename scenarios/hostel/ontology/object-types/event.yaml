@@ -10,8 +10,10 @@ Event:
       primary_key: true
     title:
       type: string
+      default: "Imported event"
     starts_at:
       type: timestamp
+      default: "@now"
     duration_hours:
       type: decimal
       default: 2

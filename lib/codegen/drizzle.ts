@@ -6,6 +6,7 @@ import type {
   PropertyDefinition,
   SharedPropertyRegistry,
 } from "../ontology/schema";
+import { isDynamicDefaultToken, tokenToSqlDefault } from "./defaults";
 
 export function snakeCase(name: string): string {
   return name
@@ -120,7 +121,17 @@ function buildColumnExpression(
   }
   if (resolved.required) expr += ".notNull()";
   if (resolved.hasDefault) {
-    expr += `.default(${formatDefault(resolved.defaultValue, resolved.inline.type)})`;
+    if (
+      (resolved.inline.type === "date" || resolved.inline.type === "timestamp") &&
+      isDynamicDefaultToken(resolved.defaultValue)
+    ) {
+      // Dynamic token → DB-level SQL expression (CURRENT_DATE, now(), interval
+      // arithmetic). Emit a drizzle sql`` template literally into the generated
+      // module so an INSERT that omits the column gets a live value.
+      expr += ".default(sql`" + tokenToSqlDefault(resolved.defaultValue, resolved.inline.type) + "`)";
+    } else {
+      expr += `.default(${formatDefault(resolved.defaultValue, resolved.inline.type)})`;
+    }
   }
   if (refTarget) {
     // Use explicit AnyPgColumn return type on all FK lambdas to prevent TS
@@ -246,6 +257,33 @@ function planCardinalLinks(ontology: Ontology): CardinalLinkPlan[] {
   return plans;
 }
 
+// Scan the whole ontology (object-type properties AND link-type properties,
+// resolving refs via ontology.properties) for any date/timestamp property whose
+// default is a dynamic token. If any exist, the generated module needs the
+// `sql` import for the emitted `.default(sql`...`)` expressions.
+function ontologyUsesSqlDefault(ontology: Ontology): boolean {
+  const scanProps = (props: Record<string, PropertyDefinition>): boolean => {
+    for (const prop of Object.values(props)) {
+      const resolved = resolveProperty(prop, ontology.properties);
+      if (
+        resolved.hasDefault &&
+        (resolved.inline.type === "date" || resolved.inline.type === "timestamp") &&
+        isDynamicDefaultToken(resolved.defaultValue)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const obj of Object.values(ontology.object_types)) {
+    if (scanProps(obj.properties)) return true;
+  }
+  for (const link of Object.values(ontology.link_types)) {
+    if (link.properties && scanProps(link.properties)) return true;
+  }
+  return false;
+}
+
 export function generateDrizzleModule(ontology: Ontology): string {
   const parts: string[] = [HEADER];
   parts.push(
@@ -260,8 +298,12 @@ export function generateDrizzleModule(ontology: Ontology): string {
       '  timestamp,\n' +
       '  uuid,\n' +
       '  type AnyPgColumn,\n' +
-      '} from "drizzle-orm/pg-core";\n\n',
+      '} from "drizzle-orm/pg-core";\n',
   );
+  if (ontologyUsesSqlDefault(ontology)) {
+    parts.push('import { sql } from "drizzle-orm";\n');
+  }
+  parts.push("\n");
 
   const cardinalPlans = planCardinalLinks(ontology);
   const inboundByObject = new Map<string, JoinColumn[]>();

@@ -11,6 +11,7 @@ Booking:
       primary_key: true
     label:
       type: string
+      default: Imported
       description: Short label, e.g. "Lena Petrov / D3-A2 / Jun 3-7"
     guest:
       type: ref
@@ -20,10 +21,13 @@ Booking:
       target: Bed
     from_date:
       type: date
+      default: "@today"
     to_date:
       type: date
+      default: "@today+7d"
     rate_per_night:
       type: decimal
+      default: 0
       description: 0 if work-trade
     currency:
       type: string

@@ -10,13 +10,17 @@ Shift:
       primary_key: true
     label:
       type: string
+      default: "Imported shift"
     kind:
       type: enum
       values: [reception, cleaning, kitchen, laundry, breakfast, night_audit, social]
+      default: reception
     starts_at:
       type: timestamp
+      default: "@now"
     duration_hours:
       type: decimal
+      default: 8
     claimed_by:
       type: ref
       target: Member

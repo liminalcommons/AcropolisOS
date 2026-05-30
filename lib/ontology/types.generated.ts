@@ -26,7 +26,7 @@ export type AgentBlocker = z.infer<typeof AgentBlockerSchema>;
 
 export const BedSchema = z.object({
   "id": z.uuid(),
-  "code": z.string(),
+  "code": z.string().default("imported"),
   "room": z.string(),
   "is_bottom_bunk": z.boolean().default(true),
   "out_of_service": z.boolean().default(false),
@@ -36,12 +36,12 @@ export type Bed = z.infer<typeof BedSchema>;
 
 export const BookingSchema = z.object({
   "id": z.uuid(),
-  "label": z.string(),
+  "label": z.string().default("Imported"),
   "guest": z.string(),
   "bed": z.string(),
   "from_date": z.iso.date(),
   "to_date": z.iso.date(),
-  "rate_per_night": z.number(),
+  "rate_per_night": z.number().default(0),
   "currency": z.string().default("EUR"),
   "source": z.enum(["direct", "booking_com", "hostelworld", "hostelsclub", "work_trade", "walk_in"]).default("direct"),
   "status": z.enum(["confirmed", "checked_in", "completed", "cancelled", "no_show"]).default("confirmed"),
@@ -50,7 +50,7 @@ export type Booking = z.infer<typeof BookingSchema>;
 
 export const EventSchema = z.object({
   "id": z.uuid(),
-  "title": z.string(),
+  "title": z.string().default("Imported event"),
   "starts_at": z.iso.datetime({ offset: true }),
   "duration_hours": z.number().default(2),
   "attendance_cap": z.number().optional(),
@@ -64,8 +64,8 @@ export const GuestSchema = z.object({
   "id": z.uuid(),
   "full_name": z.string(),
   "email": z.email(),
-  "country": z.string(),
-  "phone": z.string(),
+  "country": z.string().default("unknown"),
+  "phone": z.string().default("unknown"),
   "arrived_at": z.iso.date(),
   "expected_departure": z.iso.date(),
   "current_status": z.enum(["booked", "checked_in", "checked_out", "no_show", "cancelled"]).default("booked"),
@@ -110,7 +110,7 @@ export const MemberSchema = z.object({
   "id": z.uuid(),
   "full_name": z.string(),
   "email": z.email(),
-  "phone": z.string(),
+  "phone": z.string().default("unknown"),
   "tier_role": z.enum(["work_trader", "staff", "supervisor", "manager"]).default("staff"),
   "started_at": z.iso.date(),
   "notes": z.string().optional(),
@@ -131,9 +131,9 @@ export type Notification = z.infer<typeof NotificationSchema>;
 
 export const RoomSchema = z.object({
   "id": z.uuid(),
-  "code": z.string(),
-  "kind": z.enum(["dorm_mixed", "dorm_female", "dorm_male", "private", "staff"]),
-  "capacity": z.number(),
+  "code": z.string().default("imported"),
+  "kind": z.enum(["dorm_mixed", "dorm_female", "dorm_male", "private", "staff"]).default("dorm_mixed"),
+  "capacity": z.number().default(0),
   "floor": z.number().optional(),
   "notes": z.string().optional(),
 });
@@ -141,10 +141,10 @@ export type Room = z.infer<typeof RoomSchema>;
 
 export const ShiftSchema = z.object({
   "id": z.uuid(),
-  "label": z.string(),
-  "kind": z.enum(["reception", "cleaning", "kitchen", "laundry", "breakfast", "night_audit", "social"]),
+  "label": z.string().default("Imported shift"),
+  "kind": z.enum(["reception", "cleaning", "kitchen", "laundry", "breakfast", "night_audit", "social"]).default("reception"),
   "starts_at": z.iso.datetime({ offset: true }),
-  "duration_hours": z.number(),
+  "duration_hours": z.number().default(8),
   "claimed_by": z.string().optional(),
   "status": z.enum(["open", "claimed", "in_progress", "done", "missed"]).default("open"),
   "notes": z.string().optional(),
@@ -153,7 +153,7 @@ export type Shift = z.infer<typeof ShiftSchema>;
 
 export const WorkTradeAgreementSchema = z.object({
   "id": z.uuid(),
-  "label": z.string(),
+  "label": z.string().default("Imported agreement"),
   "guest": z.string().optional(),
   "bed_comp": z.string(),
   "hours_per_week": z.number().default(20),

@@ -10,6 +10,7 @@ Bed:
       primary_key: true
     code:
       type: string
+      default: imported
       description: e.g. "D3-A2" (Dorm 3, bunk A, bed 2)
     room:
       type: ref

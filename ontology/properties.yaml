@@ -6,8 +6,10 @@ created_at:
   description: When this record was created
 country:
   type: string
+  default: unknown
   description: ISO 3166-1 alpha-2 country code
 phone:
   type: string
   required: false
+  default: unknown
   description: International phone number

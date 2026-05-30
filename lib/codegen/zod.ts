@@ -8,6 +8,7 @@ import type {
   PropertyDefinition,
   SharedPropertyRegistry,
 } from "../ontology/schema";
+import { isDynamicDefaultToken } from "./defaults";
 
 export function pascalCase(name: string): string {
   return name
@@ -41,7 +42,12 @@ function resolveProperty(
     return {
       inline: target,
       required: prop.required ?? true,
-      hasDefault: "default" in target && target.default !== undefined,
+      // Dynamic date/timestamp tokens (CURRENT_DATE/now()) live only at the DB
+      // column-default layer — zod cannot represent them, so they carry NO zod default.
+      hasDefault:
+        "default" in target &&
+        target.default !== undefined &&
+        !isDynamicDefaultToken(target.default),
       defaultValue: "default" in target ? target.default : undefined,
       primaryKey: prop.primary_key ?? target.primary_key ?? false,
     };
@@ -49,7 +55,10 @@ function resolveProperty(
   return {
     inline: prop,
     required: prop.required ?? true,
-    hasDefault: "default" in prop && prop.default !== undefined,
+    hasDefault:
+      "default" in prop &&
+      prop.default !== undefined &&
+      !isDynamicDefaultToken(prop.default),
     defaultValue: "default" in prop ? prop.default : undefined,
     primaryKey: prop.primary_key ?? false,
   };

@@ -19,8 +19,10 @@ Guest:
       ref: phone
     arrived_at:
       type: date
+      default: "@today"
     expected_departure:
       type: date
+      default: "@today+7d"
     current_status:
       type: enum
       values: [booked, checked_in, checked_out, no_show, cancelled]

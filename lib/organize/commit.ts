@@ -43,6 +43,7 @@ import { getRuntimeOntologyDir } from "@/lib/setup/paths";
 import { resolveTargetTable } from "./target-table";
 import { findDuplicates, type DuplicateCandidate } from "./resolve";
 import { deriveRequiredRefs } from "../widgets/vocabulary";
+import { deriveTypeDefaults } from "./derive-defaults";
 import type { Actor } from "../ctx";
 
 // ── Input schema ──────────────────────────────────────────────────────────────
@@ -80,70 +81,6 @@ export type CommitProposalResult =
 export type Resolution =
   | "create_new"
   | { merge_into: string };
-
-// ── Non-FK defaults per type ──────────────────────────────────────────────────
-// Only non-FK NOT NULL columns with sensible defaults. Sentinel-UUID FK values
-// are NOT included here — those must be resolved via A4 entity resolution.
-//
-// NOTE: TYPE_DEFAULTS is genuine hostel BUSINESS opinion (per-type insert
-// defaults), not yet ontology-projectable — defer to a seed-YAML `default:`
-// migration. `TYPE_DEFAULTS[target_type] ?? {}` already fails safe (empty) for
-// any non-hostel type, so it neither breaks other ontologies nor pushes hostel
-// defaults onto them. Do NOT delete it.
-const TYPE_DEFAULTS: Record<string, Record<string, unknown>> = {
-  guest: {
-    country: "unknown",
-    phone: "unknown",
-    arrived_at: new Date().toISOString().slice(0, 10),
-    expected_departure: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10),
-    current_status: "booked",
-    is_work_trader: false,
-  },
-  member: {
-    phone: "unknown",
-    tier_role: "staff",
-    started_at: new Date().toISOString().slice(0, 10),
-  },
-  booking: {
-    label: "Imported",
-    from_date: new Date().toISOString().slice(0, 10),
-    to_date: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10),
-    rate_per_night: 0,
-    currency: "EUR",
-    source: "direct",
-    status: "confirmed",
-  },
-  event: {
-    title: "Imported event",
-    starts_at: new Date().toISOString(),
-    duration_hours: 2,
-    status: "scheduled",
-  },
-  bed: {
-    code: "imported",
-    is_bottom_bunk: true,
-    out_of_service: false,
-  },
-  room: {
-    code: "imported",
-    kind: "dorm_mixed",
-    capacity: 0,
-  },
-  shift: {
-    label: "Imported shift",
-    kind: "reception",
-    starts_at: new Date().toISOString(),
-    duration_hours: 8,
-    status: "open",
-  },
-  work_trade_agreement: {
-    label: "Imported agreement",
-    hours_per_week: 20,
-    start_date: new Date().toISOString().slice(0, 10),
-    end_date: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
-    status: "pending",
-  },
-};
 
 // ── Field mapping ─────────────────────────────────────────────────────────────
 // Applies field_map to payload: source_key → target_field.
@@ -248,9 +185,9 @@ export async function commitProposalCore(
     }
 
     if (!targetExists) {
-      // Bogus id or cross-type id (e.g. member id when target_type='guest').
-      // Write NOTHING. classified_as stays NULL so the data is preserved and
-      // re-resolvable. Never silently discard inbound payload.
+      // Bogus id or cross-type id (an id whose row is of a different type than
+      // target_type). Write NOTHING. classified_as stays NULL so the data is
+      // preserved and re-resolvable. Never silently discard inbound payload.
       return { status: "merge_target_not_found", merge_into: mergeTarget };
     }
 
@@ -407,8 +344,10 @@ export async function commitProposalCore(
             WHERE id = ${inbox_id}`,
       );
 
-      // Step c: build the typed row with defaults + mapped fields
-      const defaults = TYPE_DEFAULTS[target_type] ?? {};
+      // Step c: build the typed row from mapped fields only. Per-type insert
+      // defaults now live as DB column defaults (ontology YAML `default:` →
+      // codegen → Drizzle), so an INSERT that omits a defaulted column gets the
+      // DB-filled value — no app-side per-type default map.
       const inboxRows = await tx.execute(
         sql`SELECT payload FROM raw_inbox WHERE id = ${inbox_id}`,
       );
@@ -424,8 +363,14 @@ export async function commitProposalCore(
       const mappedFields = applyFieldMap(payload, field_map);
 
       // Step d: check required FK columns before attempting the insert.
-      // If any required-ref col is absent from both defaults AND mapped fields,
-      // return structured result — FK resolution is A4 / Resolve territory.
+      // If any required-ref col is absent from the mapped fields, return a
+      // structured result — FK resolution is A4 / Resolve territory.
+      // Per-type insert defaults projected from the ontology's `default:` fields
+      // (declared in the scenario YAML, never a hostel literal here); mapped
+      // fields win over defaults. Mirrors the DB column defaults the codegen
+      // emits, but applied app-side so the insert is correct regardless of
+      // whether drizzle-kit push has ALTERed the live columns.
+      const defaults = deriveTypeDefaults(ontology, resolved.objectType);
       const combinedFields = { ...defaults, ...mappedFields };
       const requiredRefs = deriveRequiredRefs(ontology, resolved.objectType);
       const missingRefs = requiredRefs.filter(

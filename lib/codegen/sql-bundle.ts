@@ -19,6 +19,7 @@ import type {
   PropertyDefinition,
   SharedPropertyRegistry,
 } from "../ontology/schema";
+import { isDynamicDefaultToken } from "./defaults";
 
 export function snakeCase(name: string): string {
   return name
@@ -52,7 +53,12 @@ function resolve(
       inline: target,
       required: prop.required ?? true,
       primaryKey: prop.primary_key ?? target.primary_key ?? false,
-      hasDefault: "default" in target && target.default !== undefined,
+      // Dynamic date/timestamp tokens belong to the DB column-default layer;
+      // sql-bundle DDL cannot represent CURRENT_DATE/now(), so they carry NO default.
+      hasDefault:
+        "default" in target &&
+        target.default !== undefined &&
+        !isDynamicDefaultToken(target.default),
       defaultValue: "default" in target ? target.default : undefined,
     };
   }
@@ -60,7 +66,10 @@ function resolve(
     inline: prop,
     required: prop.required ?? true,
     primaryKey: prop.primary_key ?? false,
-    hasDefault: "default" in prop && prop.default !== undefined,
+    hasDefault:
+      "default" in prop &&
+      prop.default !== undefined &&
+      !isDynamicDefaultToken(prop.default),
     defaultValue: "default" in prop ? prop.default : undefined,
   };
 }

@@ -13,6 +13,7 @@ import {
   uuid,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // === Object types ===
 
@@ -36,7 +37,7 @@ export const agent_blocker = pgTable("agent_blocker", {
 
 export const bed = pgTable("bed", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
-  code: text("code").notNull(),
+  code: text("code").notNull().default("imported"),
   room: uuid("room").notNull().references((): AnyPgColumn => room.id),
   is_bottom_bunk: boolean("is_bottom_bunk").notNull().default(true),
   out_of_service: boolean("out_of_service").notNull().default(false),
@@ -46,12 +47,12 @@ export const bed = pgTable("bed", {
 
 export const booking = pgTable("booking", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
-  label: text("label").notNull(),
+  label: text("label").notNull().default("Imported"),
   guest: uuid("guest").notNull().references((): AnyPgColumn => guest.id),
   bed: uuid("bed").notNull().references((): AnyPgColumn => bed.id),
-  from_date: date("from_date").notNull(),
-  to_date: date("to_date").notNull(),
-  rate_per_night: numeric("rate_per_night").notNull(),
+  from_date: date("from_date").notNull().default(sql`CURRENT_DATE`),
+  to_date: date("to_date").notNull().default(sql`(CURRENT_DATE + 7)`),
+  rate_per_night: numeric("rate_per_night").notNull().default("0"),
   currency: text("currency").notNull().default("EUR"),
   source: text("source").notNull().default("direct"),
   status: text("status").notNull().default("confirmed"),
@@ -59,8 +60,8 @@ export const booking = pgTable("booking", {
 
 export const event = pgTable("event", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
-  title: text("title").notNull(),
-  starts_at: timestamp("starts_at", { withTimezone: true }).notNull(),
+  title: text("title").notNull().default("Imported event"),
+  starts_at: timestamp("starts_at", { withTimezone: true }).notNull().default(sql`now()`),
   duration_hours: numeric("duration_hours").notNull().default("2"),
   attendance_cap: numeric("attendance_cap"),
   organizer: uuid("organizer").notNull().references((): AnyPgColumn => member.id),
@@ -72,10 +73,10 @@ export const guest = pgTable("guest", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
   full_name: text("full_name").notNull(),
   email: text("email").notNull(),
-  country: text("country").notNull(),
-  phone: text("phone").notNull(),
-  arrived_at: date("arrived_at").notNull(),
-  expected_departure: date("expected_departure").notNull(),
+  country: text("country").notNull().default("unknown"),
+  phone: text("phone").notNull().default("unknown"),
+  arrived_at: date("arrived_at").notNull().default(sql`CURRENT_DATE`),
+  expected_departure: date("expected_departure").notNull().default(sql`(CURRENT_DATE + 7)`),
   current_status: text("current_status").notNull().default("booked"),
   is_work_trader: boolean("is_work_trader").notNull().default(false),
   notes: text("notes"),
@@ -114,9 +115,9 @@ export const member = pgTable("member", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
   full_name: text("full_name").notNull(),
   email: text("email").notNull(),
-  phone: text("phone").notNull(),
+  phone: text("phone").notNull().default("unknown"),
   tier_role: text("tier_role").notNull().default("staff"),
-  started_at: date("started_at").notNull(),
+  started_at: date("started_at").notNull().default(sql`CURRENT_DATE`),
   notes: text("notes"),
 });
 
@@ -133,19 +134,19 @@ export const notification = pgTable("notification", {
 
 export const room = pgTable("room", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
-  code: text("code").notNull(),
-  kind: text("kind").notNull(),
-  capacity: numeric("capacity").notNull(),
+  code: text("code").notNull().default("imported"),
+  kind: text("kind").notNull().default("dorm_mixed"),
+  capacity: numeric("capacity").notNull().default("0"),
   floor: numeric("floor"),
   notes: text("notes"),
 });
 
 export const shift = pgTable("shift", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
-  label: text("label").notNull(),
-  kind: text("kind").notNull(),
-  starts_at: timestamp("starts_at", { withTimezone: true }).notNull(),
-  duration_hours: numeric("duration_hours").notNull(),
+  label: text("label").notNull().default("Imported shift"),
+  kind: text("kind").notNull().default("reception"),
+  starts_at: timestamp("starts_at", { withTimezone: true }).notNull().default(sql`now()`),
+  duration_hours: numeric("duration_hours").notNull().default("8"),
   claimed_by: uuid("claimed_by").references((): AnyPgColumn => member.id),
   status: text("status").notNull().default("open"),
   notes: text("notes"),
@@ -154,12 +155,12 @@ export const shift = pgTable("shift", {
 
 export const work_trade_agreement = pgTable("work_trade_agreement", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
-  label: text("label").notNull(),
+  label: text("label").notNull().default("Imported agreement"),
   guest: uuid("guest").references((): AnyPgColumn => guest.id),
   bed_comp: uuid("bed_comp").notNull().references((): AnyPgColumn => bed.id),
   hours_per_week: numeric("hours_per_week").notNull().default("20"),
-  start_date: date("start_date").notNull(),
-  end_date: date("end_date").notNull(),
+  start_date: date("start_date").notNull().default(sql`CURRENT_DATE`),
+  end_date: date("end_date").notNull().default(sql`(CURRENT_DATE + 30)`),
   status: text("status").notNull().default("pending"),
   notes: text("notes"),
 });
