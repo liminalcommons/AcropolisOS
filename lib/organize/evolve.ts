@@ -69,8 +69,12 @@ export function evaluateGrow(signal: GrowSignal, ontology: Ontology): GrowDecisi
   // not reversible) and must NOT auto-apply — skip it. Look up the type's
   // declared properties from the ontology to filter.
   const existingProps = ontology.object_types[snakeToPascal(targetToken)]?.properties ?? {};
+  // Field names collide case-INSENSITIVELY: a capitalized `Tier` is the same
+  // field as an existing `tier` (a redefinition), not a genuinely-new add. Lower
+  // the existing keys so a case variant is filtered out rather than smuggled in.
+  const existingFieldSet = new Set(Object.keys(existingProps).map((f) => f.toLowerCase()));
   const autoApply: GrowOp[] = Object.keys(signal.unfit_fields)
-    .filter((field) => !(field in existingProps))
+    .filter((field) => !existingFieldSet.has(field.toLowerCase()))
     .map((field) => ({
       kind: "add_optional_field",
       object_type: signal.target_type,

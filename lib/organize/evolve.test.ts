@@ -66,6 +66,25 @@ describe("evaluateGrow — the reversibility dial (§6.2)", () => {
     expect(out.escalate).toHaveLength(0);
   });
 
+  it("does NOT auto-apply a CASE-VARIANT of an existing field (case-insensitive field collision)", async () => {
+    const ontology = await loadOntology(SMALL);
+    // `tier` already exists on Member; a capitalized `Tier` is the SAME field,
+    // not a genuinely-new one. It must collide case-insensitively and be skipped.
+    const out = evaluateGrow(
+      {
+        target_type: "member",
+        unfit_fields: { Tier: "platinum" },
+        evidence_rows: ["raw_inbox:abc"],
+      },
+      ontology,
+    );
+    // The only field collides with an existing property → nothing to auto-apply.
+    expect(out.autoApply).toHaveLength(0);
+    expect(out.autoApply.some((op) => op.field === "Tier")).toBe(false);
+    expect(out.autoApply.some((op) => op.field === "tier")).toBe(false);
+    expect(out.escalate).toHaveLength(0);
+  });
+
   it("does not spuriously escalate a Pascal-cased EXISTING type as new_type (casing normalization)", async () => {
     const ontology = await loadOntology(SMALL);
     const out = evaluateGrow(
