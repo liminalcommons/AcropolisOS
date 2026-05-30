@@ -27,6 +27,14 @@ describe("Slice 3 §11 invariants", () => {
       "registry-pg.ts",
       "../widgets/derive-board.ts",
       "../widgets/per-user.ts",
+      // C2 (S4-T21): the read/write type->table resolution chokepoints, after
+      // genericizing their `typeof guestTable` cast to AnyTable. NOTE:
+      // lib/organize/commit.ts is INTENTIONALLY excluded — its TYPE_DEFAULTS map
+      // is documented, fail-safe hostel *business opinion* deferred to a future
+      // seed-YAML `default:` migration (see the comment in commit.ts), not a
+      // derivation-layer leak.
+      "../widgets/read-api.ts",
+      "../organize/target-table.ts",
     ];
     for (const f of files) {
       const src = read(f).toLowerCase();

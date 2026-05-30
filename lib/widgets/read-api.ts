@@ -25,8 +25,12 @@ import type { Database } from "@/lib/db/client";
 import type { Actor } from "@/lib/ctx";
 import { actorMatchesTokens, buildObjectPermissionsMap } from "@/lib/ontology/ctx";
 import type { Ontology } from "@/lib/ontology/schema";
-import { guest as guestTable, TABLES } from "@/lib/db/schema.generated";
+import { TABLES } from "@/lib/db/schema.generated";
 import { deriveVocabulary, type Vocabulary } from "./vocabulary";
+
+// Any generated Drizzle table — the heterogeneous union TABLES indexes into
+// (the typed-select cast target; never a domain-shaped literal).
+type AnyTable = (typeof TABLES)[keyof typeof TABLES];
 
 // RELATIVE-DATE filter tokens. A widget filter value of "@today" resolves, at
 // QUERY time, to the current date (YYYY-MM-DD) — so a descriptor like
@@ -75,8 +79,8 @@ export const CAN_READ_ALL: CanReadType = () => true;
  * that is intentional: per-row ownership lives in ctx.objects, not the coarse
  * catalog read fence.
  *
- * CASING IS LOAD-BEARING: the read-api's snake token (`bed`/`work_trade_agreement`)
- * is mapped to the PascalCase ontology object_type name (`Bed`/`WorkTradeAgreement`)
+ * CASING IS LOAD-BEARING: the read-api's snake token (e.g. `work_trade_agreement`)
+ * is mapped to the PascalCase ontology object_type name (`WorkTradeAgreement`)
  * used by buildObjectPermissionsMap. That map is derived by INVERTING the loaded
  * ontology's real keys (deriveVocabulary().typeToObjectType) — never guessed and
  * never a hostel-shaped literal. A token absent from the loaded ontology has no
@@ -215,13 +219,13 @@ export function createReadOnlyDataApi(
    * registry, keyed by the EXACT PascalCase ontology object-type name (inversion,
    * never a guess). MUST only be called for a token that passed resolveType.
    * Indexing TABLES yields a union of heterogeneous table types; cast to the
-   * guestTable shape for the typed-select paths exactly as the generated TABLES
-   * registry does.
+   * generic AnyTable shape for the typed-select paths exactly as the generated
+   * TABLES registry does.
    */
-  function tableFor(type: string): typeof guestTable {
+  function tableFor(type: string): AnyTable {
     return (TABLES as Record<string, unknown>)[
       vocab.typeToObjectType[type]
-    ] as unknown as typeof guestTable;
+    ] as unknown as AnyTable;
   }
 
   return {
