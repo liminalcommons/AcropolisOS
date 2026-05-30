@@ -1,0 +1,65 @@
+# Second-instance demo — the SAME acropolisOS code running a DIFFERENT scenario
+# (book-club-org) side-by-side with the main hostel instance at :3030, proving
+# the substrate is ontology-agnostic ("swap the ontology -> a different app").
+#
+# Launch / relaunch:   bash scripts/run-bookclub-instance.sh   (from packages/acropolisos)
+# Reaches:             http://localhost:3031   (DB: bookclub on the shared postgres)
+#
+# WHY this exists (and a lib copy): the instance needs its OWN generated schema
+# (book-club, not hostel) WITHOUT clobbering the main instance's lib/*.generated.ts.
+# The launch script copies the CURRENT main lib/ into book-club-instance/lib/ so
+# the shared app/ always has matching lib code (this is what breaks if you skip
+# the script after a main-tree change); boot-time regenerate-from-live then
+# overwrites the 5 generated files from scenarios/book-club-org/ontology.
+#
+# Reuses the main stack's network (acropolisos_default) + postgres, so the main
+# `docker compose up` must be running first. Run with project name acropolisos-bc:
+#   docker compose -p acropolisos-bc -f docker-compose.bookclub.yml up -d
+services:
+  bookclub:
+    image: acropolisos-app
+    container_name: acropolisos-bc
+    restart: unless-stopped
+    command: npm run dev
+    env_file:
+      - .env
+    environment:
+      # Own database on the shared postgres; own auth origin + port.
+      DATABASE_URL: postgres://acropolisos:acropolisos@postgres:5432/bookclub
+      AUTH_URL: http://127.0.0.1:3031
+      AUTH_TRUST_HOST: "true"
+      INNGEST_DEV: "1"
+      ACROPOLISOS_PKG_ROOT: /app
+      NODE_ENV: development
+      PORT: "3030"
+    volumes:
+      # The book-club ontology is THIS instance's /app/ontology (the demoted
+      # scenario bundle — NOT seed/, which slice 4 removed).
+      - ./scenarios/book-club-org/ontology:/app/ontology
+      # Instance-private lib copy (kept current by the launch script; its
+      # generated files are regenerated for book-club at boot).
+      - ./book-club-instance/lib:/app/lib
+      # Shared, ontology-agnostic code from the main tree.
+      - ./app:/app/app
+      - ./components:/app/components
+      - ./scripts:/app/scripts
+      - ./functions:/app/functions
+      - ./drizzle:/app/drizzle
+      - bc_data:/app/data
+      - bc_next:/app/.next
+    ports:
+      - "3031:3030"
+    networks:
+      - acropolis
+
+networks:
+  acropolis:
+    name: acropolisos_default
+    external: true
+
+volumes:
+  # Preserve the book-club steward account + setup state across relaunches.
+  bc_data:
+    name: acropolisos_bc_data
+    external: true
+  bc_next:
