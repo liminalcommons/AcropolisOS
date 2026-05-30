@@ -16,39 +16,11 @@
 
 import { and, eq, getTableColumns } from "drizzle-orm";
 import type { Database } from "../db/client";
-import {
-  agent_blocker as agentBlockerTable,
-  bed as bedTable,
-  booking as bookingTable,
-  event as eventTable,
-  guest as guestTable,
-  incident_log as incidentLogTable,
-  meeting_minute as meetingMinuteTable,
-  member as memberTable,
-  member_context as memberContextTable,
-  notification as notificationTable,
-  room as roomTable,
-  shift as shiftTable,
-  work_trade_agreement as workTradeAgreementTable,
-} from "../db/schema.generated";
-import type {
-  AgentBlocker,
-  Bed,
-  Booking,
-  Event,
-  Guest,
-  IncidentLog,
-  MeetingMinute,
-  Member,
-  MemberContext,
-  Notification,
-  Room,
-  Shift,
-  WorkTradeAgreement,
-} from "./types.generated";
+import { TABLES } from "../db/schema.generated";
 import type {
   ObjectAccess,
   ObjectFilter,
+  ObjectStoreMap,
   OntologyStore,
 } from "./ctx";
 
@@ -139,45 +111,17 @@ function buildObjectAccess<T extends { id: string }>(
   };
 }
 
+// Ontology-agnostic: build one ObjectAccess per generated TABLES entry, keyed
+// by its PascalCase ontology name. No hostel literals — the registry is the
+// single source of truth, so the store boots against any ontology's schema.
+// Permission enforcement happens one level up in createCtx; this layer is
+// auth-free.
 export function createPgOntologyStore(db: Database): OntologyStore {
-  return {
-    objects: {
-      // Original 4 — table bindings and semantics unchanged.
-      Member: buildObjectAccess<Member>(db, memberTable as unknown as TableWithId),
-      Event: buildObjectAccess<Event>(db, eventTable as unknown as TableWithId),
-      MemberContext: buildObjectAccess<MemberContext>(
-        db,
-        memberContextTable as unknown as TableWithId,
-      ),
-      AgentBlocker: buildObjectAccess<AgentBlocker>(
-        db,
-        agentBlockerTable as unknown as TableWithId,
-      ),
-      // Hostel-domain types — same buildObjectAccess factory, one drizzle table
-      // each. Permission enforcement is entirely handled upstream by
-      // wrapObjectAccess in createCtx; this layer is auth-free.
-      Bed: buildObjectAccess<Bed>(db, bedTable as unknown as TableWithId),
-      Booking: buildObjectAccess<Booking>(db, bookingTable as unknown as TableWithId),
-      Guest: buildObjectAccess<Guest>(db, guestTable as unknown as TableWithId),
-      IncidentLog: buildObjectAccess<IncidentLog>(
-        db,
-        incidentLogTable as unknown as TableWithId,
-      ),
-      MeetingMinute: buildObjectAccess<MeetingMinute>(
-        db,
-        meetingMinuteTable as unknown as TableWithId,
-      ),
-      Notification: buildObjectAccess<Notification>(
-        db,
-        notificationTable as unknown as TableWithId,
-      ),
-      Room: buildObjectAccess<Room>(db, roomTable as unknown as TableWithId),
-      Shift: buildObjectAccess<Shift>(db, shiftTable as unknown as TableWithId),
-      WorkTradeAgreement: buildObjectAccess<WorkTradeAgreement>(
-        db,
-        workTradeAgreementTable as unknown as TableWithId,
-      ),
-    },
-    links: {},
-  };
+  const objects = Object.fromEntries(
+    Object.entries(TABLES).map(([typeName, table]) => [
+      typeName,
+      buildObjectAccess(db, table as unknown as TableWithId),
+    ]),
+  ) as unknown as ObjectStoreMap;
+  return { objects, links: {} };
 }

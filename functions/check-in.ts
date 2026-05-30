@@ -48,19 +48,21 @@ export default defineAction({
     // booking's check-in onto the guest's current_status so the two stay
     // coherent. If the guest is missing/unreadable we still report the booking
     // change rather than failing the whole action.
+    // Scenario rows are loosely typed (ScenarioRow); read typed fields with casts.
+    const guestId = booking.guest as string | undefined;
     let guestStatus: string | null = null;
-    if (booking.guest) {
-      const updatedGuest = await ctx.objects.Guest.update(booking.guest, {
+    if (guestId) {
+      const updatedGuest = await ctx.objects.Guest.update(guestId, {
         current_status: "checked_in",
       });
-      guestStatus = updatedGuest?.current_status ?? null;
+      guestStatus = (updatedGuest?.current_status as string | undefined) ?? null;
     }
 
     return {
       ok: true as const,
       booking: params.booking,
-      booking_status: updatedBooking.status,
-      guest: booking.guest ?? null,
+      booking_status: updatedBooking.status as string,
+      guest: guestId ?? null,
       guest_status: guestStatus,
       checked_in: true as const,
     };

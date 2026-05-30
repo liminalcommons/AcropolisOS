@@ -1,0 +1,19 @@
+MeetingMinute:
+  description: Notes captured from a community event
+  title_property: title
+  permissions:
+    read: ["*"]
+    write: ["steward"]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    title:
+      type: string
+    body:
+      type: string
+    event_id:
+      type: ref
+      target: Event
+    created_at:
+      ref: created_at

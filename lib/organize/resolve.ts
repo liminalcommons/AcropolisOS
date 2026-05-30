@@ -13,38 +13,16 @@
 // Normalization: lowercase + trim + strip diacritics (NFD decompose + drop Mn category).
 // Returns up to 5 candidates sorted by score desc.
 //
-// KEY_FIELDS defines the human-identity fields to match on per type.
+// Key fields, table name, and label field are ONTOLOGY-DERIVED (no hostel
+// literals): key fields via deriveKeyFields, table name via getTableName on the
+// fail-closed resolved Drizzle table, label via the type's title_property.
 // Only same-type dedup — cross-type FK resolution is deferred (A5+).
 
-import { sql } from "drizzle-orm";
+import { getTableName, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-
-// ── Target type ───────────────────────────────────────────────────────────────
-
-export type TargetType =
-  | "guest"
-  | "member"
-  | "booking"
-  | "event"
-  | "bed"
-  | "room"
-  | "shift"
-  | "work_trade_agreement";
-
-// ── Key fields per type ────────────────────────────────────────────────────────
-// These are the human-identity fields used for near-match scoring.
-// email is treated specially (exact-match → 1.0); all others use name-like matching.
-
-export const KEY_FIELDS: Record<TargetType, string[]> = {
-  guest:                ["email", "full_name"],
-  member:               ["email", "full_name"],
-  event:                ["title"],
-  booking:              ["label"],
-  bed:                  ["code"],
-  room:                 ["code"],
-  shift:                ["label"],
-  work_trade_agreement: ["label"],
-};
+import type { Ontology } from "../ontology/schema";
+import type { ResolvedTarget } from "./target-table";
+import { deriveKeyFields } from "../widgets/vocabulary";
 
 // ── Normalization ─────────────────────────────────────────────────────────────
 
@@ -94,40 +72,23 @@ export interface DuplicateCandidate {
 }
 
 // ── findDuplicates ─────────────────────────────────────────────────────────────
-// Query existing rows of `targetType` for near-matches on the key fields
+// Query existing rows of the resolved target for near-matches on the key fields
 // present in `mappedFields`. Returns up to 5 candidates, score desc.
-
-const TABLE_NAMES: Record<TargetType, string> = {
-  guest:                "guest",
-  member:               "member",
-  booking:              "booking",
-  event:                "event",
-  bed:                  "bed",
-  room:                 "room",
-  shift:                "shift",
-  work_trade_agreement: "work_trade_agreement",
-};
-
-// What column to use as the human-readable label for display in the UI.
-const LABEL_FIELD: Record<TargetType, string> = {
-  guest:                "full_name",
-  member:               "full_name",
-  event:                "title",
-  booking:              "label",
-  bed:                  "code",
-  room:                 "code",
-  shift:                "label",
-  work_trade_agreement: "label",
-};
-
+//
+// SECURITY (fail-closed): the SQL table name comes from getTableName(resolved.table)
+// where `resolved` was produced by resolveTargetTable (ontology-derived + TABLES
+// registry). It is NEVER derived from the raw target_type string — a missing /
+// drifted type can never reach SQL.
 export async function findDuplicates(
   db: Database,
-  targetType: TargetType,
+  resolved: ResolvedTarget,
+  ontology: Ontology,
   mappedFields: Record<string, unknown>,
 ): Promise<DuplicateCandidate[]> {
-  const keyFields = KEY_FIELDS[targetType];
-  const tableName = TABLE_NAMES[targetType];
-  const labelField = LABEL_FIELD[targetType];
+  const objectType = resolved.objectType;
+  const keyFields = deriveKeyFields(ontology, objectType);
+  const tableName = getTableName(resolved.table as Parameters<typeof getTableName>[0]);
+  const labelField = ontology.object_types[objectType]?.title_property ?? "id";
 
   // Collect key fields that are actually present in mappedFields.
   const presentKeyFields = keyFields.filter(

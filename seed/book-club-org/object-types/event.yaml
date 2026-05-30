@@ -1,0 +1,30 @@
+Event:
+  description: Hostel social event (movie night, walking tour, dinner)
+  title_property: title
+  permissions:
+    read: ["*"]
+    write: [steward, manager]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    title:
+      type: string
+    starts_at:
+      type: timestamp
+    duration_hours:
+      type: decimal
+      default: 2
+    attendance_cap:
+      type: decimal
+      required: false
+    organizer:
+      type: ref
+      target: Member
+    description:
+      type: string
+      required: false
+    status:
+      type: enum
+      values: [scheduled, in_progress, completed, cancelled]
+      default: scheduled

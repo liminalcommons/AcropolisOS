@@ -1,0 +1,11 @@
+attended:
+  from: Member
+  to: Event
+  cardinality: many-to-many
+  description: A member attended an event (e.g. a reading meeting)
+  properties:
+    attended_at:
+      type: timestamp
+    role:
+      type: enum
+      values: [attendee, organizer, speaker]

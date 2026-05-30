@@ -41,7 +41,8 @@ import { validateFieldMap, buildTargetVocab } from "../../app/api/organize/class
 import { getOntologyCached } from "@/lib/agent/chat-runtime";
 import { getRuntimeOntologyDir } from "@/lib/setup/paths";
 import { resolveTargetTable } from "./target-table";
-import { findDuplicates, type DuplicateCandidate, type TargetType } from "./resolve";
+import { findDuplicates, type DuplicateCandidate } from "./resolve";
+import { deriveRequiredRefs } from "../widgets/vocabulary";
 import type { Actor } from "../ctx";
 
 // ── Input schema ──────────────────────────────────────────────────────────────
@@ -80,26 +81,15 @@ export type Resolution =
   | "create_new"
   | { merge_into: string };
 
-// ── Required FK columns per type ─────────────────────────────────────────────
-// These are the NOT NULL foreign-key columns derived from schema.generated.ts.
-// If any of these are absent from the mapped fields before insert, we return
-// { status: "incomplete_required_refs" } — FK resolution is A4 territory.
-
-const REQUIRED_REFS: Record<string, string[]> = {
-  guest: [],
-  member: [],
-  booking: ["guest", "bed"],
-  event: ["organizer"],
-  bed: ["room"],
-  room: [],
-  shift: ["member_id"],
-  work_trade_agreement: ["bed_comp"],
-};
-
 // ── Non-FK defaults per type ──────────────────────────────────────────────────
 // Only non-FK NOT NULL columns with sensible defaults. Sentinel-UUID FK values
 // are NOT included here — those must be resolved via A4 entity resolution.
-
+//
+// NOTE: TYPE_DEFAULTS is genuine hostel BUSINESS opinion (per-type insert
+// defaults), not yet ontology-projectable — defer to a seed-YAML `default:`
+// migration. `TYPE_DEFAULTS[target_type] ?? {}` already fails safe (empty) for
+// any non-hostel type, so it neither breaks other ontologies nor pushes hostel
+// defaults onto them. Do NOT delete it.
 const TYPE_DEFAULTS: Record<string, Record<string, unknown>> = {
   guest: {
     country: "unknown",
@@ -359,10 +349,10 @@ export async function commitProposalCore(
     // Build mapped fields for scoring — same logic as applyFieldMap but for dedup only.
     const mappedForDedup = applyFieldMap(dedupPayload, field_map);
 
-    // target_type already passed resolveTargetTable (fail-closed), so at runtime
-    // it is always a type resolve.ts knows; the cast bridges the as-yet-literal
-    // TargetType in resolve.ts (its de-contamination is a separate change).
-    const candidates = await findDuplicates(db, target_type as TargetType, mappedForDedup);
+    // findDuplicates derives key fields + table name from the ontology-resolved
+    // target (fail-closed): table name comes from getTableName(resolved.table),
+    // never the raw target_type string.
+    const candidates = await findDuplicates(db, resolved, ontology, mappedForDedup);
     if (candidates.length > 0) {
       return {
         status: "duplicate_candidate",
@@ -437,7 +427,7 @@ export async function commitProposalCore(
       // If any required-ref col is absent from both defaults AND mapped fields,
       // return structured result — FK resolution is A4 / Resolve territory.
       const combinedFields = { ...defaults, ...mappedFields };
-      const requiredRefs = REQUIRED_REFS[target_type] ?? [];
+      const requiredRefs = deriveRequiredRefs(ontology, resolved.objectType);
       const missingRefs = requiredRefs.filter(
         (col) => combinedFields[col] === undefined || combinedFields[col] === null,
       );

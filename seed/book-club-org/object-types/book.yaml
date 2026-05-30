@@ -1,0 +1,9 @@
+Book:
+  description: "A book the club reads"
+  title_property: title
+  permissions: { read: ["*"], write: ["steward"] }
+  properties:
+    id: { type: uuid, primary_key: true }
+    title: { type: string, required: true }
+    author: { type: string }
+    year: { type: integer }

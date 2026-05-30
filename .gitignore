@@ -22,3 +22,7 @@ functions/__sandbox_fixtures__/
 .tmp/
 
 .DS_Store
+
+# transient book-club second-instance (docker demo) — not committed
+book-club-instance/
+.decontam-baseline.txt

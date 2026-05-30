@@ -1,0 +1,8 @@
+member:
+  description: Any verified account (staff or work-trader with login access)
+
+steward:
+  description: Front-desk + supervisor; can check guests in/out and log incidents
+
+manager:
+  description: Full write access; sets rates, signs work-trade agreements

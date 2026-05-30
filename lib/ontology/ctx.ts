@@ -12,19 +12,13 @@ import type { NotificationStore } from "../notifications/store";
 import type { Ontology, PermissionsBlock } from "./schema";
 import type {
   AgentBlocker,
-  Bed,
-  Booking,
   Event,
-  Guest,
-  IncidentLog,
   MeetingMinute,
   Member,
   MemberContext,
   Notification,
-  Room,
-  Shift,
-  WorkTradeAgreement,
 } from "./types.generated";
+import { TABLES } from "../db/schema.generated";
 
 // === Access surface ===
 
@@ -50,29 +44,27 @@ export interface LinkAccess<L> {
   traverse(input: { from?: string; to?: string }): Promise<LinkEdge<L>[]>;
 }
 
+// PLATFORM object types: present in EVERY ontology; consumers read typed fields.
+export interface PlatformObjects {
+  Member: ObjectAccess<Member>;
+  Event: ObjectAccess<Event>;
+  MemberContext: ObjectAccess<MemberContext>;
+  AgentBlocker: ObjectAccess<AgentBlocker>;
+  Notification: ObjectAccess<Notification>;
+  MeetingMinute: ObjectAccess<MeetingMinute>;
+}
+export type ScenarioRow = { id: string } & Record<string, unknown>;
+// Hybrid: platform types concretely typed; any other type via the string index.
+// The intersection (not a plain interface with an index signature) is REQUIRED:
+// a string-indexed interface would force method-parameter bivariance across the
+// whole map and reject the concretely-typed platform accessors.
+export type ObjectStoreMap = PlatformObjects & {
+  [typeName: string]: ObjectAccess<ScenarioRow>;
+};
 export interface OntologyStore {
-  objects: {
-    // Core member/community types (original 4 — semantics and permission wiring
-    // are unchanged; these are listed first for call-site stability).
-    Member: ObjectAccess<Member>;
-    Event: ObjectAccess<Event>;
-    MemberContext: ObjectAccess<MemberContext>;
-    AgentBlocker: ObjectAccess<AgentBlocker>;
-    // Hostel-domain types — all exposed through the same permission-checked
-    // ObjectAccess surface as the 4 above; permissions are derived from the
-    // loaded ontology's object_type.permissions.read/write per type.
-    Bed: ObjectAccess<Bed>;
-    Booking: ObjectAccess<Booking>;
-    Guest: ObjectAccess<Guest>;
-    IncidentLog: ObjectAccess<IncidentLog>;
-    MeetingMinute: ObjectAccess<MeetingMinute>;
-    Notification: ObjectAccess<Notification>;
-    Room: ObjectAccess<Room>;
-    Shift: ObjectAccess<Shift>;
-    WorkTradeAgreement: ObjectAccess<WorkTradeAgreement>;
-  };
+  objects: ObjectStoreMap;
   // 0c-pre2: links typed as open record — attended/authored removed with community schema.
-  // Hostel-domain link types will be added here as they are defined.
+  // Scenario link types will be added here as they are defined.
   links: Record<string, LinkAccess<Record<string, unknown>>>;
 }
 
@@ -384,26 +376,21 @@ export function createCtx({
     return wrapObjectAccess(access, permissions[typeName], actor, typeName);
   };
 
+  // Permission-wrap EVERY key the store exposes — no type can skip the fence.
+  // wrap() fails closed (deny-all) when a type has no permissions entry, so an
+  // unmapped type is denied rather than world-open. Ontology-agnostic: the
+  // store's own key set drives the wrap, not a hardcoded type list.
+  const objects = {} as ObjectStoreMap;
+  for (const typeName of Object.keys(db.objects)) {
+    (objects as Record<string, ObjectAccess<ScenarioRow>>)[typeName] = wrap(
+      db.objects[typeName] as ObjectAccess<ScenarioRow>,
+      typeName,
+    );
+  }
+
   return {
     actor,
-    objects: {
-      // Original 4 — permission wiring unchanged.
-      Member: wrap(db.objects.Member, "Member"),
-      Event: wrap(db.objects.Event, "Event"),
-      MemberContext: wrap(db.objects.MemberContext, "MemberContext"),
-      AgentBlocker: wrap(db.objects.AgentBlocker, "AgentBlocker"),
-      // Hostel-domain types — same wrapObjectAccess decorator, permissions from
-      // the loaded ontology map passed as `permissions` to createCtx.
-      Bed: wrap(db.objects.Bed, "Bed"),
-      Booking: wrap(db.objects.Booking, "Booking"),
-      Guest: wrap(db.objects.Guest, "Guest"),
-      IncidentLog: wrap(db.objects.IncidentLog, "IncidentLog"),
-      MeetingMinute: wrap(db.objects.MeetingMinute, "MeetingMinute"),
-      Notification: wrap(db.objects.Notification, "Notification"),
-      Room: wrap(db.objects.Room, "Room"),
-      Shift: wrap(db.objects.Shift, "Shift"),
-      WorkTradeAgreement: wrap(db.objects.WorkTradeAgreement, "WorkTradeAgreement"),
-    },
+    objects,
     links: db.links,
     actions: {},
     ...(audit ? { audit } : {}),
@@ -499,25 +486,14 @@ class InMemoryLinkAccess<L> implements LinkAccess<L> {
   }
 }
 
-export function createInMemoryStore(): OntologyStore {
-  return {
-    objects: {
-      // Original 4 — unchanged.
-      Member: new InMemoryObjectAccess<Member>(),
-      Event: new InMemoryObjectAccess<Event>(),
-      MemberContext: new InMemoryObjectAccess<MemberContext>(),
-      AgentBlocker: new InMemoryObjectAccess<AgentBlocker>(),
-      // Hostel-domain types — same InMemoryObjectAccess, no special logic.
-      Bed: new InMemoryObjectAccess<Bed>(),
-      Booking: new InMemoryObjectAccess<Booking>(),
-      Guest: new InMemoryObjectAccess<Guest>(),
-      IncidentLog: new InMemoryObjectAccess<IncidentLog>(),
-      MeetingMinute: new InMemoryObjectAccess<MeetingMinute>(),
-      Notification: new InMemoryObjectAccess<Notification>(),
-      Room: new InMemoryObjectAccess<Room>(),
-      Shift: new InMemoryObjectAccess<Shift>(),
-      WorkTradeAgreement: new InMemoryObjectAccess<WorkTradeAgreement>(),
-    },
-    links: {},
-  };
+// Ontology-parametric: by default mirrors the generated TABLES key set, but a
+// caller (e.g. a non-hostel scenario test) can pass its own type names so the
+// in-memory store boots against any ontology without code change.
+export function createInMemoryStore(
+  typeNames: string[] = Object.keys(TABLES),
+): OntologyStore {
+  const objects = Object.fromEntries(
+    typeNames.map((typeName) => [typeName, new InMemoryObjectAccess<ScenarioRow>()]),
+  ) as unknown as ObjectStoreMap;
+  return { objects, links: {} };
 }
