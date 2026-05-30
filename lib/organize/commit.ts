@@ -34,40 +34,21 @@
 
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { sql } from "drizzle-orm";
+import { sql, getTableName } from "drizzle-orm";
 import { getDb, type Database } from "../db/client";
 import { raw_inbox, action_audit } from "../db/schema";
-import {
-  guest as guestTable,
-  member as memberTable,
-  booking as bookingTable,
-  event as eventTable,
-  bed as bedTable,
-  room as roomTable,
-  shift as shiftTable,
-  work_trade_agreement as workTradeTable,
-} from "../db/schema.generated";
 import { validateFieldMap, buildTargetVocab } from "../../app/api/organize/classify/route";
-import { findDuplicates, type DuplicateCandidate } from "./resolve";
+import { getOntologyCached } from "@/lib/agent/chat-runtime";
+import { getRuntimeOntologyDir } from "@/lib/setup/paths";
+import { resolveTargetTable } from "./target-table";
+import { findDuplicates, type DuplicateCandidate, type TargetType } from "./resolve";
 import type { Actor } from "../ctx";
 
 // ── Input schema ──────────────────────────────────────────────────────────────
 
-const TARGET_TYPE_ENUM = z.enum([
-  "guest",
-  "member",
-  "booking",
-  "event",
-  "bed",
-  "room",
-  "shift",
-  "work_trade_agreement",
-]);
-type TargetType = z.infer<typeof TARGET_TYPE_ENUM>;
-
 export const CommitProposalInputSchema = z.object({
   inbox_id: z.string().uuid(),
-  target_type: TARGET_TYPE_ENUM,
+  target_type: z.string().min(1),
   field_map: z.record(z.string(), z.string()),
   confidence: z.number().min(0).max(1),
   unmapped: z.array(z.string()),
@@ -78,11 +59,12 @@ export type CommitProposalInput = z.infer<typeof CommitProposalInputSchema>;
 // ── Result discriminated union ────────────────────────────────────────────────
 
 export type CommitProposalResult =
-  | { status: "committed"; typed_row_id: string; target_type: TargetType }
+  | { status: "committed"; typed_row_id: string; target_type: string }
   | { status: "already_classified"; classified_as: string | null }
   | { status: "forbidden" }
   | { status: "validation_error"; issues: z.ZodIssue[] }
   | { status: "field_map_error"; invalid_fields: string[] }
+  | { status: "invalid_target_type"; target_type: string }
   | { status: "inbox_not_found" }
   | { status: "incomplete_required_refs"; missing: string[] }
   | { status: "commit_error"; detail: string }
@@ -103,7 +85,7 @@ export type Resolution =
 // If any of these are absent from the mapped fields before insert, we return
 // { status: "incomplete_required_refs" } — FK resolution is A4 territory.
 
-const REQUIRED_REFS: Record<TargetType, string[]> = {
+const REQUIRED_REFS: Record<string, string[]> = {
   guest: [],
   member: [],
   booking: ["guest", "bed"],
@@ -118,7 +100,7 @@ const REQUIRED_REFS: Record<TargetType, string[]> = {
 // Only non-FK NOT NULL columns with sensible defaults. Sentinel-UUID FK values
 // are NOT included here — those must be resolved via A4 entity resolution.
 
-const TYPE_DEFAULTS: Record<TargetType, Record<string, unknown>> = {
+const TYPE_DEFAULTS: Record<string, Record<string, unknown>> = {
   guest: {
     country: "unknown",
     phone: "unknown",
@@ -172,38 +154,6 @@ const TYPE_DEFAULTS: Record<TargetType, Record<string, unknown>> = {
     status: "pending",
   },
 };
-
-// ── Table lookup ──────────────────────────────────────────────────────────────
-
-// Safe hardcoded table name map — used in parameterized existence checks.
-// The id is ALWAYS a bound parameter; only the table name comes from this map.
-const TABLE_NAMES: Record<TargetType, string> = {
-  guest: "guest",
-  member: "member",
-  booking: "booking",
-  event: "event",
-  bed: "bed",
-  room: "room",
-  shift: "shift",
-  work_trade_agreement: "work_trade_agreement",
-};
-
-type AnyTable = typeof guestTable | typeof memberTable | typeof bookingTable |
-  typeof eventTable | typeof bedTable | typeof roomTable |
-  typeof shiftTable | typeof workTradeTable;
-
-function tableForType(targetType: TargetType): AnyTable {
-  switch (targetType) {
-    case "guest": return guestTable;
-    case "member": return memberTable;
-    case "booking": return bookingTable;
-    case "event": return eventTable;
-    case "bed": return bedTable;
-    case "room": return roomTable;
-    case "shift": return shiftTable;
-    case "work_trade_agreement": return workTradeTable;
-  }
-}
 
 // ── Field mapping ─────────────────────────────────────────────────────────────
 // Applies field_map to payload: source_key → target_field.
@@ -262,6 +212,16 @@ export async function commitProposalCore(
     return { status: "field_map_error", invalid_fields: fieldMapCheck.invalid };
   }
 
+  // 3b. Resolve target type → Drizzle table from the LOADED ontology (fail-closed).
+  //     Single write-path chokepoint: no hostel literals. resolveTargetTable
+  //     returns null when the type is not in the ontology OR has no generated
+  //     TABLES entry (ontology<->schema drift), so a missing key never reaches SQL.
+  const ontology = await getOntologyCached(getRuntimeOntologyDir());
+  const resolved = resolveTargetTable(ontology, target_type);
+  if (resolved === null) {
+    return { status: "invalid_target_type", target_type };
+  }
+
   // ── A4: Handle merge_into resolution path ─────────────────────────────────
   // resolution = { merge_into: "<existing_id>" }:
   //   No new row is created. Stamp provenance on raw_inbox so the row is marked
@@ -277,12 +237,13 @@ export async function commitProposalCore(
   //   3. Persist merge decision to action_audit for recoverability.
   if (resolution !== undefined && resolution !== "create_new" && typeof resolution === "object" && "merge_into" in resolution) {
     const mergeTarget = (resolution as { merge_into: string }).merge_into;
-    const tableName = TABLE_NAMES[target_type];
+    const tableName = getTableName(resolved.table);
 
     // ── Step 1: Validate the merge target exists and is of the correct type ──
     let targetExists = false;
     try {
-      // Safe: tableName comes from the hardcoded TABLE_NAMES map (not user input).
+      // Safe: tableName is the SQL name of the ontology-resolved Drizzle table
+      // (not user input — resolved.table came from the fail-closed TABLES lookup).
       // mergeTarget is a bound parameter — never concatenated into the query string.
       const existResult = await db.execute(
         sql`SELECT 1 FROM ${sql.identifier(tableName)} WHERE id = ${mergeTarget} LIMIT 1`,
@@ -398,7 +359,10 @@ export async function commitProposalCore(
     // Build mapped fields for scoring — same logic as applyFieldMap but for dedup only.
     const mappedForDedup = applyFieldMap(dedupPayload, field_map);
 
-    const candidates = await findDuplicates(db, target_type, mappedForDedup);
+    // target_type already passed resolveTargetTable (fail-closed), so at runtime
+    // it is always a type resolve.ts knows; the cast bridges the as-yet-literal
+    // TargetType in resolve.ts (its de-contamination is a separate change).
+    const candidates = await findDuplicates(db, target_type as TargetType, mappedForDedup);
     if (candidates.length > 0) {
       return {
         status: "duplicate_candidate",
@@ -491,7 +455,7 @@ export async function commitProposalCore(
 
       // Step e: insert the typed row — wrapped so any DB error maps to
       // { status:"commit_error" } rather than re-throwing raw SQL strings.
-      const table = tableForType(target_type);
+      const table = resolved.table;
       try {
         await tx.insert(table as never).values(rowToInsert as never);
       } catch (insertErr) {
