@@ -36,6 +36,9 @@ import { getOrCreateMemberContext } from "@/lib/me/fetchers/member-context";
 import { buildCanReadType } from "@/lib/widgets/read-api";
 import { readOrgProfile } from "@/lib/org-profile/store";
 import { orgPurposePreamble } from "@/lib/org-profile/shared";
+import { getDb } from "@/lib/db/client";
+import { raw_inbox } from "@/lib/db/schema";
+import { chatPasteRow } from "@/lib/inbox/stage-text";
 import {
   composeOrgView,
   removeOrgView,
@@ -64,6 +67,7 @@ const APPLY_ACTION_INSTRUCTIONS = [
   "",
   "You have FOUR surfaces:",
   "  - READ (query_<type>, read_<type>, describe_<type>): inspect existing data. When the user asks about existing data ('what X do we have', 'show me', 'list', 'how many', 'who is …'), use query_<type> or read_<type> FIRST, before proposing anything new. Use describe_<type> when you need to know what fields an object type has.",
+  "  - ingest_text: when the user PASTES raw data as text in chat (a list or dump of records, 'here are our guests: …'), call ingest_text with that text to stage it in the raw inbox for classification + growth. Prefer this over proposing object types directly from a paste — stage the data first, then it can be classified at /organize.",
   "  - propose_* + finalize_proposal: stage ONTOLOGY changes (new object/link/property/action types, new ingest mappings). These DO NOT mutate live state until a steward reviews and applies the proposal.",
   "  - apply_action: invoke a typed action to mutate LIVE state immediately (e.g., change_tier on an existing Member, record_attendance). These commit when called.",
   "  - n8n (list_workflows, create_workflow): inspect and create automation workflows in n8n. Use list_workflows when the user asks what automations exist or what's connected. Use create_workflow when the user asks to set up an automation or materialize an action path as a workflow. If either tool returns 'n8n not connected', inform the user the API key needs to be configured.",
@@ -289,6 +293,34 @@ export async function POST(req: Request): Promise<Response> {
     },
   });
 
+  // ingest_text — the "paste your mess in chat" intake channel (storyboard
+  // Scene 3). Stages pasted free-text into raw_inbox so /organize + the GROW
+  // loop classify + grow it. The route is already past the isAnonymous gate, so
+  // the caller is an authenticated member (same bar as /api/connect/upload).
+  const ingest_text = tool({
+    description:
+      "Stage raw data the user PASTES into chat (a list/dump of records, e.g. 'here are our 128 guests: …') into the raw inbox so it can be classified and grown into the ontology. Use this when the user pastes records as prose instead of uploading a file — do NOT try to propose object types directly from a paste; stage it first. After staging, tell the user it's in the inbox and they can classify/grow it at /organize.",
+    inputSchema: z.object({
+      text: z.string().min(1).describe("the pasted free-text data to stage"),
+      label: z
+        .string()
+        .optional()
+        .describe("optional short label for what this data is, e.g. 'guests' or 'bookings'"),
+    }),
+    execute: async ({ text, label }) => {
+      const [row] = await getDb()
+        .insert(raw_inbox)
+        .values(chatPasteRow(text, label))
+        .returning({ id: raw_inbox.id });
+      return {
+        ok: true,
+        id: row?.id,
+        message:
+          "Staged your text in the raw inbox. Review + classify it at /organize, or ask me to propose structure from it.",
+      };
+    },
+  });
+
   const tools = {
     ...readTools,
     ...proposalTools,
@@ -299,6 +331,7 @@ export async function POST(req: Request): Promise<Response> {
     compose_view,
     remove_widget,
     clear_dashboard,
+    ingest_text,
   };
 
   // Gap ②: inject the org's PURPOSE so the agent weighs proposals + answers by
