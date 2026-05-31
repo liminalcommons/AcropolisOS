@@ -30,4 +30,6 @@ functions/__sandbox_fixtures__/
 
 # transient book-club second-instance (docker demo) — not committed
 book-club-instance/
+# transient empty second-instance (docker demo, :3032) — not committed (scaffolding)
+empty-instance/
 .decontam-baseline.txt

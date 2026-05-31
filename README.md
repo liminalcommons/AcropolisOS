@@ -50,3 +50,12 @@ npm run typecheck
 npm run lint
 npm test
 ```
+
+## Codegen safety
+
+`lib/**/*.generated.ts` are emitted from YAML. There are two regeneration paths — do not confuse them:
+
+- **Boot / live:** `scripts/regenerate-from-live.ts` reads the bind-mounted `./ontology/` (the single source of truth at runtime). The docker entrypoint runs this before `drizzle-kit push`.
+- **Seeding a scenario (dev only):** `npm run codegen -- <bundle>` regenerates from `scenarios/<bundle>/ontology/`.
+
+> **Warning:** `npm run codegen` with no argument is **refused** — a bare run would regenerate from the `small-community` seed and **clobber** the richer live ontology. Always pass an explicit bundle name, e.g. `npm run codegen -- hostel`.

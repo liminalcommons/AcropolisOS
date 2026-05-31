@@ -14,11 +14,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function main(): Promise<void> {
-  const seedName = process.argv[2] ?? "small-community";
-  const pkgRoot = path.resolve(__dirname, "..");
   // Scenario bundles live at packages/acropolisos/scenarios/<name>/ontology/
-  // (action-types, object-types, properties.yaml, roles.yaml). NEVER run this
-  // bare — it defaults to small-community; pass an explicit scenario as argv[2].
+  // (action-types, object-types, properties.yaml, roles.yaml). A bare run is
+  // REFUSED: it would regenerate lib/*.generated.ts from the small-community
+  // seed and CLOBBER the richer live ontology. Boot uses regenerate-from-live.ts
+  // (reads ./ontology); the dev watcher uses lib/dev/codegen-runner.ts. Pass a
+  // scenario bundle explicitly: `npm run codegen -- <name>`.
+  const seedArg = process.argv[2];
+  if (!seedArg) {
+    process.stderr.write(
+      "refusing to run codegen with the implicit default seed.\n" +
+        "A bare `npm run codegen` would regenerate lib/*.generated.ts from the\n" +
+        "small-community seed and CLOBBER the live ontology. Pass a scenario\n" +
+        "bundle explicitly, e.g.:\n" +
+        "  npm run codegen -- small-community\n" +
+        "  npm run codegen -- hostel\n",
+    );
+    process.exit(2);
+  }
+  const seedName = seedArg;
+  const pkgRoot = path.resolve(__dirname, "..");
   const seedRoot = path.join(pkgRoot, "scenarios", seedName, "ontology");
   const ontologyOutDir = path.join(pkgRoot, "lib", "ontology");
   const agentOutDir = path.join(pkgRoot, "lib", "agent");

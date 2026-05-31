@@ -36,7 +36,7 @@ This was a deliberate **from-scratch rebuild** (disconnected from M1's Discord/L
 | 5 | Self-correction via human feedback | Pathway-preference read-loop (safest-first) | **Completed** | `lib/blockers/pathway-preference.ts` (`b1de2ca2d`,`44024a691`) |
 | 6 | Metrics framework for community intelligence | 5 KPIs + governed `intelligence_metric` widgets | **Completed** | `lib/metrics/community-intelligence.ts`, `lib/widgets/catalog.ts` (`418b05769`,`bc43954ec`) |
 
-**Overall: 6 / 6 deliverables met.** One honest caveat (not a blocker): the `/org` metric-widget *live browser render* is proven by an in-container reproduction of the exact resolve path but was not screenshot-confirmable in the session's browser (cache/dev-server artifact, not a code defect). One product gap is noted (§Known gaps).
+**Overall: 6 / 6 deliverables met.** One honest caveat (not a blocker): the steward-home (`/`) metric-widget *live browser render* is proven by an in-container reproduction of the exact resolve path but was not screenshot-confirmable in the session's browser (cache/dev-server artifact, not a code defect). One product gap is noted (§Known gaps).
 
 ---
 
@@ -57,7 +57,7 @@ The society-simulation deliverable is reframed as the **autonomous governed habi
 **Status: Completed** | Confidence: High
 The agent detects situations and raises a governed `agent_blocker` offering up to **3 curated pathways** (scenarios); the steward disposes on the community's behalf via the real `always_confirm → confirm` path. This is the "surface-then-decide" collective-decision contract — the agent drives the process, the community's governance decides.
 - **Evidence:** `scripts/demo-m3-narrative.ts` exercises the full pipeline and asserts each step; `=== M3 DEMO NARRATIVE PASS ===` reproducibly. The decision surface (veto-queue + pathway/binary/text resolvers) is the shipped foundation.
-- **Key files:** `scripts/demo-m3-narrative.ts`, `functions/flag-blocker.ts`, `functions/resolve-blocker-with-pathway.ts`, `seed/small-community/object-types/agent-blocker.yaml`.
+- **Key files:** `scripts/demo-m3-narrative.ts`, `functions/flag-blocker.ts`, `functions/resolve-blocker-with-pathway.ts`, `ontology/object-types/agent-blocker.yaml`.
 
 ### 4. Integrating Real Human Input
 **Status: Completed** | Confidence: High
@@ -79,8 +79,8 @@ Three governed human-input affordances: the **pathway picker** (choose among ≤
 - **Coordination coverage** — addressed ÷ detected situations.
 - **Resolution accuracy** — resolutions that held (not re-flagged).
 
-Four of the five (acceptance, latency, coverage, accuracy) are surfaced as **governed `intelligence_metric` catalog widgets** on the steward `/org` dashboard (composition over generation; reads through the fail-closed read-api).
-- **Evidence:** 46 (core) + 11 (widget) unit tests; live values on the seeded community — autonomy 0.69, acceptance 1.0, latency 30 min, coverage 0.79, accuracy 0.93.
+Four of the five (autonomy, acceptance, coverage, accuracy) are surfaced as **governed `intelligence_metric` catalog widgets** on the steward home board (`/`) (composition over generation; reads through the fail-closed read-api).
+- **Evidence:** 46 (core) + 6 (widget) unit tests; deterministic values self-asserted by `scripts/seed-decision-lifecycle.ts` — autonomy 73%, acceptance 100%, latency 40 min, coverage 95%, accuracy 94%.
 - **Key files:** `lib/metrics/community-intelligence.ts`, `lib/widgets/catalog.ts`, `components/dashboard/ResolvedWidgetCard.tsx`, `lib/org-dashboard/store.ts`.
 
 ---
@@ -99,8 +99,9 @@ Four of the five (acceptance, latency, coverage, accuracy) are surfaced as **gov
 - **Self-correction with guardrails:** the system learns from human choices but within a safety-ordered, governed vocabulary.
 
 ## Known Gaps (honest)
-1. **`/org` metric-widget live render** not screenshot-confirmed in the session's browser (dev-server/cache artifact); proven instead by reproducing the exact `/org` resolve path in-container (all widgets resolve; KPIs compute). Recommend a quick confirm in a clean browser.
+1. **Steward-home (`/`) metric-widget live render** not screenshot-confirmed in the session's browser (dev-server/cache artifact); proven instead by reproducing the exact steward-home (`/`) resolve path in-container (all widgets resolve; KPIs compute). Recommend a quick confirm in a clean browser.
 2. **`log_incident` declarative path** throws a NOT-NULL on `incident_log.reported_by` (a NOT-NULL ref not declared as an action param; the declarative runner doesn't auto-fill ref props — affects the Inngest path too). The autonomy *contract* (policy + audit) is real; fix = make `reported_by` a server-derived param or have the runner fill it.
+3. **Broader test-suite drift (pre-existing, outside M3).** The M3 surface — `lib/metrics`, `lib/blockers`, `lib/widgets` (incl. read-api + derive-board) — passes **209 tests** clean (the 46/36/6 cited above included), and `tsc --noEmit` is clean. The *wider* platform suite carries ≈60 pre-existing failures (older `app/api`, `lib/actions`, `lib/agent`, `lib/codegen`, `lib/ontology` tests) from ontology evolution — removed actions (`delete_member`, `record_attendance`), the `staff`→`work_trader` tier rename, stale codegen snapshots — that postdate those tests. They are unrelated to the M3 autonomy/intelligence layer and do not affect the verified deliverable.
 
 ## How to Run / Reproduce
 ```bash

@@ -41,6 +41,7 @@
   "exclude": [
     "node_modules",
     ".next",
-    "book-club-instance"
+    "book-club-instance",
+    "empty-instance"
   ]
 }

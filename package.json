@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "//codegen": "DANGER: regenerates lib/*.generated.ts FROM A SEED BUNDLE. Pass an explicit scenario (e.g. `npm run codegen -- hostel`) — a bare run is refused. Boot uses scripts/regenerate-from-live.ts (reads ./ontology), NOT this.",
     "codegen": "tsx scripts/generate-ontology.ts",
     "codegen:ontology": "tsx scripts/generate-ontology.ts",
     "db:generate": "drizzle-kit generate",
