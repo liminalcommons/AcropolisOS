@@ -355,6 +355,10 @@ export function ResolvedWidgetCard({ widget }: { widget: ResolvedWidget }) {
   switch (widget.kind) {
     case "metric":
       return <MetricWidget widget={widget} />;
+    case "intelligence_metric":
+      // Same MetricData shape as `metric`; its config carries no ontology `type`,
+      // so MetricWidget renders data.label ("Agent autonomy") + data.display ("69%").
+      return <MetricWidget widget={widget} />;
     case "data_table":
       return <DataTableWidget widget={widget} />;
     case "roster":

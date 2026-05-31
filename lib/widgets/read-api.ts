@@ -26,6 +26,14 @@ import type { Actor } from "@/lib/ctx";
 import { actorMatchesTokens, buildObjectPermissionsMap } from "@/lib/ontology/ctx";
 import type { Ontology } from "@/lib/ontology/schema";
 import { TABLES } from "@/lib/db/schema.generated";
+import { PgAuditReader } from "@/lib/audit/reader";
+import {
+  computeCommunityIntelligence,
+  type CommunityIntelligenceMetrics,
+  type MetricBlockerRow,
+  type MetricAuditRow,
+  type PolicyOf,
+} from "@/lib/metrics/community-intelligence";
 import { deriveVocabulary, type Vocabulary } from "./vocabulary";
 
 // Any generated Drizzle table — the heterogeneous union TABLES indexes into
@@ -165,6 +173,17 @@ export interface ReadOnlyDataApi {
     dateField: string,
     limit?: number,
   ): Promise<Record<string, unknown>[]>;
+
+  /**
+   * The five community-intelligence KPIs (M3), computed over the agent_blocker
+   * lifecycle + the action_audit log via lib/metrics/community-intelligence.
+   * FAIL CLOSED: gated on the viewer's agent_blocker read permission — a viewer
+   * not permitted to read agent_blocker gets all-null KPIs (the same "no data"
+   * value the pure metrics return on an empty denominator), BEFORE any SQL. So
+   * these org-intelligence aggregates surface only to roles allowed the blocker
+   * queue (the steward), never to a member.
+   */
+  communityIntelligence(): Promise<CommunityIntelligenceMetrics>;
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────────
@@ -380,6 +399,51 @@ export function createReadOnlyDataApi(
         .limit(safeLimit) as Record<string, unknown>[];
 
       return rows;
+    },
+
+    // ── communityIntelligence ───────────────────────────────────────────────────
+    async communityIntelligence() {
+      const NULL_METRICS: CommunityIntelligenceMetrics = {
+        autonomyRatio: null,
+        scenarioAcceptanceRate: null,
+        decisionLatencyMsMedian: null,
+        coordinationCoverage: null,
+        resolutionAccuracy: null,
+      };
+      // FAIL CLOSED: the KPIs describe the agent_blocker lifecycle — gate on the
+      // viewer's agent_blocker read permission (same pre-SQL gate as every read).
+      // A type absent from the loaded ontology (or unreadable) → all-null KPIs.
+      const resolved = resolveType("agent_blocker");
+      if (!resolved || !canReadType(resolved)) return NULL_METRICS;
+
+      // ALL agent_blocker rows (the KPIs span open + closed). Typed drizzle select.
+      const blockerRows = (await db
+        .select()
+        .from(tableFor(resolved))
+        .limit(2000)) as Record<string, unknown>[];
+      const toIso = (v: unknown): string | null =>
+        v instanceof Date ? v.toISOString() : typeof v === "string" ? v : null;
+      const blockers: MetricBlockerRow[] = blockerRows.map((r) => ({
+        status: String(r.status ?? ""),
+        created_at: toIso(r.created_at),
+        resolved_at: toIso(r.resolved_at),
+        resolved_via_pathway_id: (r.resolved_via_pathway_id as string | null) ?? null,
+        reason_kind: (r.reason_kind as string | null) ?? null,
+        blocked_actor_id: (r.blocked_actor_id as string | null) ?? null,
+        summary: (r.summary as string | null) ?? null,
+      }));
+
+      // action_audit rows via the proven reader (the SAME source the veto-queue
+      // autonomy split uses) + policyOf from the LOADED ontology (never a stale map).
+      const auditRows = await new PgAuditReader(db).listAction({ limit: 2000 });
+      const audits: MetricAuditRow[] = auditRows.map((r) => ({
+        subject_type: r.subject_type,
+        subject_id: r.subject_id,
+        metadata: r.metadata as { result?: string },
+      }));
+      const policyOf: PolicyOf = (name) => ontology.action_types[name]?.agent_policy;
+
+      return computeCommunityIntelligence(blockers, audits, policyOf);
     },
   };
 }

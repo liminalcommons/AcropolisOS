@@ -63,8 +63,12 @@ function widgetLabel(kind: string, config: unknown): string {
 // board stays scannable instead of an endless single-column scroll. Collapses
 // to one column below `lg` (narrow screens / the member board).
 function WidgetGrid({ widgets }: { widgets: ResolvedWidget[] }) {
-  const metrics = widgets.filter((w) => w.kind === "metric");
-  const others = widgets.filter((w) => w.kind !== "metric");
+  const metrics = widgets.filter(
+    (w) => w.kind === "metric" || w.kind === "intelligence_metric",
+  );
+  const others = widgets.filter(
+    (w) => w.kind !== "metric" && w.kind !== "intelligence_metric",
+  );
   return (
     <section className="space-y-4">
       {metrics.length > 0 && (

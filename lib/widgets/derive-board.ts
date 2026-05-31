@@ -72,6 +72,14 @@ export function deriveDefaultBoard(
           limit: 50,
         },
       });
+      // M3 deliverable #6: surface the community-intelligence KPIs as governed
+      // intelligence_metric widgets on the steward board. Computed behind the
+      // fence over agent_blocker + action_audit (api.communityIntelligence), so
+      // they ride the SAME agent_blocker read gate as the queue above — steward
+      // sees them, a member never does. Titles come from the resolved KPI label.
+      for (const kpi of ["autonomy", "acceptance", "coverage", "accuracy"] as const) {
+        board.push({ kind: "intelligence_metric", config: { kpi } });
+      }
     }
   }
 

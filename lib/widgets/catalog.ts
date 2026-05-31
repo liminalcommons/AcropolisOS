@@ -18,6 +18,7 @@
 import { z } from "zod";
 import type { ReadOnlyDataApi } from "./read-api";
 import type { Ontology } from "@/lib/ontology/schema";
+import type { CommunityIntelligenceMetrics } from "@/lib/metrics/community-intelligence";
 import { deriveVocabulary } from "./vocabulary";
 
 // ── Catalog type ──────────────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ export const CATALOG_KINDS = [
   "data_table",
   "roster",
   "calendar",
+  "intelligence_metric",
 ] as const;
 
 export type CatalogKind = (typeof CATALOG_KINDS)[number];
@@ -89,6 +91,49 @@ export const CalendarConfigSchema = z.object({
 });
 export type CalendarConfig = z.infer<typeof CalendarConfigSchema>;
 
+// intelligence_metric: a single community-intelligence KPI (M3 deliverable #6).
+// Unlike the other kinds it carries NO ontology `type` — it is a derived ORG
+// metric (autonomy / acceptance / coverage / accuracy / latency) computed by
+// lib/metrics/community-intelligence over agent_blocker + action_audit, read
+// THROUGH the fence (api.communityIntelligence, gated on agent_blocker read).
+export const INTELLIGENCE_KPIS = [
+  "autonomy",
+  "acceptance",
+  "coverage",
+  "accuracy",
+  "latency",
+] as const;
+export type IntelligenceKpi = (typeof INTELLIGENCE_KPIS)[number];
+
+export const IntelligenceMetricConfigSchema = z.object({
+  kpi: z.enum(INTELLIGENCE_KPIS),
+});
+export type IntelligenceMetricConfig = z.infer<typeof IntelligenceMetricConfigSchema>;
+
+// Pure mapping: a computed KPI bundle → the MetricData a card renders. Ratios
+// render as a percentage; latency as minutes; a null KPI (no data) renders "—"
+// (never a fake 0). Exported for unit testing without a DB.
+export function kpiToMetricData(
+  kpi: IntelligenceKpi,
+  m: CommunityIntelligenceMetrics,
+): MetricData {
+  const pct = (r: number | null): string => (r === null ? "—" : `${Math.round(r * 100)}%`);
+  switch (kpi) {
+    case "autonomy":
+      return { value: m.autonomyRatio ?? 0, label: "Agent autonomy", display: pct(m.autonomyRatio) };
+    case "acceptance":
+      return { value: m.scenarioAcceptanceRate ?? 0, label: "Scenario acceptance", display: pct(m.scenarioAcceptanceRate) };
+    case "coverage":
+      return { value: m.coordinationCoverage ?? 0, label: "Coordination coverage", display: pct(m.coordinationCoverage) };
+    case "accuracy":
+      return { value: m.resolutionAccuracy ?? 0, label: "Resolution accuracy", display: pct(m.resolutionAccuracy) };
+    case "latency": {
+      const ms = m.decisionLatencyMsMedian;
+      return { value: ms ?? 0, label: "Decision latency", display: ms === null ? "—" : `${Math.round(ms / 60000)} min` };
+    }
+  }
+}
+
 // ── Output types ──────────────────────────────────────────────────────────────
 
 export interface MetricData {
@@ -131,6 +176,7 @@ export const WIDGET_CATALOG: {
   data_table: CatalogEntry<DataTableConfig, DataTableData>;
   roster: CatalogEntry<RosterConfig, RosterData>;
   calendar: CatalogEntry<CalendarConfig, CalendarData>;
+  intelligence_metric: CatalogEntry<IntelligenceMetricConfig, MetricData>;
 } = {
   // ── metric ──────────────────────────────────────────────────────────────────
   // Returns a COUNT(*) aggregate for any ontology type with optional filter.
@@ -218,6 +264,18 @@ export const WIDGET_CATALOG: {
     },
   },
 
+  // ── intelligence_metric ──────────────────────────────────────────────────────
+  // Returns one community-intelligence KPI as MetricData. READ-ONLY: delegates to
+  // api.communityIntelligence(), which reads agent_blocker + action_audit behind
+  // the fence (fail-closed on agent_blocker read permission) and computes the KPIs.
+  intelligence_metric: {
+    configSchema: IntelligenceMetricConfigSchema,
+    queryBinding: async (config, api) => {
+      const m = await api.communityIntelligence();
+      return kpiToMetricData(config.kpi, m);
+    },
+  },
+
 };
 
 // ── Config validation helper (used by compose_dashboard) ─────────────────────
@@ -227,7 +285,7 @@ export const WIDGET_CATALOG: {
 // rather than throwing.
 
 export type ConfigValidationResult =
-  | { ok: true; config: MetricConfig | DataTableConfig | RosterConfig | CalendarConfig }
+  | { ok: true; config: MetricConfig | DataTableConfig | RosterConfig | CalendarConfig | IntelligenceMetricConfig }
   | { ok: false; error: string; detail?: unknown };
 
 export function validateWidgetConfig(
