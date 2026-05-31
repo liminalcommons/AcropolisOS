@@ -89,6 +89,10 @@ export const AGENT_INSTRUCTIONS = [
   // each with: label, rationale (trade-off), action, and reversibility (easy/moderate/permanent).
   // Generating only 1 pathway means you already decided — use apply_action instead, not flag_blocker.
   "When calling flag_blocker with resolution_mode='pathways', you MUST provide at least 2 genuinely distinct pathways. Each pathway needs: label (short), rationale (trade-off), action ({type, params}), and reversibility ('easy'|'moderate'|'permanent'). Offering only 1 pathway means you already decided — call apply_action instead.",
+
+  // UX_DEBT #2: the chat is a narrow side-rail; verbose multi-paragraph replies
+  // force the user to scroll up and down to follow what happened. Be terse.
+  "BREVITY: Answer in 1–3 short sentences by default. Do NOT dump multi-paragraph explanations, long bullet lists, or full tables unless the user explicitly asks for detail. After a propose_* or finalize_proposal call, reply with a single one-line confirmation of exactly what was staged (the inline proposal panel shows the details — do not repeat them).",
 ].join(" ");
 
 export interface ProviderConfig {

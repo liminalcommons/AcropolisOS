@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { proposal_drafts, proposals } from "../db/schema";
 import type { Database } from "../db/client";
 import {
@@ -233,5 +233,16 @@ export class PgProposalDraftStore implements ProposalDraftStore {
       .returning();
     if (!row) throw new ProposalNotFoundError(id);
     return rowToProposal(row);
+  }
+
+  async withdraw(id: string): Promise<boolean> {
+    // DELETE … WHERE id = ? AND status = 'pending' — the status guard is in the
+    // predicate so an approved/rejected row is never dropped, and the operation
+    // stays a single atomic statement. RETURNING tells us whether a row matched.
+    const removed = await this.db
+      .delete(proposals)
+      .where(and(eq(proposals.id, id), eq(proposals.status, "pending")))
+      .returning({ id: proposals.id });
+    return removed.length > 0;
   }
 }

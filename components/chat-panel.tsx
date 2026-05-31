@@ -253,11 +253,17 @@ export function ChatPanel({
     },
   });
 
+  // Auto-scroll the history pane to the newest message. We key off the message
+  // count AND the streamed text of the last message so the pane follows along
+  // token-by-token while the agent streams (not just when a new message lands)
+  // — this removes the manual scroll-up/down pain noted in UX_DEBT.
+  const lastMessageText =
+    messages.length > 0 ? getMessageText(messages[messages.length - 1]) : "";
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, activeProposalId]);
+  }, [messages.length, lastMessageText, activeProposalId]);
 
   // Tracks active streaming (+3s tail) to surface the keyboard-hint overlay and
   // the data-state attribute while the agent works. The panel itself fills the

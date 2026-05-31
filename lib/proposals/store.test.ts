@@ -257,4 +257,30 @@ describe("InMemoryProposalDraftStore", () => {
       ProposalNotFoundError,
     );
   });
+
+  it("withdraw removes a pending proposal so it no longer lists", async () => {
+    const store = new InMemoryProposalDraftStore();
+    await store.appendObjectType("s1", "Thread", SAMPLE_OT);
+    const p = await store.finalize("s1");
+    expect((await store.listProposals()).map((x) => x.id)).toEqual([p.id]);
+    const removed = await store.withdraw(p.id);
+    expect(removed).toBe(true);
+    expect(await store.listProposals()).toEqual([]);
+    expect(await store.getProposal(p.id)).toBeNull();
+  });
+
+  it("withdraw returns false for an unknown id", async () => {
+    const store = new InMemoryProposalDraftStore();
+    expect(await store.withdraw("ghost")).toBe(false);
+  });
+
+  it("withdraw refuses a non-pending proposal (returns false, keeps the row)", async () => {
+    const store = new InMemoryProposalDraftStore();
+    await store.appendObjectType("s1", "Thread", SAMPLE_OT);
+    const p = await store.finalize("s1");
+    await store.setStatus(p.id, "approved");
+    const removed = await store.withdraw(p.id);
+    expect(removed).toBe(false);
+    expect((await store.getProposal(p.id))?.status).toBe("approved");
+  });
 });

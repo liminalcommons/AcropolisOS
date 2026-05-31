@@ -80,6 +80,13 @@ export interface ProposalDraftStore {
   getProposal(id: string): Promise<Proposal | null>;
   updateProposalDiff(id: string, diff: ProposalDiff): Promise<Proposal>;
   setStatus(id: string, status: ProposalStatus): Promise<Proposal>;
+  // Retract a PENDING proposal: hard-delete the row so it leaves the pending
+  // list entirely (unlike setStatus(..,"rejected"), which keeps a tombstone).
+  // No-op + returns false if the id is unknown OR the proposal is not pending
+  // (an already-approved/rejected proposal must not be silently dropped).
+  // Returns true iff a pending row was removed. Lets the agent correct a
+  // proposal it just finalized instead of stacking a duplicate.
+  withdraw(id: string): Promise<boolean>;
 }
 
 export class ProposalDraftNotFoundError extends Error {
@@ -254,5 +261,14 @@ export class InMemoryProposalDraftStore implements ProposalDraftStore {
     if (idx === -1) throw new ProposalNotFoundError(id);
     this.proposals[idx] = { ...this.proposals[idx], status };
     return this.proposals[idx];
+  }
+
+  async withdraw(id: string): Promise<boolean> {
+    const idx = this.proposals.findIndex(
+      (p) => p.id === id && p.status === "pending",
+    );
+    if (idx === -1) return false;
+    this.proposals.splice(idx, 1);
+    return true;
   }
 }

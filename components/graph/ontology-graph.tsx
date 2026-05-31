@@ -51,7 +51,13 @@ function ObjectNode({ data }: NodeProps<ObjectNodeType>): React.ReactElement {
   const growing = data.status === "growing";
   return (
     <div
-      className={`w-52 rounded-md px-3 py-2 shadow-sm ${proposed ? "animate-pulse" : ""}`}
+      // `nopan` is load-bearing: with nodesDraggable={false} (read-only graph),
+      // React Flow v12 lets the canvas pan-handler swallow pointer events over
+      // a node, so onNodeClick never fires and the Inspector never opens. The
+      // nopan class on the node wrapper stops that propagation so clicks select
+      // the node (and the steward Reject affordance can appear) while the node
+      // stays non-draggable. See reactflow.dev "pan over nodes" / utility classes.
+      className={`nopan w-52 rounded-md px-3 py-2 shadow-sm ${proposed ? "animate-pulse" : ""}`}
       style={{
         borderWidth: proposed ? 2 : 1,
         borderStyle: proposed ? "dashed" : "solid",
@@ -109,15 +115,24 @@ function ObjectNode({ data }: NodeProps<ObjectNodeType>): React.ReactElement {
 
 const nodeTypes = { object: ObjectNode };
 
-export function OntologyGraph({ model }: { model: GraphModel }): React.ReactElement {
+export function OntologyGraph({
+  model,
+  isSteward = false,
+}: {
+  model: GraphModel;
+  isSteward?: boolean;
+}): React.ReactElement {
   const [selected, setSelected] = useState<string | null>(null);
   const [proposals, setProposals] = useState<{ id: string; diff: ProposalDiff }[]>([]);
   const router = useRouter();
   const prevIds = useRef<Set<string>>(new Set());
+  const pollRef = useRef<() => Promise<void>>(async () => {});
 
   // Live overlay: poll pending proposals. When a previously-pending proposal
-  // disappears (approved/rejected), the committed ontology may have grown — so
-  // refresh the server component's `model` to "solidify" the new node.
+  // disappears (approved/rejected/withdrawn), the committed ontology may have
+  // grown — so refresh the server component's `model` to "solidify" the new
+  // node. The poll body is also stashed in pollRef so the steward reject
+  // handler can re-poll immediately after a withdraw (don't wait the 4s tick).
   useEffect(() => {
     let alive = true;
     const poll = async () => {
@@ -136,6 +151,7 @@ export function OntologyGraph({ model }: { model: GraphModel }): React.ReactElem
         // transient — keep the last good overlay
       }
     };
+    pollRef.current = poll;
     void poll();
     const t = setInterval(poll, 4000);
     return () => {
@@ -143,6 +159,33 @@ export function OntologyGraph({ model }: { model: GraphModel }): React.ReactElem
       clearInterval(t);
     };
   }, [router]);
+
+  // Steward "Reject" on a proposed/growing node: withdraw the pending
+  // proposal(s) that introduce it via DELETE /api/proposals/[id], then re-poll
+  // so the dashed overlay drops immediately (the poll's shrink-detection also
+  // fires router.refresh()). The DELETE route re-checks steward role server-side.
+  const rejectProposals = useCallback(async (ids: string[]) => {
+    for (const id of ids) {
+      const res = await fetch(`/api/proposals/${id}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 404) {
+        throw new Error(`reject failed (${res.status})`);
+      }
+    }
+    await pollRef.current();
+  }, []);
+
+  // Map each proposed/growing node id -> the pending proposal id(s) carrying it,
+  // so the inspector can withdraw exactly those. An object type appears in a
+  // proposal's diff via new_object_types (proposed node OR growing fields).
+  const proposalIdsByNode = useMemo(() => {
+    const byNode: Record<string, string[]> = {};
+    for (const p of proposals) {
+      for (const typeName of Object.keys(p.diff.new_object_types)) {
+        (byNode[typeName] ??= []).push(p.id);
+      }
+    }
+    return byNode;
+  }, [proposals]);
 
   const overlay = useMemo(
     () => buildOverlay(model, proposals.map((p) => p.diff)),
@@ -213,13 +256,29 @@ export function OntologyGraph({ model }: { model: GraphModel }): React.ReactElem
         proOptions={{ hideAttribution: true }}
       >
         <Background color="var(--border)" gap={20} />
-        <Controls />
+        {/* Default Controls position (bottom-left) collides with the Next.js
+            dev-tools "N" indicator that also pins bottom-left, clipping the
+            zoom +/- buttons on short viewports. Move to bottom-right, clear of
+            both the dev indicator and the top-left Legend, with margin off the
+            edge and a z-index that keeps it above any overlay. */}
+        <Controls
+          position="bottom-right"
+          style={{ zIndex: 20, margin: "0.75rem" }}
+        />
         <Panel position="top-left">
           <Legend proposedCount={proposedCount} />
         </Panel>
         {selectedNode && (
           <Panel position="top-right">
-            <Inspector node={selectedNode} actions={selectedActions} onClose={() => setSelected(null)} />
+            <Inspector
+              node={selectedNode}
+              actions={selectedActions}
+              onClose={() => setSelected(null)}
+              status={overlay.nodeStatus[selectedNode.id] ?? "committed"}
+              isSteward={isSteward}
+              proposalIds={proposalIdsByNode[selectedNode.id] ?? []}
+              onReject={rejectProposals}
+            />
           </Panel>
         )}
       </ReactFlow>

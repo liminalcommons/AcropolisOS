@@ -80,3 +80,24 @@ export async function PATCH(
     throw err;
   }
 }
+
+// Revisable proposals: hard-WITHDRAW a pending proposal. Steward-gated (mirrors
+// the apply route's role check). Withdraw DELETES the row outright — distinct
+// from /reject, which keeps a status=rejected tombstone — so a corrected
+// proposal replaces rather than stacks. Returns { ok, removed }; 404 when no
+// pending row matched (unknown id or already approved/rejected).
+export async function DELETE(
+  _req: Request,
+  ctx: RouteCtx,
+): Promise<Response> {
+  const runtime_ctx = await buildChatRuntime();
+  if (isAnonymous(runtime_ctx.actor)) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (runtime_ctx.actor.role !== "steward") {
+    return Response.json({ error: "forbidden" }, { status: 403 });
+  }
+  const { id } = await ctx.params;
+  const removed = await getProposalStore().withdraw(id);
+  return Response.json({ ok: true, removed }, { status: removed ? 200 : 404 });
+}

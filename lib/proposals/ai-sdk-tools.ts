@@ -22,12 +22,39 @@ import type {
   IngestProposal,
   SeedProposal,
 } from "./diff";
-import type { ProposalDraftStore } from "./store";
+import type { Proposal, ProposalDraftStore } from "./store";
+import type { ProposalDiff } from "./diff";
 import type { InboxStore } from "../inbox/store";
 import {
   validateViewProposalAgainstLiveOntology,
   InvalidViewProposalError,
 } from "./validate-view-proposal";
+
+// One-line, agent-readable summary of what a pending proposal introduces, so
+// the model can pick the right id to withdraw_proposal without re-deriving the
+// diff. Mirrors the dimensions the /graph overlay surfaces (object + link
+// types), plus the other diff buckets when present.
+function summarizeDiff(diff: ProposalDiff): string {
+  const parts: string[] = [];
+  const ots = Object.keys(diff.new_object_types);
+  if (ots.length) parts.push(`object types: ${ots.join(", ")}`);
+  const lts = Object.keys(diff.new_link_types);
+  if (lts.length) parts.push(`link types: ${lts.join(", ")}`);
+  const props = [
+    ...Object.keys(diff.new_shared_properties),
+    ...Object.keys(diff.modified_properties),
+  ];
+  if (props.length) parts.push(`properties: ${props.join(", ")}`);
+  const ats = Object.keys(diff.new_action_types);
+  if (ats.length) parts.push(`actions: ${ats.join(", ")}`);
+  const views = Object.keys(diff.new_view_configs);
+  if (views.length) parts.push(`views: ${views.join(", ")}`);
+  const seeds = Object.keys(diff.new_seeds);
+  if (seeds.length) parts.push(`seeds: ${seeds.join(", ")}`);
+  const ingests = Object.keys(diff.new_ingests);
+  if (ingests.length) parts.push(`ingests: ${ingests.join(", ")}`);
+  return parts.length ? parts.join("; ") : "(empty proposal)";
+}
 
 export function buildAiSdkProposalTools(
   store: ProposalDraftStore,
@@ -181,6 +208,40 @@ export function buildAiSdkProposalTools(
       execute: async () => {
         const proposal = await store.finalize(session_id);
         return { ok: true, proposal };
+      },
+    }),
+
+    list_pending_proposals: tool({
+      description:
+        "List the PENDING proposals currently awaiting steward review, each with its id and a one-line summary of the object/link/property/action/view/seed/ingest types it introduces. Use this to FIND the id of a proposal you finalized earlier (when it is no longer in recent context) before calling withdraw_proposal.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const all = await store.listProposals();
+        const proposals = all
+          .filter((p: Proposal) => p.status === "pending")
+          .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+          .map((p) => ({
+            id: p.id,
+            session_id: p.session_id,
+            created_at: p.created_at,
+            summary: summarizeDiff(p.diff),
+          }));
+        return { proposals };
+      },
+    }),
+
+    withdraw_proposal: tool({
+      description:
+        "Retract a PENDING proposal you previously finalized, by id. This DELETES the pending row so it disappears from the steward review queue and the /graph growth overlay — use it to CORRECT/UNDO/REPLACE a proposal instead of stacking a duplicate. After withdrawing the stale one, re-stage the corrected version with propose_* + finalize_proposal. Returns { ok, removed } — removed:false means no pending proposal matched that id (already approved, rejected, or unknown). Call list_pending_proposals first if you do not have the id.",
+      inputSchema: z.object({
+        proposal_id: z
+          .string()
+          .min(1)
+          .describe("The id of the pending proposal to retract."),
+      }),
+      execute: async ({ proposal_id }) => {
+        const removed = await store.withdraw(proposal_id);
+        return { ok: true, removed };
       },
     }),
 
