@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { loadOntology } from "@/lib/ontology/load";
 import { getRuntimeOntologyDir } from "@/lib/setup/paths";
+import { ontologyToGraph } from "@/lib/graph/derive";
+import { groupActionsByPolicy } from "@/lib/graph/kinetic";
+import { POLICY_LABEL, POLICY_VAR } from "@/components/graph/legend";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +48,9 @@ export default async function OntologyPage(): Promise<React.ReactElement> {
       description: body.description ?? "",
     }),
   );
+
+  // The kinetic layer: the org's verbs (actions) grouped by autonomy.
+  const kinetic = groupActionsByPolicy(ontologyToGraph(ontology).actions);
 
   const sharedPropertyRows = Object.entries(ontology.properties).map(
     ([name, body]) => ({
@@ -100,6 +106,47 @@ export default async function OntologyPage(): Promise<React.ReactElement> {
             </span>
           </Link>
         </section>
+
+        {kinetic.length > 0 && (
+          <section className="mt-10" data-testid="ontology-kinetic-layer">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Kinetic layer · what can be done
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The org&apos;s verbs (actions), grouped by how much autonomy the agent has —
+              the request→approve grammar made legible. The objects below are the nouns; these are the verbs.
+            </p>
+            <div className="mt-3 grid gap-4 md:grid-cols-3">
+              {kinetic.map((g) => (
+                <div key={g.policy} className="rounded-md border border-border bg-card/50 p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: POLICY_VAR[g.policy] }} />
+                    <span className="text-xs font-medium text-foreground">{POLICY_LABEL[g.policy]}</span>
+                    <span className="text-xs text-muted-foreground">· {g.actions.length}</span>
+                  </div>
+                  <ul className="mt-2 space-y-2">
+                    {g.actions.map((a) => (
+                      <li key={a.id} className="text-xs">
+                        <div className="font-mono text-foreground">{a.label}</div>
+                        <div className="text-muted-foreground">
+                          {a.targets.length > 0
+                            ? a.targets.map((t) => `${t.effect} ${t.objectType}`).join(" · ")
+                            : "no object effect"}
+                        </div>
+                        {(a.permissions.length > 0 || a.sideEffects.length > 0) && (
+                          <div className="mt-0.5 text-[10px] text-muted-foreground/70">
+                            {a.permissions.length > 0 && <>by: {a.permissions.join(", ")}</>}
+                            {a.sideEffects.length > 0 && <> · ⤳ {a.sideEffects.join(", ")}</>}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="mt-10 grid gap-8 lg:grid-cols-2">
           <div>
