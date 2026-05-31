@@ -105,8 +105,17 @@ export function deriveDefaultBoard(
       board.push({ kind: "data_table", title: name, config: { type: token, columns: cols, limit: 20 } });
     }
 
+    // A calendar only makes sense for time-anchored types. Gate on the element
+    // kind: only `event`/`commitment` types get one — a Member or Notification
+    // "calendar" is noise. Backward-compat: an UNCLASSIFIED type (kind absent —
+    // a legacy ontology authored before kinds) keeps the old behavior so existing
+    // instances never silently lose a useful calendar; GROW assigns kinds for new
+    // orgs, which then trim automatically.
+    const kind = ot.kind;
+    const calendarWorthy =
+      kind === undefined || kind === "event" || kind === "commitment";
     const dateField = fieldNames.find((f) => DATE_TYPES.has(resolvedType(props[f], ontology) ?? ""));
-    if (dateField) {
+    if (dateField && calendarWorthy) {
       board.push({ kind: "calendar", title: `${name} calendar`, config: { type: token, date_field: dateField, limit: 50 } });
     }
   }

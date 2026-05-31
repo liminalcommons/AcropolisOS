@@ -58,7 +58,10 @@ function widgetLabel(kind: string, config: unknown): string {
   }
 }
 
-// Shared widget grid — metrics in a responsive row, everything else stacked.
+// Shared widget grid — metrics in a tight responsive row; tables/lists/calendars
+// in a responsive 2-up masonry-ish grid (top-aligned, natural height) so the
+// board stays scannable instead of an endless single-column scroll. Collapses
+// to one column below `lg` (narrow screens / the member board).
 function WidgetGrid({ widgets }: { widgets: ResolvedWidget[] }) {
   const metrics = widgets.filter((w) => w.kind === "metric");
   const others = widgets.filter((w) => w.kind !== "metric");
@@ -71,7 +74,7 @@ function WidgetGrid({ widgets }: { widgets: ResolvedWidget[] }) {
               ? "grid-cols-1 max-w-xs"
               : metrics.length === 2
                 ? "grid-cols-2"
-                : "grid-cols-3"
+                : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
           }`}
         >
           {metrics.map((w) => (
@@ -79,9 +82,13 @@ function WidgetGrid({ widgets }: { widgets: ResolvedWidget[] }) {
           ))}
         </div>
       )}
-      {others.map((w) => (
-        <ResolvedWidgetCard key={w.id} widget={w} />
-      ))}
+      {others.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          {others.map((w) => (
+            <ResolvedWidgetCard key={w.id} widget={w} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -144,7 +151,7 @@ export default async function Home({
 
     return (
       <div className="font-sans">
-        <div className="mx-auto max-w-5xl px-8 py-10 space-y-6">
+        <div className="mx-auto max-w-6xl px-8 py-10 space-y-6">
           <div className="space-y-1">
             <h1 className="font-mono text-2xl font-semibold tracking-tight text-foreground">
               Home
