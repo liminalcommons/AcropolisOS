@@ -1,0 +1,37 @@
+From: Priya Nair <priya@frugalml.dev>
+Subject: hello / intro
+
+hi there,
+
+joined up last week. quick intro — i'm priya, solo (researcher + engineer, depends on the day lol). i build tooling for running LLM inference cheaply on consumer GPUs. think quantization, edge inference, the unglamorous stuff that makes open weights actually usable for people who don't have an H100 lying around.
+
+what i need: ~35k EUR + ideally some GPU compute credits to cover ~6 months of focused R&D. cash alone works but compute would stretch it a lot further.
+
+heard the Mozilla local-AI thing might be a fit? open to whatever you suggest.
+
+cheers
+Priya
+
+---------- Forwarded message ----------
+From: contact@verdecomunidad.org
+Date: 22 Jan 2026
+Subject: Introduction — Verde Comunidad
+
+Dear Liminal Grant team,
+
+We are Verde Comunidad, a community NGO based in peri-urban Bogotá. We run urban reforestation and soil-regeneration projects — currently three neighborhood sites. Our team brings grassroots mobilization, agronomy, and GIS mapping to climate-justice work on the ground.
+
+We are seeking €75,000 to expand from 3 to 8 sites and hire two local coordinators. We have grant-administration experience and can provide measurable outcome reporting if that helps with funder fit.
+
+Thank you for considering us. We look forward to working together.
+
+Warm regards,
+The Verde Comunidad team
+contact@verdecomunidad.org
+
+--
+
+from: Sofia Marchetti <sofia@kindui.dev>
+subj: intro :)
+
+hey! sofia here, just signed up (mar 20 i think?). i'm an indie designer-dev — i build open-source accessible UI components, the kind screen-reader users actually need. react + typescript, very WCAG/ARIA focused. looking for ~28k to fund about 6 months of component work + proper accessibility audits. saw something about a gitcoin OSS round maybe?? anyway happy to be here. - sofia
