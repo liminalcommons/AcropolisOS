@@ -7,6 +7,23 @@ vi.mock("@/lib/proposals/singleton", () => ({
   getProposalStore: () => store,
 }));
 
+// The real chat-runtime imports next-auth → next/server which fails to
+// resolve under vitest's node environment. Mock it with a steward actor so
+// the auth guard passes and we can test the reject logic. See
+// route.withdraw.test.ts for the same pattern applied across all route tests.
+vi.mock("@/lib/agent/chat-runtime", () => ({
+  buildChatRuntime: async () => ({
+    actor: {
+      userId: "u-steward",
+      email: "steward@example.com",
+      role: "steward",
+      customRoles: [] as string[],
+    },
+  }),
+  isAnonymous: (actor: { role?: string } | null) =>
+    actor === null || actor.role === "anonymous",
+}));
+
 const { POST } = await import("./route");
 
 const SAMPLE_OT = {

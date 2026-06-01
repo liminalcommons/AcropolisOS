@@ -74,8 +74,8 @@ function buildDeleteModel(): MockLanguageModelV3 {
             toolCallId: "ui-call-1",
             toolName: "apply_action",
             input: JSON.stringify({
-              action: "delete_member",
-              params: { id: TEST_MEMBER_ID },
+              action: "promote_to_steward",
+              params: { member: TEST_MEMBER_ID },
               // No bypass — we want the confirmation envelope.
             }),
           },
@@ -140,7 +140,7 @@ describe("POST /api/chat — UI message stream transport (M2.3 step 3)", () => {
           {
             id: "m1",
             role: "user",
-            parts: [{ type: "text", text: `delete ${TEST_MEMBER_ID}` }],
+            parts: [{ type: "text", text: `promote ${TEST_MEMBER_ID} to steward` }],
           },
         ],
       }),
@@ -163,7 +163,7 @@ describe("POST /api/chat — UI message stream transport (M2.3 step 3)", () => {
             id: "m1",
             role: "user",
             parts: [
-              { type: "text", text: `delete ${TEST_MEMBER_ID}` },
+              { type: "text", text: `promote ${TEST_MEMBER_ID} to steward` },
             ],
           },
         ],
@@ -180,7 +180,7 @@ describe("POST /api/chat — UI message stream transport (M2.3 step 3)", () => {
     // observable contract: the envelope reaches the wire as structured
     // JSON the client can decode, not just baked into a text delta.
     expect(wire).toContain("confirmation_required");
-    expect(wire).toContain("delete_member");
+    expect(wire).toContain("promote_to_steward");
     expect(wire).toContain("apply_action");
   });
 });

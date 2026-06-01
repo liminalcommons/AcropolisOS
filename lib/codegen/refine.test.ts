@@ -147,34 +147,45 @@ describe("generateRefineRoutes — typed data provider backed by ctx", () => {
   });
 });
 
+// The permaculture-org scenario has actions with creates_object (add_planting,
+// log_observation, record_harvest) so it is the correct seed for testing the
+// action-wiring branch of emitCreatePage.
+const PERMACULTURE_SEED_DIR = path.join(
+  __dirname,
+  "..",
+  "..",
+  "scenarios",
+  "permaculture-org", "ontology",
+);
+
 describe("generateRefineRoutes — create form surfaces add_X action params", () => {
   it("create page declares the matching add_<type> action parameter schema as form fields", async () => {
-    const onto = await loadOntology(SEED_DIR);
+    const onto = await loadOntology(PERMACULTURE_SEED_DIR);
     const files = generateRefineRoutes(onto);
 
-    // Member -> add_member (full_name, email, tier)
-    const memberNew = findFile(files, "app/(generated)/Member/new/page.tsx");
-    expect(memberNew.content).toContain('actionName: "add_member"');
-    expect(memberNew.content).toContain("full_name");
-    expect(memberNew.content).toContain("email");
-    expect(memberNew.content).toContain("tier");
+    // Planting -> add_planting (label, species, variety, site, planted_at, expected_harvest)
+    const plantingNew = findFile(files, "app/(generated)/Planting/new/page.tsx");
+    expect(plantingNew.content).toContain('actionName: "add_planting"');
+    expect(plantingNew.content).toContain("label");
+    expect(plantingNew.content).toContain("species");
+    expect(plantingNew.content).toContain("site");
     // Schema source is the generated zod module so types stay in sync.
-    expect(memberNew.content).toMatch(
+    expect(plantingNew.content).toMatch(
       /from\s+"@\/lib\/ontology\/types\.generated"/,
     );
-    expect(memberNew.content).toContain("AddMemberParamsSchema");
+    expect(plantingNew.content).toContain("AddPlantingParamsSchema");
   });
 
-  it("MeetingMinute create page wires add_meeting_minute params", async () => {
-    const onto = await loadOntology(SEED_DIR);
+  it("Observation create page wires log_observation params", async () => {
+    const onto = await loadOntology(PERMACULTURE_SEED_DIR);
     const files = generateRefineRoutes(onto);
-    const f = findFile(files, "app/(generated)/MeetingMinute/new/page.tsx");
-    expect(f.content).toContain('actionName: "add_meeting_minute"');
-    expect(f.content).toContain("AddMeetingMinuteParamsSchema");
-    // The three declared params show up:
-    expect(f.content).toContain("title");
+    const f = findFile(files, "app/(generated)/Observation/new/page.tsx");
+    expect(f.content).toContain('actionName: "log_observation"');
+    expect(f.content).toContain("LogObservationParamsSchema");
+    // The declared params show up:
+    expect(f.content).toContain("summary");
     expect(f.content).toContain("body");
-    expect(f.content).toContain("event");
+    expect(f.content).toContain("site");
   });
 
   it("falls back to the inferencer create when no add_<type> action exists", async () => {

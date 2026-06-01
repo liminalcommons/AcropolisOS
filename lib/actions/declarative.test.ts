@@ -9,11 +9,13 @@ import { loadOntology } from "../ontology/load";
 import {
   createCtx,
   createInMemoryStore,
+  type LinkAccess,
+  type LinkEdge,
   type OntologyCtx,
   type OntologyStore,
 } from "../ontology/ctx";
 import type { Ontology } from "../ontology/schema";
-import type { Event, Member } from "../ontology/types.generated";
+import type { Member } from "../ontology/types.generated";
 import {
   DeclarativeActionError,
   runDeclarativeAction,
@@ -38,6 +40,36 @@ let ontology: Ontology;
 let db: OntologyStore;
 let ctx: OntologyCtx;
 
+// Minimal in-memory link store for tests that exercise the creates_link
+// directive. Mirrors the private InMemoryLinkAccess in ctx.ts.
+class TestLinkAccess<L extends Record<string, unknown>> implements LinkAccess<L> {
+  readonly edges: LinkEdge<L>[] = [];
+
+  async create(input: { from: string; to: string; properties: L }): Promise<void> {
+    const idx = this.edges.findIndex((e) => e.from === input.from && e.to === input.to);
+    const edge: LinkEdge<L> = { from: input.from, to: input.to, properties: { ...input.properties } };
+    if (idx >= 0) {
+      this.edges[idx] = edge;
+    } else {
+      this.edges.push(edge);
+    }
+  }
+
+  async delete(input: { from: string; to: string }): Promise<boolean> {
+    const idx = this.edges.findIndex((e) => e.from === input.from && e.to === input.to);
+    if (idx < 0) return false;
+    this.edges.splice(idx, 1);
+    return true;
+  }
+
+  async traverse(input: { from?: string; to?: string }): Promise<LinkEdge<L>[]> {
+    return this.edges
+      .filter((e) => (input.from === undefined ? true : e.from === input.from))
+      .filter((e) => (input.to === undefined ? true : e.to === input.to))
+      .map((e) => ({ ...e, properties: { ...e.properties } }));
+  }
+}
+
 beforeEach(async () => {
   ontology = await loadOntology(SEED_DIR);
   db = createInMemoryStore();
@@ -52,33 +84,84 @@ function memberRow(id: string, overrides: Partial<Member> = {}): Member {
     phone: "555-0000",
     tier_role: "staff",
     started_at: "2026-01-01",
-    notes: "",
     ...overrides,
   };
 }
 
-function eventRow(id: string, overrides: Partial<Event> = {}): Event {
+// Synthetic creates_object action used by the creates_object + error-surface
+// suites. Matches the live Member schema (hostel ontology).
+function makeOntologyWithCreateMember(base: Ontology): Ontology {
   return {
-    id,
-    title: `Event ${id}`,
-    starts_at: "2026-06-01T18:00:00+00:00",
-    duration_hours: 2,
-    organizer: "u-steward",
-    description: "An event",
-    status: "scheduled",
-    ...overrides,
+    ...base,
+    action_types: {
+      ...base.action_types,
+      create_member: {
+        description: "Create a member (declarative, synthetic for test)",
+        creates_object: "Member",
+        parameters: {
+          full_name: { type: "string", required: true },
+          email: { type: "string", required: true },
+          tier_role: {
+            type: "enum",
+            values: ["work_trader", "staff", "supervisor", "manager"],
+          },
+        },
+        agent_policy: "always_confirm",
+      },
+    },
   };
 }
 
-describe("runDeclarativeAction — creates_object (seed: add_member)", () => {
+// Synthetic creates_link action + link-type entry used by the creates_link suite.
+function makeOntologyWithAttended(base: Ontology): Ontology {
+  return {
+    ...base,
+    action_types: {
+      ...base.action_types,
+      log_attendance: {
+        description: "Record member attendance at an event (synthetic for test)",
+        creates_link: "attended",
+        parameters: {
+          member: { type: "ref", target: "Member", required: true },
+          event: { type: "ref", target: "Event", required: true },
+          role: {
+            type: "enum",
+            values: ["attendee", "organizer", "speaker"],
+            default: "attendee",
+          },
+        },
+        agent_policy: "auto_apply",
+      },
+    },
+    link_types: {
+      ...base.link_types,
+      attended: {
+        from: "Member",
+        to: "Event",
+        cardinality: "many-to-many",
+        properties: {
+          attended_at: { type: "timestamp" },
+          role: {
+            type: "enum",
+            values: ["attendee", "organizer", "speaker"],
+            default: "attendee",
+          },
+        },
+      },
+    },
+  };
+}
+
+describe("runDeclarativeAction — creates_object (synthetic create_member action)", () => {
   it("creates a Member row from typed params + auto-filled system fields", async () => {
+    const ontologyWithCreate = makeOntologyWithCreateMember(ontology);
     const result = await runDeclarativeAction({
-      actionName: "add_member",
-      ontology,
+      actionName: "create_member",
+      ontology: ontologyWithCreate,
       params: {
         full_name: "Ada Lovelace",
         email: "ada@example.com",
-        tier: "sustaining",
+        tier_role: "staff",
       },
       ctx,
     });
@@ -98,25 +181,35 @@ describe("runDeclarativeAction — creates_object (seed: add_member)", () => {
       full_name: "Ada Lovelace",
       email: "ada@example.com",
     });
-    // Note: small-community add_member action uses old 'tier' param; declarative engine
-    // passes it through — the stored row shape depends on the engine's behavior.
-    expect(stored?.started_at ?? (stored as unknown as Record<string, unknown>)?.joined_at).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(stored?.notes).toBe("");
   });
 });
 
-// NOTE (0g-codegen-drift): add_meeting_minute action and MeetingMinute object
-// were removed in the hostel-domain migration (M4). The creates_link test below
-// (record_attendance) covers the creates_link directive path.
+describe("runDeclarativeAction — creates_link (synthetic log_attendance action)", () => {
+  let attendedLink: TestLinkAccess<Record<string, unknown>>;
 
-describe("runDeclarativeAction — creates_link (seed: record_attendance)", () => {
+  beforeEach(() => {
+    attendedLink = new TestLinkAccess();
+    // Inject the link store so the engine can resolve ctx.links.attended
+    (db.links as Record<string, unknown>).attended = attendedLink;
+    ctx = createCtx({ db, actor: steward });
+  });
+
   it("creates the attended edge with role + auto-filled attended_at", async () => {
+    const ontologyWithLink = makeOntologyWithAttended(ontology);
     await db.objects.Member.create(memberRow("m-1"));
-    await db.objects.Event.create(eventRow("e-1"));
+    await db.objects.Event.create({
+      id: "e-1",
+      title: "Event e-1",
+      starts_at: "2026-06-01T18:00:00+00:00",
+      duration_hours: 2,
+      organizer: "u-steward",
+      description: "An event",
+      status: "scheduled",
+    });
 
     const result = await runDeclarativeAction({
-      actionName: "record_attendance",
-      ontology,
+      actionName: "log_attendance",
+      ontology: ontologyWithLink,
       params: { member: "m-1", event: "e-1", role: "organizer" },
       ctx,
     });
@@ -129,26 +222,35 @@ describe("runDeclarativeAction — creates_link (seed: record_attendance)", () =
       to: "e-1",
     });
 
-    const edges = await ctx.links.attended.traverse({ from: "m-1" });
+    const edges = await attendedLink.traverse({ from: "m-1" });
     expect(edges).toHaveLength(1);
     expect(edges[0]).toMatchObject({
       from: "m-1",
       to: "e-1",
       properties: { role: "organizer" },
     });
-    expect(edges[0].properties.attended_at).toMatch(/^\d{4}-/);
+    expect(String(edges[0].properties.attended_at ?? "")).toMatch(/^\d{4}-/);
   });
 
   it("defaults link role enum to attendee when omitted", async () => {
+    const ontologyWithLink = makeOntologyWithAttended(ontology);
     await db.objects.Member.create(memberRow("m-2"));
-    await db.objects.Event.create(eventRow("e-2"));
+    await db.objects.Event.create({
+      id: "e-2",
+      title: "Event e-2",
+      starts_at: "2026-06-01T18:00:00+00:00",
+      duration_hours: 2,
+      organizer: "u-steward",
+      description: "An event",
+      status: "scheduled",
+    });
     await runDeclarativeAction({
-      actionName: "record_attendance",
-      ontology,
+      actionName: "log_attendance",
+      ontology: ontologyWithLink,
       params: { member: "m-2", event: "e-2" },
       ctx,
     });
-    const edges = await ctx.links.attended.traverse({ from: "m-2" });
+    const edges = await attendedLink.traverse({ from: "m-2" });
     expect(edges[0].properties.role).toBe("attendee");
   });
 });
@@ -287,11 +389,13 @@ describe("runDeclarativeAction — error surface", () => {
   });
 
   it("throws DeclarativeActionError on param schema mismatch", async () => {
+    const ontologyWithCreate = makeOntologyWithCreateMember(ontology);
     await expect(
       runDeclarativeAction({
-        actionName: "add_member",
-        ontology,
-        params: { full_name: 42 },
+        actionName: "create_member",
+        ontology: ontologyWithCreate,
+        // full_name should be string; passing a number triggers schema validation
+        params: { full_name: 42, email: "bad@example.com" },
         ctx,
       }),
     ).rejects.toBeInstanceOf(DeclarativeActionError);

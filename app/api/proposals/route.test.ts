@@ -7,6 +7,35 @@ vi.mock("@/lib/proposals/singleton", () => ({
   getProposalStore: () => store,
 }));
 
+// Stub chat-runtime so next-auth / next/server are never loaded in the test
+// environment. The route uses buildChatRuntime() only to resolve the actor;
+// these list tests assume an authenticated steward caller and don't exercise
+// the 401 path (that is covered by route.unauth.test.ts siblings elsewhere).
+vi.mock("@/lib/agent/chat-runtime", () => ({
+  buildChatRuntime: async () => ({
+    actor: {
+      userId: "steward-test",
+      email: "steward@example.com",
+      role: "steward",
+      customRoles: [] as string[],
+    },
+    ctx: { actor: null },
+    ontology: {
+      object_types: {},
+      link_types: {},
+      property_types: {},
+      action_types: {},
+      roles: {},
+      ingest_mappings: {},
+    },
+    functionsDir: "",
+    sideEffectAdapters: {},
+    readTools: {},
+  }),
+  isAnonymous: (actor: { role?: string } | null) =>
+    actor === null || actor.role === "anonymous",
+}));
+
 // Import after the mock is registered.
 const { GET } = await import("./route");
 

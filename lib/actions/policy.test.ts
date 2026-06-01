@@ -77,11 +77,11 @@ async function recordOkAudit(input: {
 
 describe("resolveActionPolicy — auto_apply", () => {
   it("returns auto_apply for an action declared as auto_apply", async () => {
-    // record_attendance is auto_apply in the seed.
+    // mark_notification_read is auto_apply in the small-community seed.
     const decision = await resolveActionPolicy({
       ontology,
-      actionName: "record_attendance",
-      params: { member: "m-1", event: "e-1" },
+      actionName: "mark_notification_read",
+      params: { notification_id: "n-1" },
       ctx: stewardCtx,
     });
     expect(decision).toEqual({ decision: "auto_apply" });

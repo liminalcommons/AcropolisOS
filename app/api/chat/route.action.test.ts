@@ -193,7 +193,12 @@ describe("POST /api/chat — apply_action wiring (M2.2 step 1)", () => {
     expect(okRow).toBeUndefined();
   });
 
-  it("mutates member.tier AND writes action_audit row when bypass_confirmation=true", async () => {
+  it("ignores bypass_confirmation in LLM tool args and still returns confirmation_required (M3.8 #35)", async () => {
+    // M3.8 #35: bypass_confirmation is removed from the LLM tool schema.
+    // Even if the model emits bypass_confirmation=true in the tool call input,
+    // apply-action-ai-sdk.ts hardcodes bypassConfirmation=false and ignores
+    // the field. The always_confirm policy gate still fires, so the action
+    // DOES NOT mutate state. The confirmed bypass path is POST /api/chat/confirm.
     currentModel = buildToolCallingModel(true);
     const req = new Request("http://localhost/api/chat", {
       method: "POST",
@@ -218,16 +223,15 @@ describe("POST /api/chat — apply_action wiring (M2.2 step 1)", () => {
     expect(res.status).toBe(200);
     await drainResponse(res);
 
-    // Member tier updated
+    // Member tier must NOT be mutated — bypass in LLM tool args is ignored
     const after = await sharedDb.objects.Member.findById(TEST_MEMBER_ID);
-    expect(after?.tier_role).toBe("work_trader");
+    expect(after?.tier_role).toBe("staff");
 
-    // action_audit has an ok row for change_tier
+    // No completed ok audit row — confirmation_required was returned, not applied
     const auditRows = await sharedAudit.listActionAudit();
     const okRow = auditRows.find(
       (r) => r.subject_id === "change_tier" && r.metadata.result === "ok",
     );
-    expect(okRow).toBeDefined();
-    expect(okRow!.actor).toBe(stewardActor.userId);
+    expect(okRow).toBeUndefined();
   });
 });

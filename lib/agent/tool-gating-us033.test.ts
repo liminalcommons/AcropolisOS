@@ -171,13 +171,13 @@ describe("US-033: apply_action discriminated union narrows per actor", () => {
     const onto = await loadOntology(SEED_DIR);
     const { applyActionInput } = getToolsForActor(onto, member);
 
-    // add_meeting_minute.permissions = [steward, member] in the seed.
+    // mark_notification_read.permissions = [member_self, steward] in the seed.
+    // member_self is treated as allowed for any member actor at gating time
+    // (row-level ownership check runs later in ctx).
     const result = applyActionInput.safeParse({
-      action: "add_meeting_minute",
+      action: "mark_notification_read",
       params: {
-        title: "Notes",
-        body: "Body",
-        event: "11111111-1111-1111-1111-111111111111",
+        notification_id: "11111111-1111-1111-1111-111111111111",
       },
     });
     expect(result.success).toBe(true);

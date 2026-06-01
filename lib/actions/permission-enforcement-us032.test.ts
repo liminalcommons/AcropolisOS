@@ -106,11 +106,13 @@ function writeFunction(name: string, source: string): void {
 
 describe("US-032 (a): member invoking a steward-only action is denied", () => {
   it("invokeAction throws ActionPermissionError and writes a rejected audit row", async () => {
-    // add_member.permissions = [steward] in the seed.
+    // promote_to_steward.permissions = [steward] in the small-community seed.
+    // (add_member was removed from the ontology; promote_to_steward is the
+    // canonical steward-only action in this scenario.)
     await expect(
       invokeAction({
-        actionName: "add_member",
-        params: { full_name: "Mallory", email: "m@example.com" },
+        actionName: "promote_to_steward",
+        params: { member: "m-does-not-matter" },
         ctx: memberCtx,
         ontology: seedOntology,
         functionsDir,
@@ -120,8 +122,8 @@ describe("US-032 (a): member invoking a steward-only action is denied", () => {
     // Subclass relationship — callers can catch the base PermissionError too.
     await expect(
       invokeAction({
-        actionName: "add_member",
-        params: { full_name: "Mallory", email: "m@example.com" },
+        actionName: "promote_to_steward",
+        params: { member: "m-does-not-matter" },
         ctx: memberCtx,
         ontology: seedOntology,
         functionsDir,
@@ -130,7 +132,7 @@ describe("US-032 (a): member invoking a steward-only action is denied", () => {
 
     const rejections = (await audit.listActionAudit()).filter(
       (r) =>
-        r.subject_id === "add_member" && r.metadata.result === "rejected",
+        r.subject_id === "promote_to_steward" && r.metadata.result === "rejected",
     );
     expect(rejections.length).toBeGreaterThanOrEqual(1);
     const row = rejections[0];

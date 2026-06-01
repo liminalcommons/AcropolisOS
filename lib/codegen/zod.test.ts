@@ -62,10 +62,9 @@ describe("buildZodSchemas (runtime)", () => {
   it("builds action-parameter schemas keyed by PascalCase + Params suffix", async () => {
     const onto = await loadOntology(SMALL_COMMUNITY);
     const schemas = buildZodSchemas(onto);
-    expect(schemas.actionParamSchemas.RecordAttendanceParams).toBeDefined();
-    expect(schemas.actionParamSchemas.AddMemberParams).toBeDefined();
-    expect(schemas.actionParamSchemas.AddMeetingMinuteParams).toBeDefined();
     expect(schemas.actionParamSchemas.ChangeTierParams).toBeDefined();
+    expect(schemas.actionParamSchemas.PromoteToStewardParams).toBeDefined();
+    expect(schemas.actionParamSchemas.MarkNotificationReadParams).toBeDefined();
   });
 
   it("builds link-type schemas with Link suffix when properties exist", async () => {
@@ -104,15 +103,14 @@ describe("buildZodSchemas (runtime)", () => {
     expect(parsed).toEqual(event);
   });
 
-  it("roundtrips RecordAttendanceParams from seed action", async () => {
+  it("roundtrips ChangeTierParams from seed action", async () => {
     const onto = await loadOntology(SMALL_COMMUNITY);
     const { actionParamSchemas } = buildZodSchemas(onto);
     const params = {
       member: "123e4567-e89b-12d3-a456-426614174000",
-      event: "223e4567-e89b-12d3-a456-426614174000",
-      role: "organizer",
+      new_tier: "sustaining",
     };
-    const parsed = (actionParamSchemas.RecordAttendanceParams as ZodType).parse(
+    const parsed = (actionParamSchemas.ChangeTierParams as ZodType).parse(
       params,
     );
     expect(parsed).toEqual(params);
@@ -134,10 +132,11 @@ describe("buildZodSchemas (runtime)", () => {
   it("rejects an action-param value missing a required field", async () => {
     const onto = await loadOntology(SMALL_COMMUNITY);
     const { actionParamSchemas } = buildZodSchemas(onto);
+    // ChangeTierParams requires both `member` and `new_tier`; omitting `new_tier` must fail
     const result = (
-      actionParamSchemas.RecordAttendanceParams as ZodType
+      actionParamSchemas.ChangeTierParams as ZodType
     ).safeParse({
-      event: "223e4567-e89b-12d3-a456-426614174000",
+      member: "123e4567-e89b-12d3-a456-426614174000",
     });
     expect(result.success).toBe(false);
   });
@@ -151,12 +150,12 @@ describe("generateZodModule (TS source)", () => {
     expect(source).toMatch(/export const MemberSchema\s*=/);
     expect(source).toMatch(/export const EventSchema\s*=/);
     expect(source).toMatch(/export const MeetingMinuteSchema\s*=/);
-    expect(source).toMatch(/export const RecordAttendanceParamsSchema\s*=/);
-    expect(source).toMatch(/export const AddMemberParamsSchema\s*=/);
+    expect(source).toMatch(/export const ChangeTierParamsSchema\s*=/);
+    expect(source).toMatch(/export const PromoteToStewardParamsSchema\s*=/);
     expect(source).toMatch(/export const AttendedLinkSchema\s*=/);
     expect(source).toMatch(/export type Member\s*=/);
     expect(source).toMatch(/export type Event\s*=/);
-    expect(source).toMatch(/export type RecordAttendanceParams\s*=/);
+    expect(source).toMatch(/export type ChangeTierParams\s*=/);
   });
 
   it("generates a header comment marking the file as generated", async () => {
@@ -181,15 +180,14 @@ describe("generateZodModule (TS source)", () => {
     };
     expect(MemberSchema.parse(member)).toEqual(member);
 
-    const RecordAttendanceParamsSchema =
-      mod.RecordAttendanceParamsSchema as ZodType;
+    const ChangeTierParamsSchema =
+      mod.ChangeTierParamsSchema as ZodType;
     expect(
-      RecordAttendanceParamsSchema.parse({
+      ChangeTierParamsSchema.parse({
         member: "123e4567-e89b-12d3-a456-426614174000",
-        event: "223e4567-e89b-12d3-a456-426614174000",
-        role: "attendee",
+        new_tier: "sustaining",
       }),
-    ).toMatchObject({ role: "attendee" });
+    ).toMatchObject({ new_tier: "sustaining" });
   });
 });
 
@@ -207,9 +205,14 @@ describe("generateOntologyModule (combined)", () => {
 });
 
 describe("committed generated artifacts match codegen output", () => {
-  it("types.generated.ts is in sync with the seed ontology", async () => {
+  // The committed *.generated.ts files are regenerated from the LIVE ontology
+  // (packages/acropolisos/ontology/), not from any scenario seed. This test
+  // guards that the committed files stay in sync with a regenerate-from-live run.
+  const LIVE_ONTOLOGY = path.join(PKG_ROOT, "ontology");
+
+  it("types.generated.ts is in sync with the live ontology", async () => {
     const { readFile } = await import("node:fs/promises");
-    const onto = await loadOntology(SMALL_COMMUNITY);
+    const onto = await loadOntology(LIVE_ONTOLOGY);
     const expected = generateZodModule(onto);
     const actual = await readFile(
       path.join(PKG_ROOT, "lib", "ontology", "types.generated.ts"),
@@ -218,9 +221,9 @@ describe("committed generated artifacts match codegen output", () => {
     expect(actual).toBe(expected);
   });
 
-  it("ontology.generated.ts is in sync with the seed ontology", async () => {
+  it("ontology.generated.ts is in sync with the live ontology", async () => {
     const { readFile } = await import("node:fs/promises");
-    const onto = await loadOntology(SMALL_COMMUNITY);
+    const onto = await loadOntology(LIVE_ONTOLOGY);
     const expected = generateOntologyModule(onto);
     const actual = await readFile(
       path.join(PKG_ROOT, "lib", "ontology", "ontology.generated.ts"),

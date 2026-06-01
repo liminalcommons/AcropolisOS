@@ -44,7 +44,9 @@ describe("createOntologyCtxForActor — M2.2 step 3", () => {
     expect(ctx.actor).toEqual(stewardActor);
     expect(ctx.objects.Member).toBeDefined();
     expect(ctx.objects.Event).toBeDefined();
-    expect(ctx.links.attended).toBeDefined();
+    // ctx.links is an open record; specific link-type keys are not pre-populated
+    // by createPgOntologyStore (0c-pre2 redesign removed attended/authored).
+    expect(ctx.links).toBeDefined();
     expect(ctx.audit).toBeDefined();
     expect(typeof ctx.audit?.insertActionAudit).toBe("function");
   });

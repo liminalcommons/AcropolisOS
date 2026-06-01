@@ -20,6 +20,7 @@ import { InMemoryNotificationStore } from "../notifications/store";
 import { InMemoryAuditStore } from "../audit/writer";
 import type { Ontology } from "../ontology/schema";
 import type { SideEffectAdapters } from "./side-effects";
+import { ActionPermissionError } from "./permission-check";
 
 const SEED_ROOT = path.resolve(__dirname, "..", "..", "scenarios", "small-community", "ontology");
 const FUNCTIONS_DIR = path.resolve(__dirname, "..", "..", "functions");
@@ -100,6 +101,10 @@ describe("mark_notification_read — real seed", () => {
   });
 
   it("DENIES member_self when actor is not the recipient", async () => {
+    // M3.8 #34: ownership is verified at the permission layer before the
+    // handler runs. A member invoking this action against another member's
+    // notification throws ActionPermissionError — the handler is never reached
+    // so no {ok: false, reason: "not_recipient"} is returned.
     const created = await notifications.create({
       recipient_member_id: memberA.userId,
       kind: "change_tier",
@@ -107,16 +112,16 @@ describe("mark_notification_read — real seed", () => {
       body: "lifetime",
     });
 
-    const result = (await invokeAction({
-      actionName: "mark_notification_read",
-      params: { notification_id: created.id },
-      ctx: makeCtx(memberB),
-      ontology,
-      functionsDir: FUNCTIONS_DIR,
-      sideEffectAdapters: adapters,
-    })) as { ok: boolean; reason: string };
-    expect(result.ok).toBe(false);
-    expect(result.reason).toBe("not_recipient");
+    await expect(
+      invokeAction({
+        actionName: "mark_notification_read",
+        params: { notification_id: created.id },
+        ctx: makeCtx(memberB),
+        ontology,
+        functionsDir: FUNCTIONS_DIR,
+        sideEffectAdapters: adapters,
+      }),
+    ).rejects.toBeInstanceOf(ActionPermissionError);
 
     const after = await notifications.findById(created.id);
     expect(after?.read_at).toBeNull();
@@ -142,16 +147,20 @@ describe("mark_notification_read — real seed", () => {
     expect(after?.read_at).not.toBeNull();
   });
 
-  it("returns not_found when the notification does not exist", async () => {
-    const result = (await invokeAction({
-      actionName: "mark_notification_read",
-      params: { notification_id: "00000000-0000-4000-8000-00000000ffff" },
-      ctx: makeCtx(memberA),
-      ontology,
-      functionsDir: FUNCTIONS_DIR,
-      sideEffectAdapters: adapters,
-    })) as { ok: boolean; reason: string };
-    expect(result.ok).toBe(false);
-    expect(result.reason).toBe("not_found");
+  it("throws ActionPermissionError when the notification does not exist (cannot verify ownership)", async () => {
+    // M3.8 #34: ownership is verified at the permission layer. When the target
+    // notification row is absent, the permission check cannot resolve ownership
+    // and must deny. This throws ActionPermissionError before the handler runs,
+    // so {ok: false, reason: "not_found"} is never returned.
+    await expect(
+      invokeAction({
+        actionName: "mark_notification_read",
+        params: { notification_id: "00000000-0000-4000-8000-00000000ffff" },
+        ctx: makeCtx(memberA),
+        ontology,
+        functionsDir: FUNCTIONS_DIR,
+        sideEffectAdapters: adapters,
+      }),
+    ).rejects.toBeInstanceOf(ActionPermissionError);
   });
 });

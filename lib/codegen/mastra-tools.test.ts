@@ -77,23 +77,24 @@ describe("buildMastraTools (runtime)", () => {
     const onto = await loadOntology(SMALL_COMMUNITY);
     const { applyActionInput } = buildMastraTools(onto);
 
-    const okAddMember = applyActionInput.safeParse({
-      action: "add_member",
-      params: {
-        full_name: "Ada",
-        email: "ada@example.org",
-      },
-    });
-    expect(okAddMember.success).toBe(true);
-
-    const okRecord = applyActionInput.safeParse({
-      action: "record_attendance",
+    // change_tier is a valid action in small-community
+    const okChangeTier = applyActionInput.safeParse({
+      action: "change_tier",
       params: {
         member: "123e4567-e89b-12d3-a456-426614174000",
-        event: "223e4567-e89b-12d3-a456-426614174000",
+        new_tier: "sustaining",
       },
     });
-    expect(okRecord.success).toBe(true);
+    expect(okChangeTier.success).toBe(true);
+
+    // mark_notification_read is a valid action in small-community
+    const okMarkRead = applyActionInput.safeParse({
+      action: "mark_notification_read",
+      params: {
+        notification_id: "223e4567-e89b-12d3-a456-426614174000",
+      },
+    });
+    expect(okMarkRead.success).toBe(true);
 
     const wrongAction = applyActionInput.safeParse({
       action: "not_a_real_action",
@@ -101,9 +102,10 @@ describe("buildMastraTools (runtime)", () => {
     });
     expect(wrongAction.success).toBe(false);
 
+    // change_tier with a bad enum value fails validation
     const wrongParams = applyActionInput.safeParse({
-      action: "add_member",
-      params: { full_name: "Ada", email: "not-an-email" },
+      action: "change_tier",
+      params: { member: "123e4567-e89b-12d3-a456-426614174000", new_tier: "invalid_tier" },
     });
     expect(wrongParams.success).toBe(false);
   });
@@ -171,9 +173,14 @@ describe("generateMastraToolsModule (TS source)", () => {
 });
 
 describe("committed generated artifact matches codegen output", () => {
-  it("lib/agent/tools.generated.ts is in sync with the seed ontology", async () => {
+  it("lib/agent/tools.generated.ts is in sync with the live ontology", async () => {
     const { readFile } = await import("node:fs/promises");
-    const onto = await loadOntology(SMALL_COMMUNITY);
+    // The committed file is generated from the live bind-mounted ontology/,
+    // not a seed scenario. small-community was the original seed but the
+    // ontology has grown (hostel types, additional actions). Use ontology/ as
+    // the canonical source of truth for this sync check.
+    const LIVE_ONTOLOGY = path.join(PKG_ROOT, "ontology");
+    const onto = await loadOntology(LIVE_ONTOLOGY);
     const expected = generateMastraToolsModule(onto);
     const actual = await readFile(
       path.join(PKG_ROOT, "lib", "agent", "tools.generated.ts"),

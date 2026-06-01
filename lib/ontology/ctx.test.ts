@@ -96,70 +96,12 @@ describe("ontology createCtx — objects.Member CRUD", () => {
   });
 });
 
-describe("ontology createCtx — links.attended", () => {
-  const at = "2026-05-01T12:00:00+00:00";
-
-  it("create + traverse returns the edge with its properties", async () => {
-    const ctx = createCtx({ db: createInMemoryStore(), actor: steward });
-    await ctx.links.attended.create({
-      from: "m-1",
-      to: "e-1",
-      properties: { attended_at: at, role: "attendee" },
-    });
-    expect(await ctx.links.attended.traverse({ from: "m-1" })).toEqual([
-      {
-        from: "m-1",
-        to: "e-1",
-        properties: { attended_at: at, role: "attendee" },
-      },
-    ]);
-  });
-
-  it("traverse filters by from, by to, and by both", async () => {
-    const ctx = createCtx({ db: createInMemoryStore(), actor: steward });
-    await ctx.links.attended.create({
-      from: "m-1",
-      to: "e-1",
-      properties: { attended_at: at, role: "attendee" },
-    });
-    await ctx.links.attended.create({
-      from: "m-1",
-      to: "e-2",
-      properties: { attended_at: at, role: "speaker" },
-    });
-    await ctx.links.attended.create({
-      from: "m-2",
-      to: "e-1",
-      properties: { attended_at: at, role: "attendee" },
-    });
-
-    const fromM1 = await ctx.links.attended.traverse({ from: "m-1" });
-    expect(fromM1.map((e) => e.to).sort()).toEqual(["e-1", "e-2"]);
-
-    const toE1 = await ctx.links.attended.traverse({ to: "e-1" });
-    expect(toE1.map((e) => e.from).sort()).toEqual(["m-1", "m-2"]);
-
-    const both = await ctx.links.attended.traverse({ from: "m-1", to: "e-1" });
-    expect(both).toHaveLength(1);
-    expect(both[0].properties.role).toBe("attendee");
-  });
-
-  it("delete returns false when absent, true after the edge was created", async () => {
-    const ctx = createCtx({ db: createInMemoryStore(), actor: steward });
-    expect(
-      await ctx.links.attended.delete({ from: "m-1", to: "e-1" }),
-    ).toBe(false);
-    await ctx.links.attended.create({
-      from: "m-1",
-      to: "e-1",
-      properties: { attended_at: at, role: "attendee" },
-    });
-    expect(
-      await ctx.links.attended.delete({ from: "m-1", to: "e-1" }),
-    ).toBe(true);
-    expect(await ctx.links.attended.traverse({ from: "m-1" })).toEqual([]);
-  });
-});
+// NOTE: the former `links.attended` CRUD tests were removed here. Per ctx.ts the
+// attended/authored link surface was "removed with community schema" — the
+// runtime store exposes `links: {}` (no action uses creates_link). The tests
+// exercised `ctx.links.attended`, a surface that no longer exists, so they were
+// stale. (Residual `attended` entries linger in ontology/link-types.yaml + the
+// generated member_attended_event table — a separate, harmless cleanup.)
 
 describe("ontology createCtx — actions interface (hostel domain)", () => {
   it("OntologyActions is an empty interface (hostel actions wired via function-backed dispatcher)", () => {

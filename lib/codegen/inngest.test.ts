@@ -14,36 +14,36 @@ const SEED_DIR = path.join(
   "..",
   "..",
   "scenarios",
-  "small-community", "ontology",
+  "hostel", "ontology",
 );
 
 describe("inngestFunctionIdFor", () => {
   it("namespaces by action name", () => {
-    expect(inngestFunctionIdFor("add_member")).toBe(
-      "acropolisos-action-add_member",
+    expect(inngestFunctionIdFor("log_incident")).toBe(
+      "acropolisos-action-log_incident",
     );
   });
 });
 
 describe("inngestEventNameFor", () => {
   it("namespaces by action name", () => {
-    expect(inngestEventNameFor("add_member")).toBe(
-      "acropolisos/action.add_member",
+    expect(inngestEventNameFor("log_incident")).toBe(
+      "acropolisos/action.log_incident",
     );
   });
 });
 
-describe("generateInngestActionsModule (seed: small-community)", () => {
+describe("generateInngestActionsModule (seed: hostel)", () => {
   it("emits one inngest.createFunction per declarative action, skipping function-backed", async () => {
     const ontology = await loadOntology(SEED_DIR);
     const out = generateInngestActionsModule(ontology);
 
-    // change_tier is function-backed (handled by US-025) and must NOT appear here.
-    expect(out).not.toContain("acropolisos-action-change_tier");
-    expect(out).not.toContain("acropolisos/action.change_tier");
+    // check_in is function-backed (handled by US-025) and must NOT appear here.
+    expect(out).not.toContain("acropolisos-action-check_in");
+    expect(out).not.toContain("acropolisos/action.check_in");
 
-    // The three seed declarative actions must each produce a function.
-    for (const action of ["add_member", "add_meeting_minute", "record_attendance"]) {
+    // The two seed declarative actions must each produce a function.
+    for (const action of ["log_incident", "start_work_trade"]) {
       expect(out).toContain(`"acropolisos-action-${action}"`);
       expect(out).toContain(`"acropolisos/action.${action}"`);
     }
@@ -67,9 +67,8 @@ describe("generateInngestActionsModule (seed: small-community)", () => {
     expect(out).toMatch(/export const declarativeActionFunctions\s*=\s*\[/);
     // The generated const names follow camelCase of the action name,
     // prefixed with `action`.
-    expect(out).toContain("actionAddMember");
-    expect(out).toContain("actionAddMeetingMinute");
-    expect(out).toContain("actionRecordAttendance");
+    expect(out).toContain("actionLogIncident");
+    expect(out).toContain("actionStartWorkTrade");
   });
 
   it("marks the module as generated and pins it to inngest client", async () => {
@@ -85,12 +84,12 @@ describe("generateInngestActionsModule — runtime semantics", () => {
     const ontology = await loadOntology(SEED_DIR);
     const out = generateInngestActionsModule(ontology);
 
-    // For add_member, the function must wire actionName + ctx and source
+    // For log_incident, the function must wire actionName + ctx and source
     // params from the event payload (via the `payload` local extracted from
     // event.data — US-030 introduced the indirection so audit_pre + the
     // declarative step share the same params binding).
     expect(out).toMatch(
-      /runDeclarativeAction\(\{\s*actionName:\s*"add_member"/,
+      /runDeclarativeAction\(\{\s*actionName:\s*"log_incident"/,
     );
     expect(out).toMatch(/const payload\s*=\s*\(event\.data/);
     expect(out).toMatch(/const params\s*=\s*payload\.params/);
@@ -107,9 +106,8 @@ describe("generateInngestActionsModule — runtime semantics", () => {
     );
     // For each declarative action: a permission-check step is registered.
     for (const action of [
-      "add_member",
-      "add_meeting_minute",
-      "record_attendance",
+      "log_incident",
+      "start_work_trade",
     ]) {
       expect(out).toContain(`"permission-check.${action}"`);
       // The permission check is emitted ahead of the declarative step in
@@ -133,9 +131,8 @@ describe("generateInngestActionsModule — runtime semantics", () => {
     // Each declarative action gets matching audit step ids and they bracket
     // the permission-check + declarative steps in source order.
     for (const action of [
-      "add_member",
-      "add_meeting_minute",
-      "record_attendance",
+      "log_incident",
+      "start_work_trade",
     ]) {
       expect(out).toContain(`"audit-pre.${action}"`);
       expect(out).toContain(`"audit-post.${action}"`);
@@ -167,9 +164,8 @@ describe("generateInngestActionsModule — runtime semantics", () => {
     expect(out).toMatch(/from\s+"\.\.\/actions\/side-effects"/);
 
     for (const action of [
-      "add_member",
-      "add_meeting_minute",
-      "record_attendance",
+      "log_incident",
+      "start_work_trade",
     ]) {
       expect(out).toContain(`"side-effects.${action}"`);
       const postIdx = out.indexOf(`"audit-post.${action}"`);

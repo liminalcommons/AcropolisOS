@@ -2,6 +2,33 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { InMemoryProposalDraftStore } from "@/lib/proposals/store";
 
 const store = new InMemoryProposalDraftStore();
+
+// Mock chat-runtime so next-auth's next/server CJS import never materialises
+// in vitest. Returns a member actor so the route proceeds past the auth gate
+// (isAnonymous check). Pattern mirrors apply/route.test.ts (M3.8 update).
+vi.mock("@/lib/agent/chat-runtime", () => ({
+  buildChatRuntime: async () => ({
+    actor: {
+      userId: "member-1",
+      email: "member@example.com",
+      role: "member",
+      customRoles: [] as string[],
+    },
+    ctx: { actor: null },
+    ontology: {
+      object_types: {},
+      link_types: {},
+      property_types: {},
+      action_types: {},
+      roles: {},
+      ingest_mappings: {},
+    },
+    functionsDir: "",
+    sideEffectAdapters: {},
+  }),
+  isAnonymous: (actor: { role?: string } | null) =>
+    actor === null || actor.role === "anonymous",
+}));
 const dispatched: Array<{ proposalId: string; submittedBy?: string }> = [];
 
 vi.mock("@/lib/proposals/singleton", () => ({

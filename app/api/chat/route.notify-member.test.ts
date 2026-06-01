@@ -1,15 +1,14 @@
-// M2.4 step-1: failing E2E that proves the chat route fires the
-// notify_member side-effect after a successful apply_action invocation
-// AND records each side-effect dispatch result as a child action_audit row
-// (subject_type="side_effect", subject_id=channel name) linked back to the
-// parent action_audit row via metadata.parent_action_audit_id.
+// M2.4 step-1: E2E test that proves the confirmed action path fires the
+// notify_member side-effect AND records each side-effect dispatch result as a
+// child action_audit row (subject_type="side_effect", subject_id=channel name)
+// linked back to the parent action_audit row via metadata.parent_action_audit_id.
 //
-// Why this is the first M2.4 RED test:
-//   - chat-runtime today does NOT pass sideEffectAdapters into the
-//     dispatcher, so notify_member never fires from /api/chat.
-//   - dispatchSideEffects today returns results in memory but never writes
-//     them into the audit store — there is no observable side_effect entry.
-//   - change-tier.yaml already declares side_effects: [audit, notify_member].
+// Since M3.8 #35, the LLM-facing /api/chat route no longer accepts
+// bypass_confirmation from the model's tool call — that field was intentionally
+// removed from the apply_action schema to prevent prompt injection.
+// The CONFIRMED action path is POST /api/chat/confirm, which is the only
+// server-side path that sets bypassConfirmation=true after matching an explicit
+// user Confirm click. This test verifies notify_member fires through that path.
 //
 // We intercept console.log so the structured stdout adapter (M2.4 step 2)
 // can be asserted directly without touching real SMTP/Resend, and we inspect
@@ -17,12 +16,6 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import path from "node:path";
-import {
-  MockLanguageModelV3,
-  convertReadableStreamToArray,
-  simulateReadableStream,
-} from "ai/test";
-import type { LanguageModelV3StreamPart } from "@ai-sdk/provider";
 import {
   createCtx,
   createInMemoryStore,
@@ -52,9 +45,9 @@ vi.mock("@/lib/agent/chat-runtime", async () => {
   const ontology = await loadOntology(
     path.join(PKG_ROOT_INNER, "scenarios", "small-community", "ontology"),
   );
-  // Import the real notify-stdout + dispatchSideEffectAdapters factory so
-  // the route's side-effect runtime fires through to the structured stdout
-  // adapter. The factory is created in M2.4 step 2.
+  // Import the real notify-stdout + resolveSideEffectAdapters factory so
+  // the confirmed action path's side-effect runtime fires through to the
+  // structured stdout adapter.
   const { resolveSideEffectAdapters } = await import(
     "@/lib/actions/side-effects-runtime"
   );
@@ -70,82 +63,19 @@ vi.mock("@/lib/agent/chat-runtime", async () => {
         ctx,
         ontology,
         functionsDir: path.join(PKG_ROOT_INNER, "functions"),
-        // M2.4 step-4: the route must accept adapters from chat-runtime and
-        // forward them into createInProcessDispatcher.
+        // M2.4: side-effect adapters forwarded into createInProcessDispatcher
+        // by the confirm route so notify_member fires after a confirmed apply.
         sideEffectAdapters: resolveSideEffectAdapters({}),
       };
     },
-    // M3.8 (#33): route gates on isAnonymous; this mock supplies steward.
+    // M3.8 (#33): confirm route gates on isAnonymous; this mock supplies steward.
     isAnonymous: () => false,
   };
 });
 
-function buildToolCallingModel(): MockLanguageModelV3 {
-  return new MockLanguageModelV3({
-    doStream: async () => ({
-      stream: simulateReadableStream<LanguageModelV3StreamPart>({
-        chunks: [
-          { type: "stream-start", warnings: [] },
-          {
-            type: "tool-call",
-            toolCallId: "call-1",
-            toolName: "apply_action",
-            input: JSON.stringify({
-              action: "change_tier",
-              params: {
-                member: TEST_MEMBER_ID,
-                new_tier: "work_trader",
-              },
-              bypass_confirmation: true,
-            }),
-          },
-          {
-            type: "finish",
-            finishReason: { unified: "tool-calls", raw: "tool_calls" },
-            usage: {
-              inputTokens: {
-                total: 10,
-                noCache: 10,
-                cacheRead: undefined,
-                cacheWrite: undefined,
-              },
-              outputTokens: {
-                total: 5,
-                text: 0,
-                reasoning: undefined,
-              },
-            },
-          },
-        ],
-      }),
-    }),
-  });
-}
+import { POST } from "./confirm/route";
 
-let currentModel: MockLanguageModelV3;
-
-vi.mock("@/lib/agent/mastra", async () => {
-  const real = await vi.importActual<typeof import("@/lib/agent/mastra")>(
-    "@/lib/agent/mastra",
-  );
-  return {
-    ...real,
-    AGENT_INSTRUCTIONS: "stub instructions",
-    buildLanguageModel: () => currentModel,
-  };
-});
-
-import { POST } from "./route";
-
-async function drainResponse(res: Response): Promise<string> {
-  if (!res.body) return "";
-  const chunks = await convertReadableStreamToArray(
-    res.body.pipeThrough(new TextDecoderStream()),
-  );
-  return chunks.join("");
-}
-
-describe("POST /api/chat — notify_member side-effect (M2.4 step 1)", () => {
+describe("POST /api/chat/confirm — notify_member side-effect (M2.4 step 1)", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     sharedDb = createInMemoryStore();
@@ -162,32 +92,25 @@ describe("POST /api/chat — notify_member side-effect (M2.4 step 1)", () => {
   });
 
   it("writes structured JSON log line AND audit child row when notify_member fires", async () => {
-    currentModel = buildToolCallingModel();
-
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     try {
-      const req = new Request("http://localhost/api/chat", {
+      // POST to the confirm endpoint (the only server-side path where
+      // bypassConfirmation=true is set, bypassing the always_confirm policy gate).
+      const req = new Request("http://localhost/api/chat/confirm", {
         method: "POST",
         body: JSON.stringify({
-          session_id: "test-notify-1",
-          messages: [
-            {
-              id: "m1",
-              role: "user",
-              parts: [
-                {
-                  type: "text",
-                  text: `confirmed: notify ${TEST_MEMBER_ID}`,
-                },
-              ],
-            },
-          ],
+          action: "change_tier",
+          params: {
+            member: TEST_MEMBER_ID,
+            new_tier: "work_trader",
+          },
         }),
       });
 
       const res = await POST(req);
       expect(res.status).toBe(200);
-      await drainResponse(res);
+      const json = await res.json() as Record<string, unknown>;
+      expect(json.ok).toBe(true);
 
       // 1. Member mutation landed (sanity).
       const member = await sharedDb.objects.Member.findById(TEST_MEMBER_ID);

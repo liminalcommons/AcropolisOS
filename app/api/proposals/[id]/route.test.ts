@@ -9,6 +9,23 @@ vi.mock("@/lib/proposals/singleton", () => ({
   getProposalStore: () => store,
 }));
 
+// route.ts imports buildChatRuntime which pulls in next-auth; under vitest's
+// node environment next/server is not resolvable.  Stub the entire module so
+// the suite stays focused on the GET / PATCH surface.  All tests run as an
+// authenticated steward so the auth gate never fires.
+vi.mock("@/lib/agent/chat-runtime", () => ({
+  buildChatRuntime: async () => ({
+    actor: {
+      userId: "u-steward",
+      email: "steward@example.com",
+      role: "steward",
+      customRoles: [] as string[],
+    },
+  }),
+  isAnonymous: (actor: { role?: string } | null) =>
+    actor === null || actor.role === "anonymous",
+}));
+
 const { GET, PATCH } = await import("./route");
 
 const SAMPLE_OT = {

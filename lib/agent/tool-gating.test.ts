@@ -64,25 +64,24 @@ describe("getToolsForActor — apply_action narrowing (small-community seed)", (
   it("member's apply_action still accepts actions the member role can invoke", async () => {
     const onto = await loadOntology(SMALL_COMMUNITY);
     const { applyActionInput } = getToolsForActor(onto, memberActor);
-    const addMinute = applyActionInput.safeParse({
-      action: "add_meeting_minute",
+    // mark_notification_read is gated by [member_self, steward] — at session-start
+    // the member_self token is allowed in case the member owns the notification row.
+    const markRead = applyActionInput.safeParse({
+      action: "mark_notification_read",
       params: {
-        title: "Notes",
-        body: "Body",
-        event: "11111111-1111-1111-1111-111111111111",
+        notification_id: "11111111-1111-1111-1111-111111111111",
       },
     });
-    expect(addMinute.success).toBe(true);
-    // record_attendance is gated by [steward, member_self] — at session-start
-    // the member_self token is allowed in case the member owns target rows.
-    const attendance = applyActionInput.safeParse({
-      action: "record_attendance",
+    expect(markRead.success).toBe(true);
+    // dismiss_blocker is gated by [member_self] — at session-start the
+    // member_self token is allowed in case the member owns the blocker row.
+    const dismiss = applyActionInput.safeParse({
+      action: "dismiss_blocker",
       params: {
-        member: "22222222-2222-2222-2222-222222222222",
-        event: "33333333-3333-3333-3333-333333333333",
+        blocker_id: "22222222-2222-2222-2222-222222222222",
       },
     });
-    expect(attendance.success).toBe(true);
+    expect(dismiss.success).toBe(true);
   });
 });
 
@@ -111,7 +110,7 @@ describe("getToolsForActor — READ tool filtering", () => {
 });
 
 describe("getToolsForActor — toolset counts (acceptance criterion)", () => {
-  it("with seed: steward and member top-level counts match the formula, apply_action narrows from 4 -> 2 branches", async () => {
+  it("with seed: steward and member top-level counts match the formula, apply_action narrows from 8 -> 5 branches", async () => {
     const onto = await loadOntology(SMALL_COMMUNITY);
     const stewardBundle = getToolsForActor(onto, stewardActor);
     const memberBundle = getToolsForActor(onto, memberActor);
@@ -129,8 +128,8 @@ describe("getToolsForActor — toolset counts (acceptance criterion)", () => {
     const memberActions = countDiscriminatorBranches(
       memberBundle.applyActionInput,
     );
-    expect(stewardActions).toBe(4);
-    expect(memberActions).toBe(2);
+    expect(stewardActions).toBe(8);
+    expect(memberActions).toBe(5);
     expect(memberActions).toBeLessThan(stewardActions);
   });
 
@@ -161,18 +160,18 @@ describe("apply_action — structured permission error surface (US-032)", () => 
         });
         return { ran: action };
       },
-      action: "add_member",
-      params: { full_name: "Mallory", email: "m@example.com" },
+      action: "change_tier",
+      params: { member: "m-1", new_tier: "lifetime" },
     });
     expect(out.ok).toBe(false);
     expect(out.error?.type).toBe("permission_denied");
-    expect(out.error?.action).toBe("add_member");
+    expect(out.error?.action).toBe("change_tier");
     expect(out.error?.actor_id).toBe("u-member");
     expect(out.error?.required_permissions).toEqual(["steward"]);
     // The middleware also recorded the rejection in action_audit.
     const rows = await audit.listActionAudit();
     expect(rows).toHaveLength(1);
-    expect(rows[0].subject_id).toBe("add_member");
+    expect(rows[0].subject_id).toBe("change_tier");
   });
 
   it("runApplyActionTool returns ok:true with dispatcher result on permitted invocation", async () => {
@@ -191,11 +190,11 @@ describe("apply_action — structured permission error surface (US-032)", () => 
         });
         return { ran: action, params };
       },
-      action: "add_member",
-      params: { full_name: "Ada", email: "a@example.com", tier: "sustaining" },
+      action: "change_tier",
+      params: { member: "m-ada", new_tier: "lifetime" },
     });
     expect(out.ok).toBe(true);
-    expect(out.result).toMatchObject({ ran: "add_member" });
+    expect(out.result).toMatchObject({ ran: "change_tier" });
     expect(out.error).toBeUndefined();
   });
 

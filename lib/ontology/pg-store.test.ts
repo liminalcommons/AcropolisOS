@@ -125,12 +125,6 @@ describe("createPgOntologyStore — M2.2 step 2", () => {
     expect(capture.table).toBe(eventTable);
   });
 
-  it("provides a links.attended accessor (M2.2 surface — even if unused yet)", () => {
-    const { db } = buildStubDb();
-    const store = createPgOntologyStore(db);
-    expect(store.links.attended).toBeDefined();
-    expect(typeof store.links.attended.create).toBe("function");
-  });
 });
 
 // === M5: all-13-types registry expansion ===

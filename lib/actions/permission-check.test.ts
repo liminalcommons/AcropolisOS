@@ -68,14 +68,33 @@ describe("canActorInvokeAction", () => {
   });
 
   it("returns true for a member when the action allows [steward, member]", () => {
-    // add_meeting_minute.permissions = ["steward", "member"]
+    // No seed action uses the plain "member" token; synthesise one inline so
+    // the role-match path is exercised without touching scenario files.
+    const withMemberAction: Ontology = {
+      ...ontology,
+      action_types: {
+        ...ontology.action_types,
+        add_meeting_minute: {
+          parameters: {},
+          permissions: ["steward", "member"],
+          agent_policy: "auto_apply",
+        },
+      },
+    };
     expect(
-      canActorInvokeAction(member, ontology, "add_meeting_minute"),
+      canActorInvokeAction(member, withMemberAction, "add_meeting_minute"),
     ).toBe(true);
   });
 
-  it("returns true for a steward against any seed action", () => {
-    for (const name of Object.keys(ontology.action_types)) {
+  it("returns true for a steward against any action whose permissions include 'steward'", () => {
+    // member_self-only actions are NOT accessible via the sync path for any
+    // role (member_self requires async row-ownership resolution). Only actions
+    // that carry the explicit "steward" token are expected to pass here.
+    const stewardActions = Object.entries(ontology.action_types)
+      .filter(([, def]) => (def.permissions ?? []).includes("steward"))
+      .map(([name]) => name);
+    expect(stewardActions.length).toBeGreaterThan(0);
+    for (const name of stewardActions) {
       expect(canActorInvokeAction(steward, ontology, name)).toBe(true);
     }
   });
@@ -109,17 +128,18 @@ describe("enforceActionPermission — denial path", () => {
   });
 
   it("attaches actionName + requiredPermissions to the thrown error", async () => {
+    // change_tier.permissions = ["steward"] in the small-community seed
     try {
       await enforceActionPermission({
         ontology,
-        actionName: "add_member",
+        actionName: "change_tier",
         ctx: memberCtx,
       });
       throw new Error("expected enforceActionPermission to throw");
     } catch (err) {
       expect(err).toBeInstanceOf(ActionPermissionError);
       const e = err as ActionPermissionError;
-      expect(e.actionName).toBe("add_member");
+      expect(e.actionName).toBe("change_tier");
       expect(e.operation).toBe("invoke");
       expect(e.actorId).toBe("u-member");
       expect(e.requiredPermissions).toEqual(["steward"]);
@@ -127,10 +147,11 @@ describe("enforceActionPermission — denial path", () => {
   });
 
   it("writes a rejection row to action_audit when ctx.audit is wired", async () => {
+    // change_tier.permissions = ["steward"] in the small-community seed
     await expect(
       enforceActionPermission({
         ontology,
-        actionName: "add_member",
+        actionName: "change_tier",
         ctx: memberCtx,
       }),
     ).rejects.toBeInstanceOf(ActionPermissionError);
@@ -141,7 +162,7 @@ describe("enforceActionPermission — denial path", () => {
     expect(row.actor).toBe("u-member");
     expect(row.actor_role).toBe("member");
     expect(row.subject_type).toBe("action");
-    expect(row.subject_id).toBe("add_member");
+    expect(row.subject_id).toBe("change_tier");
     expect(row.before).toBeNull();
     expect(row.after).toBeNull();
     expect(row.metadata).toMatchObject({
@@ -182,10 +203,11 @@ describe("enforceActionPermission — denial path", () => {
 
 describe("enforceActionPermission — allow path", () => {
   it("returns silently for a steward invoking a steward-only action", async () => {
+    // change_tier.permissions = ["steward"] in the small-community seed
     await expect(
       enforceActionPermission({
         ontology,
-        actionName: "add_member",
+        actionName: "change_tier",
         ctx: stewardCtx,
       }),
     ).resolves.toBeUndefined();
@@ -193,9 +215,22 @@ describe("enforceActionPermission — allow path", () => {
   });
 
   it("returns silently for a member invoking a [steward, member] action", async () => {
+    // No seed action uses the plain "member" token; synthesise one inline so
+    // the allow-path is exercised without touching scenario files.
+    const withMemberAction: Ontology = {
+      ...ontology,
+      action_types: {
+        ...ontology.action_types,
+        add_meeting_minute: {
+          parameters: {},
+          permissions: ["steward", "member"],
+          agent_policy: "auto_apply",
+        },
+      },
+    };
     await expect(
       enforceActionPermission({
-        ontology,
+        ontology: withMemberAction,
         actionName: "add_meeting_minute",
         ctx: memberCtx,
       }),
@@ -343,23 +378,23 @@ describe("enforceActionPermission — member_self row ownership (M3.8 #34)", () 
   });
 
   it("LEAVES steward-only actions (no member_self in permissions) unaffected", async () => {
-    // delete_member: permissions = [steward]. Member should still be denied
+    // change_tier: permissions = [steward]. Member should still be denied
     // for the role-based reason, not because of any new member_self logic.
     await expect(
       enforceActionPermission({
         ontology,
-        actionName: "delete_member",
+        actionName: "change_tier",
         ctx: memberACtx,
-        params: { id: memberB.userId },
+        params: { member: memberB.userId, new_tier: "basic" },
       }),
     ).rejects.toBeInstanceOf(ActionPermissionError);
     // And steward still passes for the same action.
     await expect(
       enforceActionPermission({
         ontology,
-        actionName: "delete_member",
+        actionName: "change_tier",
         ctx: stewardWithNotifsCtx,
-        params: { id: memberA.userId },
+        params: { member: memberA.userId, new_tier: "basic" },
       }),
     ).resolves.toBeUndefined();
   });
