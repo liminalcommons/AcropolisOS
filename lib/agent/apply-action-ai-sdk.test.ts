@@ -11,6 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 import path from "node:path";
+import { z } from "zod";
 import { loadOntology } from "../ontology/load";
 import { createCtx, createInMemoryStore } from "../ontology/ctx";
 import { InMemoryAuditStore } from "../audit/writer";
@@ -61,9 +62,33 @@ describe("buildApplyActionAiSdkTool — M2.2 step 4", () => {
       ctx,
       dispatcher,
     });
-    expect(tool).toBeDefined();
-    expect(typeof tool.execute).toBe("function");
-    expect(typeof tool.description).toBe("string");
+    expect(tool).not.toBeNull();
+    expect(typeof tool!.execute).toBe("function");
+    expect(typeof tool!.description).toBe("string");
+  });
+
+  it("returns null when the actor can invoke no actions — no degenerate (type:null) schema", async () => {
+    // Regression: with zero allowed actions the old builder returned a z.never()
+    // inputSchema, which serializes to a function schema with no object `type`.
+    // Strict providers (DeepSeek) reject it as `type: null`, failing the WHOLE
+    // chat request. The builder must instead return null so the caller omits the
+    // tool. Reproduced with an ontology that declares no action_types.
+    const { ctx, dispatcher } = await setup(steward);
+    const emptyOntology = { object_types: {}, action_types: {}, link_types: {}, properties: {} } as never;
+    const tool = buildApplyActionAiSdkTool({ actor: steward, ontology: emptyOntology, ctx, dispatcher });
+    expect(tool).toBeNull();
+  });
+
+  it("emits a top-level type:object JSON schema — strict providers reject a top-level oneOf", async () => {
+    // Regression: with multiple allowed actions the schema was a z.discriminatedUnion,
+    // which serializes to a top-level `oneOf` with no `type`. DeepSeek rejects that as
+    // `type: null`, failing the WHOLE chat request. The top level must be an object.
+    const { ontology, ctx, dispatcher } = await setup(steward);
+    const tool = buildApplyActionAiSdkTool({ actor: steward, ontology, ctx, dispatcher });
+    expect(tool).not.toBeNull();
+    const json = z.toJSONSchema(tool!.inputSchema as z.ZodType) as { type?: string; oneOf?: unknown };
+    expect(json.type).toBe("object");
+    expect(json.oneOf).toBeUndefined();
   });
 
   it("without bypass: returns confirmation_required for change_tier (always_confirm)", async () => {
@@ -74,7 +99,7 @@ describe("buildApplyActionAiSdkTool — M2.2 step 4", () => {
       ctx,
       dispatcher,
     });
-    const out = (await tool.execute!(
+    const out = (await tool!.execute!(
       {
         action: "change_tier",
         params: { member: MEMBER_ID, new_tier: "sustaining" },
@@ -101,7 +126,7 @@ describe("buildApplyActionAiSdkTool — M2.2 step 4", () => {
       ctx,
       dispatcher,
     });
-    const out = (await tool.execute!(
+    const out = (await tool!.execute!(
       {
         action: "change_tier",
         params: { member: MEMBER_ID, new_tier: "sustaining" },

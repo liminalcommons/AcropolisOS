@@ -326,7 +326,10 @@ export async function POST(req: Request): Promise<Response> {
   const tools = {
     ...readTools,
     ...proposalTools,
-    apply_action: applyActionTool,
+    // Omitted entirely when the actor can invoke no actions (buildApplyActionAiSdkTool
+    // returns null) — a degenerate apply_action schema otherwise fails the whole
+    // request on strict providers (DeepSeek: `type: null`).
+    ...(applyActionTool ? { apply_action: applyActionTool } : {}),
     ...meReadTools,
     ...n8nTools,
     design_theme,
