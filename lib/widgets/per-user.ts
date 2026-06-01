@@ -19,6 +19,7 @@ import { member_context } from "@/lib/db/schema.generated";
 import type { Database } from "@/lib/db/client";
 import {
   WIDGET_CATALOG,
+  CATALOG_KINDS,
   validateWidgetConfig,
   type CatalogKind,
   type MetricData,
@@ -146,8 +147,10 @@ async function runDescriptors(
     const kindRaw = d.kind;
     if (typeof kindRaw !== "string") continue;
 
-    // Validate kind
-    const CATALOG_KINDS = ["metric", "data_table", "roster", "calendar"] as const;
+    // Validate kind against the CANONICAL catalog kinds (incl. intelligence_metric).
+    // A local hand-listed subset here previously omitted intelligence_metric and
+    // silently dropped the steward board's KPI widgets — derive the gate from the
+    // catalog so it can never drift from WIDGET_CATALOG again.
     if (!(CATALOG_KINDS as readonly string[]).includes(kindRaw)) continue;
     const kind = kindRaw as CatalogKind;
 
