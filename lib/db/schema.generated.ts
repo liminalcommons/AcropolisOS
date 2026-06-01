@@ -89,7 +89,7 @@ export const incident_log = pgTable("incident_log", {
   category: text("category").notNull(),
   severity: text("severity").notNull().default("low"),
   occurred_at: timestamp("occurred_at", { withTimezone: true }).notNull(),
-  reported_by: uuid("reported_by").notNull().references((): AnyPgColumn => member.id),
+  reported_by: uuid("reported_by").references((): AnyPgColumn => member.id),
   resolved: boolean("resolved").notNull().default(false),
   resolution_notes: text("resolution_notes"),
 });

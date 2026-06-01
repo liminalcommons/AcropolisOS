@@ -27,6 +27,10 @@ IncidentLog:
     reported_by:
       type: ref
       target: Member
+      # Optional: an incident may be agent-logged with no human reporter, and
+      # log_incident does not collect it. Without this the column generates NOT
+      # NULL and the declarative create-leg (which can't auto-fill a ref) throws.
+      required: false
     resolved:
       type: boolean
       default: false

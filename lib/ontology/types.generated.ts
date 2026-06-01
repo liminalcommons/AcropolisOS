@@ -81,7 +81,7 @@ export const IncidentLogSchema = z.object({
   "category": z.enum(["noise", "damage", "theft", "lost_key", "lockout", "medical", "dispute", "other"]),
   "severity": z.enum(["info", "low", "medium", "high", "critical"]).default("low"),
   "occurred_at": z.iso.datetime({ offset: true }),
-  "reported_by": z.string(),
+  "reported_by": z.string().optional(),
   "resolved": z.boolean().default(false),
   "resolution_notes": z.string().optional(),
 });
