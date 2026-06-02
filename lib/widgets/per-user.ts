@@ -29,7 +29,7 @@ import {
   type CalendarData,
 } from "./catalog";
 import { createReadOnlyDataApi, type CanReadType } from "./read-api";
-import { type ResolvedWidget } from "./compose";
+import { isEmptyWidgetData, type ResolvedWidget } from "./compose";
 import { deriveDefaultBoard } from "./derive-board";
 import { resolveApprovedViews } from "@/lib/views/resolve";
 import { mergeApprovedIntoFloor } from "@/lib/views/merge";
@@ -170,6 +170,7 @@ async function runDescriptors(
         kind,
         config,
         data: null,
+        status: "drift",
         validation_error: describeValidationError(validation),
         title: (d as { title?: string }).title,
       });
@@ -222,6 +223,10 @@ async function runDescriptors(
         kind,
         config,
         data: resolvedData as MetricData | DataTableData | RosterData | CalendarData,
+        status: isEmptyWidgetData(
+          kind,
+          resolvedData as MetricData | DataTableData | RosterData | CalendarData,
+        ) ? "empty" : "ok",
         title: (d as { title?: string }).title,
         ...(rowActions ? { rowActions } : {}),
         ...(rowResolvers ? { rowResolvers } : {}),
