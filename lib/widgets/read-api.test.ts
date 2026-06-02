@@ -224,6 +224,57 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
       expect(db.selectCalls).toBe(0);
       expect(db.lastSelectCols).toBeUndefined();
     });
+
+    it("byDate with rowActionColumns param → projects required hidden columns alongside dateField", async () => {
+      // When calendar (or another kind) opts into row_actions and calls byDate with
+      // required hidden columns (id + resolver choices + confirm source), those
+      // columns must be projected alongside the dateField. This mirrors the
+      // composition layer's hidden-column discipline (commit 80d76c3) and guards
+      // against the latent regression where byDate's projection would silently omit
+      // affordance columns, leaving them undefined at render time. agent_blocker is
+      // steward-readable and carries pathways + confirm_action (the row-affordance
+      // columns), with created_at as a date field.
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(
+        db.asDatabase(),
+        buildCanReadType(steward, ontology),
+        ontology,
+      );
+      // agent_blocker's rowActionColumns would be ["id", "pathways", "confirm_action"]
+      // (its resolver/confirm row-action fields). byDate should project all three
+      // alongside the created_at date field, not just [created_at, id].
+      const result = await api.byDate("agent_blocker", "created_at", 10, [
+        "id",
+        "pathways",
+        "confirm_action",
+      ]);
+      // Verify the projection includes the dateField + all requested hidden columns.
+      expect(db.lastSelectCols).toContain("created_at");
+      expect(db.lastSelectCols).toContain("id");
+      expect(db.lastSelectCols).toContain("pathways");
+      expect(db.lastSelectCols).toContain("confirm_action");
+      expect(db.lastSelectCols).toHaveLength(4);
+      // And the read still reaches SQL and returns rows (no behavioral change).
+      expect(db.selectCalls).toBeGreaterThan(0);
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it("byDate without rowActionColumns → projects [dateField, 'id'] unchanged (backward-compat)", async () => {
+      // The default behavior (rowActionColumns omitted) is identical to today:
+      // exactly [dateField, "id"], never the full column set. This pins that the
+      // forward-compat parameter is purely additive and cannot regress the existing
+      // calendar projection.
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(
+        db.asDatabase(),
+        buildCanReadType(steward, ontology),
+        ontology,
+      );
+      const result = await api.byDate("member", "started_at", 10);
+      expect(db.lastSelectCols).toEqual(["started_at", "id"]);
+      expect(db.selectCalls).toBeGreaterThan(0);
+      expect(result.length).toBeGreaterThan(0);
+    });
   });
 
   describe("public type (bed, read:[\"*\"]) reaches SQL for BOTH roles", () => {
