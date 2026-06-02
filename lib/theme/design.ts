@@ -3,7 +3,7 @@
 // designTheme() core — the senior-color-expert agent. Builds a persona prompt,
 // calls an injected `generate` fn (default generateText with buildLanguageModel),
 // extracts JSON from the (possibly fenced/prosey) text, zod-validates against the
-// exact 18-key TokenSet schema, contrast-validates (WCAG floor), retries once,
+// exact 25-key TokenSet schema, contrast-validates (WCAG floor), retries once,
 // then errors. Mirrors app/api/organize/classify/route.ts's text-path pattern.
 //
 // Generation freedom is bounded by two structural guardrails: the fixed schema
@@ -33,7 +33,7 @@ const oklchString = z
   .string()
   .regex(OKLCH_RE, "must be a complete oklch(L C H[/A]) color string");
 
-// Exact 18-key TokenSet schema. Listed literally (mirrors TOKEN_KEYS) so tsc is
+// Exact 25-key TokenSet schema. Listed literally (mirrors TOKEN_KEYS) so tsc is
 // happy and no extra/missing key can slip through (.strict()).
 const TokenSetSchema = z
   .object({
@@ -52,6 +52,13 @@ const TokenSetSchema = z
     accent: oklchString,
     "accent-foreground": oklchString,
     destructive: oklchString,
+    "destructive-foreground": oklchString,
+    success: oklchString,
+    "success-foreground": oklchString,
+    warning: oklchString,
+    "warning-foreground": oklchString,
+    info: oklchString,
+    "info-foreground": oklchString,
     border: oklchString,
     input: oklchString,
     ring: oklchString,

@@ -1,7 +1,7 @@
 // lib/theme/contrast.ts
 //
 // WCAG contrast validation for oklch token sets. Generation freedom is bounded
-// by two structural guardrails — the fixed 18-key TokenSet schema and this
+// by two structural guardrails — the fixed 25-key TokenSet schema and this
 // contrast floor. The agent cannot ship an unreadable theme.
 //
 // Conversion path: parse "oklch(L C H)" → OKLab → LMS' → LMS → linear sRGB
@@ -65,6 +65,9 @@ export function contrastRatio(a: string, b: string): number {
 // 3.0:1 floor. This is the set of thresholds that makes BASE_TOKENS (the floor
 // itself) pass its own validator — its primary button is white-on-indigo at
 // 3.69:1 — while still rejecting foreground===background.
+// The semantic-status surfaces (destructive/success/warning/info) are
+// badge / chip / banner backgrounds carrying a dark on-color label, so they
+// join the tinted UI-component 3.0:1 tier alongside primary/secondary/etc.
 const TEXT_PAIRS: Array<[TokenKey, TokenKey, number]> = [
   ["foreground", "background", 4.5],
   ["card-foreground", "card", 4.5],
@@ -73,6 +76,10 @@ const TEXT_PAIRS: Array<[TokenKey, TokenKey, number]> = [
   ["secondary-foreground", "secondary", 3.0],
   ["muted-foreground", "muted", 3.0],
   ["accent-foreground", "accent", 3.0],
+  ["destructive-foreground", "destructive", 3.0],
+  ["success-foreground", "success", 3.0],
+  ["warning-foreground", "warning", 3.0],
+  ["info-foreground", "info", 3.0],
 ];
 
 export interface ContrastResult {
