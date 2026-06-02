@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { ChatPanel } from "@/components/chat-panel";
 import { DOCK_KEY, readCollapsed, writeCollapsed } from "./shell-state";
+import { DOCK_TOGGLE_COLLAPSED_CLS, DOCK_TOGGLE_EXPANDED_CLS } from "./dock-affordance";
 import type { BuiltInRole } from "@/lib/auth/users";
 
 interface Props {
@@ -42,7 +43,7 @@ export function CoPilotDock({ actorRole, actorEmail, modelName }: Props): React.
         type="button"
         onClick={toggle}
         aria-label="Open co-pilot"
-        className="flex h-full w-10 shrink-0 items-center justify-center border-l border-border bg-card text-muted-foreground hover:text-foreground"
+        className={DOCK_TOGGLE_COLLAPSED_CLS}
       >
         <PanelRightOpen className="h-4 w-4" aria-hidden />
       </button>
@@ -55,7 +56,7 @@ export function CoPilotDock({ actorRole, actorEmail, modelName }: Props): React.
         type="button"
         onClick={toggle}
         aria-label="Collapse co-pilot"
-        className="absolute right-2 top-2 z-10 text-muted-foreground hover:text-foreground"
+        className={DOCK_TOGGLE_EXPANDED_CLS}
       >
         <PanelRightClose className="h-4 w-4" aria-hidden />
       </button>
