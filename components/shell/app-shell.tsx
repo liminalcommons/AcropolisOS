@@ -25,6 +25,7 @@ export async function AppShell({ children, actor, modelName }: Props): Promise<R
     // is light; the dark theme lives only in the injected vars, not a .dark class).
     return (
       <div
+        id="main-content"
         style={tokenSetToCssVars(BASE_TOKENS)}
         className="min-h-screen bg-background text-foreground"
       >
@@ -81,7 +82,7 @@ export async function AppShell({ children, actor, modelName }: Props): Promise<R
     >
       <TopBar memberName={memberName} role={role} orgName={orgName} roles={roles} canSwitch={canSwitch} />
       <div className="flex flex-1 overflow-hidden">
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main id="main-content" className="flex-1 overflow-y-auto">{children}</main>
         <CoPilotDock actorRole={actor.role} actorEmail={actor.email} modelName={modelName} />
       </div>
     </div>

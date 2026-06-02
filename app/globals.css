@@ -47,6 +47,30 @@
   --ring: oklch(0.66 0.12 55);
 }
 
+/* ── Global accessibility floor (additive) ─────────────────────────────────
+ * Keyboard focus must always show a visible ring. We use :focus-visible so
+ * mouse clicks don't ring but keyboard nav does. Uses the existing --ring token
+ * (no new token keys). prefers-reduced-motion honours the OS "reduce motion"
+ * setting app-wide. The skip link + #main-content target live in layout/shell.
+ * Wrapped in @layer base so Tailwind v4 retains + orders these custom rules. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
