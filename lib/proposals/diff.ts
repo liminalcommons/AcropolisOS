@@ -47,6 +47,11 @@ export const ProposalDiff = z.object({
   new_view_configs: z.record(z.string(), ViewConfigProposal),
   new_seeds: z.record(z.string(), SeedProposal),
   new_ingests: z.record(z.string(), IngestProposal),
+  // Evidence-before-consent: the raw_inbox row refs that JUSTIFIED each grown
+  // field, keyed "<PascalType>.<field>" so multiple grown fields on one type keep
+  // SEPARATE receipts (never collapsed under the type). Optional + default {} so
+  // every already-persisted proposal still parses. Populated by growDecisionToDiffs.
+  evidence: z.record(z.string(), z.array(z.string())).default({}),
   impacted_tables: z.array(z.string()),
 });
 export type ProposalDiff = z.infer<typeof ProposalDiff>;
@@ -62,6 +67,7 @@ export function emptyDraft(): ProposalDiff {
     new_view_configs: {},
     new_seeds: {},
     new_ingests: {},
+    evidence: {},
     impacted_tables: [],
   };
 }

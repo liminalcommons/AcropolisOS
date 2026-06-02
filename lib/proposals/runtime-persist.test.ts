@@ -22,6 +22,7 @@ function fakeDiff(): ProposalDiff {
     new_view_configs: {},
     new_seeds: {},
     new_ingests: {},
+    evidence: {},
     impacted_tables: [],
   };
 }
