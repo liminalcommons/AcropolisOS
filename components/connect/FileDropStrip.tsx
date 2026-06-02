@@ -10,8 +10,25 @@
 // No external CSV dep — basic split-on-comma only. Quoted-comma edge cases
 // are a follow-up (scope comment in spec).
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+
+// ── Success affordance contract (exported for tests + reuse) ───────────────────
+
+// Where a completed drop sends the user next: the classify queue, not a
+// dead-end "view" link. /organize is the human-in-the-loop proposal gate.
+export const ORGANIZE_HREF = "/organize";
+
+// Auto-nav delay after a successful drop. Long enough to read the count, short
+// enough to feel like momentum; cancelled if the component unmounts first.
+export const AUTO_NAV_MS = 2500;
+
+// Success copy frames the moment as a call to the NEXT step (classify), with
+// correct pluralization. Kept pure so the contract is unit-testable.
+export function successHeadline(count: number): string {
+  return `Pushed ${count} row${count === 1 ? "" : "s"} — now classify them`;
+}
 
 // ── Tiny inline CSV parser ────────────────────────────────────────────────────
 
@@ -72,9 +89,21 @@ type UploadState =
   | { phase: "error"; message: string };
 
 export function FileDropStrip() {
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [over, setOver] = useState(false);
   const [state, setState] = useState<UploadState>({ phase: "idle" });
+
+  // After a successful drop, carry the user to the classify queue so the
+  // ontology-growth loop continues. The manual button below is always available
+  // (and stops the timer); this just removes a click when the user does nothing.
+  useEffect(() => {
+    if (state.phase !== "done") return;
+    const t = setTimeout(() => {
+      router.push(ORGANIZE_HREF);
+    }, AUTO_NAV_MS);
+    return () => clearTimeout(t);
+  }, [state.phase, router]);
 
   async function handleFiles(files: FileList | File[]) {
     const fileArr = Array.from(files);
@@ -189,12 +218,16 @@ export function FileDropStrip() {
       )}
 
       {state.phase === "done" && (
-        <p className="text-xs text-emerald-400">
-          Pushed {state.count} row{state.count === 1 ? "" : "s"} into raw_inbox.{" "}
-          <Link href="/organize" className="underline underline-offset-2 hover:text-emerald-300">
-            View at /organize →
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-emerald-400">{successHeadline(state.count)}</span>
+          <Link
+            href={ORGANIZE_HREF}
+            className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20"
+          >
+            Go classify →
           </Link>
-        </p>
+          <span className="text-muted-foreground/60">redirecting…</span>
+        </div>
       )}
     </div>
   );
