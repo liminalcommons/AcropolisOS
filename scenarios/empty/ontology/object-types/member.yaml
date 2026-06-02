@@ -1,0 +1,21 @@
+member:
+  kind: agent
+  properties:
+    does:
+      ref: does
+    dues:
+      ref: dues
+    name:
+      ref: name
+    email:
+      ref: email
+    since:
+      ref: since
+  description: A member of the ecovillage community
+  permissions:
+    read:
+      - steward
+      - member
+    write:
+      - steward
+  title_property: name

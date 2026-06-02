@@ -1,0 +1,22 @@
+resolve_blocker_with_pathway:
+  description: |
+    Human picked one of the agent's curated paths. Middleware fires the
+    pathway's typed action, sets resolved_via_pathway_id, flips status,
+    and backfills resolved_by_action_audit_id.
+  function: resolve-blocker-with-pathway
+  parameters:
+    blocker_id:
+      type: ref
+      target: AgentBlocker
+      required: true
+    pathway_id: { type: uuid, required: true }
+  permissions: [member_self]
+  agent_policy: always_confirm
+  side_effects: [audit, notify_member]
+  # Per-row CHOICE picker (row_resolver): each row's `pathways` JSON array of
+  # {id,label} renders one button per option; the chosen option's id binds to
+  # the `pathway_id` param. Governed/derived — the steward clicks a curated
+  # pathway, the server validates membership, then dispatches.
+  row_resolver:
+    choices_from: pathways
+    choice_param: pathway_id

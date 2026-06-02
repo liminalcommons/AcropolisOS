@@ -1,0 +1,20 @@
+does:
+  type: string
+  required: true
+  description: Role(s) and activities the member carries out
+dues:
+  type: decimal
+  required: false
+  description: Monthly contribution amount in EUR (may be unset)
+name:
+  type: string
+  required: true
+  description: Full name of the community member
+email:
+  type: email
+  required: false
+  description: Contact email address (may be absent)
+since:
+  type: date
+  required: true
+  description: Date the member joined the community

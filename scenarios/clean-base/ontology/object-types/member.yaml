@@ -1,0 +1,65 @@
+Member:
+  kind: agent
+  description: A person belonging to the community
+  title_property: full_name
+  data_audit: true
+  permissions:
+    # M3.1 / US-031: tightened from `["*"]` to enforce member_self.
+    # A member sees only their own Member row; stewards see all. The wrap
+    # layer (wrapObjectAccess in lib/ontology/ctx.ts) resolves member_self
+    # via row.id === actor.userId (the actor IS the member).
+    read: ["steward", "member_self"]
+    write: ["steward", "member_self"]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    full_name:
+      type: string
+    email:
+      ref: email
+    joined_at:
+      ref: joined_at
+    tier:
+      type: enum
+      values: [basic, sustaining, lifetime]
+      default: basic
+    # tier_role + started_at: required by the baked docker-entrypoint check_column
+    # guard (and the app's role logic reads tier_role). Shape mirrors book-club-org.
+    tier_role:
+      type: enum
+      values: [work_trader, staff, supervisor, manager]
+      default: staff
+    started_at:
+      type: date
+      required: false
+    notes:
+      type: string
+      permissions:
+        read: ["steward"]
+        write: ["steward"]
+    # M4.2: user_id links a Member to a UserRecord in users.json (NextAuth
+    # Credentials). Null until the invitee claims the invite via /claim,
+    # which creates the user record and writes its id back here. The
+    # member_self check in lib/ontology/ctx.ts already probes user_id, so
+    # populating it is what makes the row pass the member_self gate from
+    # the user's NextAuth actor.userId — until then, the Member is a
+    # placeholder that only stewards can see/touch.
+    user_id:
+      type: string
+      required: false
+    # invite_code + invite_expires_at are written by the invite_member
+    # action and consumed by the /claim route. Steward-only so a leaked
+    # client read cannot enumerate active invites.
+    invite_code:
+      type: string
+      required: false
+      permissions:
+        read: ["steward"]
+        write: ["steward"]
+    invite_expires_at:
+      type: timestamp
+      required: false
+      permissions:
+        read: ["steward"]
+        write: ["steward"]

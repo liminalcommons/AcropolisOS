@@ -1,0 +1,17 @@
+post_announcement:
+  parameters:
+    date:
+      type: date
+      required: true
+      description: The announcement date
+    text:
+      type: string
+      required: true
+      description: The announcement text
+  description: Post a community announcement.
+  permissions:
+    - member
+    - steward
+  agent_policy: always_confirm
+  side_effects:
+    - audit
