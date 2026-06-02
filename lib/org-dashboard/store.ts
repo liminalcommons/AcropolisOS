@@ -47,8 +47,12 @@ const ORG_DASHBOARD_PATH = path.join(UPLOADS_DIR, "org-dashboard.json");
 export function adminDefaultBoard(
   ontology: Ontology,
   canReadType: CanReadType,
+  opts: { hasBlockerHistory?: boolean } = {},
 ): SliceDescriptor[] {
-  return deriveDefaultBoard(ontology, canReadType, { admin: true });
+  return deriveDefaultBoard(ontology, canReadType, {
+    admin: true,
+    hasBlockerHistory: opts.hasBlockerHistory,
+  });
 }
 
 // ── readOrgDashboard ────────────────────────────────────────────────────────────

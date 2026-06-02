@@ -29,7 +29,7 @@ import { readOrgDashboard, adminDefaultBoard } from "@/lib/org-dashboard/store";
 import { resolveApprovedViews } from "@/lib/views/resolve";
 import { mergeApprovedIntoFloor } from "@/lib/views/merge";
 import { PgApprovedViewsRegistry } from "@/lib/views/registry-pg";
-import { buildCanReadType } from "@/lib/widgets/read-api";
+import { buildCanReadType, createReadOnlyDataApi } from "@/lib/widgets/read-api";
 import { addableWidgets } from "@/lib/widgets/arrange";
 import { readOrgProfile } from "@/lib/org-profile/store";
 import { OrgNameEditor } from "@/components/org/org-name-editor";
@@ -137,7 +137,16 @@ export default async function Home({
         if (stored.widgets.length > 0) {
           descriptors = stored.widgets;
         } else {
-          const floor = adminDefaultBoard(ontology, canReadType);
+          // cold_board: the four community-intelligence KPI cards are hollow
+          // (0% / em-dash) until there is something to measure. Count
+          // agent_blocker behind the SAME read fence the KPIs ride; the floor
+          // only emits them once history exists. count() returns 0 if the
+          // viewer can't read the type or the table is absent (fresh install).
+          const api = createReadOnlyDataApi(db, canReadType, ontology);
+          const blockerCount = await api.count("agent_blocker").catch(() => 0);
+          const floor = adminDefaultBoard(ontology, canReadType, {
+            hasBlockerHistory: blockerCount > 0,
+          });
           const approved = await resolveApprovedViews(
             new PgApprovedViewsRegistry(db),
             { id: actor.userId, role: actor.role },
