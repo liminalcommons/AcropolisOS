@@ -42,5 +42,13 @@ ontology-backup-small-community/
 /package-lock.json
 *casing-test.mjs
 
-# Runtime instance data (steward-edited org profile etc.) — mirrors data/
-uploads/
+# Runtime instance data (steward-edited org profile etc.) — mirrors data/.
+# Keep the dir placeholder tracked, ignore its runtime contents.
+uploads/*
+!uploads/.gitkeep
+
+# Propose-step generated migrations = instance-specific GROWN columns (runtime
+# drift, NOT canonical). The curated migration set is the NNNN_name.sql files +
+# _journal.json. Promoting a grown field to canonical is a deliberate, human-
+# gated ontology change via the codegen path, never a raw proposal_*.sql commit.
+drizzle/proposal_*.sql
