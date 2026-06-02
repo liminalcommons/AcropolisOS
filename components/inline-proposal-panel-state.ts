@@ -23,6 +23,10 @@ export interface ProposalDiffSummary {
   seed_count: number;
   ingest_count: number;
   impacted_tables: string[];
+  // Receipts-before-consent: the raw_inbox refs that justified each grown field,
+  // surfaced per "<Type>.<field>" key (sorted) so the consent card can render
+  // "proposed because of these N rows you dropped". Empty when no field was grown.
+  evidenceByField: Array<{ key: string; rows: string[] }>;
   isEmpty: boolean;
 }
 
@@ -37,6 +41,9 @@ export function summarizeProposalDiff(diff: ProposalDiff): ProposalDiffSummary {
   const seed_count = Object.keys(diff.new_seeds).length;
   const ingest_count = Object.keys(diff.new_ingests).length;
   const impacted_tables = [...diff.impacted_tables].sort();
+  const evidenceByField = Object.keys(diff.evidence)
+    .sort()
+    .map((key) => ({ key, rows: diff.evidence[key] }));
   const isEmpty =
     new_object_types.length === 0 &&
     new_link_types.length === 0 &&
@@ -59,6 +66,7 @@ export function summarizeProposalDiff(diff: ProposalDiff): ProposalDiffSummary {
     seed_count,
     ingest_count,
     impacted_tables,
+    evidenceByField,
     isEmpty,
   };
 }

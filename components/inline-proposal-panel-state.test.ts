@@ -77,6 +77,24 @@ describe("summarizeProposalDiff", () => {
     expect(summary.impacted_tables).toEqual(["Event"]);
   });
 
+  it("surfaces evidence per Type.field, sorted by key", () => {
+    const diff = makeDiff({
+      evidence: {
+        "Guest.phone": ["raw_inbox:r2"],
+        "Guest.passport": ["raw_inbox:r1a", "raw_inbox:r1b"],
+      },
+    });
+    const summary = summarizeProposalDiff(diff);
+    expect(summary.evidenceByField).toEqual([
+      { key: "Guest.passport", rows: ["raw_inbox:r1a", "raw_inbox:r1b"] },
+      { key: "Guest.phone", rows: ["raw_inbox:r2"] },
+    ]);
+  });
+
+  it("emits an empty evidenceByField for an empty draft", () => {
+    expect(summarizeProposalDiff(emptyDraft()).evidenceByField).toEqual([]);
+  });
+
   it("returns empty summary for an empty draft", () => {
     const summary = summarizeProposalDiff(emptyDraft());
     expect(summary.new_object_types).toEqual([]);
