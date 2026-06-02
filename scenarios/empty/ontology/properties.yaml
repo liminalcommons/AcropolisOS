@@ -1,11 +1,3 @@
-does:
-  type: string
-  required: true
-  description: Role(s) and activities the member carries out
-dues:
-  type: decimal
-  required: false
-  description: Monthly contribution amount in EUR (may be unset)
 name:
   type: string
   required: true
