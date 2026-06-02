@@ -59,12 +59,12 @@ export function OrgPurposeEditor({ initialPurpose }: { initialPurpose: string })
           {pending ? "Saving…" : "Save purpose"}
         </button>
         {toast.kind === "ok" && (
-          <span role="status" className="text-xs text-emerald-400">
+          <span role="status" className="text-xs text-success">
             Saved · the agent now weighs proposals against this
           </span>
         )}
         {toast.kind === "error" && (
-          <span role="status" className="text-xs text-rose-400">
+          <span role="status" className="text-xs text-destructive">
             {toast.message}
           </span>
         )}

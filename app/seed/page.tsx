@@ -71,7 +71,7 @@ export default async function SeedIndexPage(): Promise<React.ReactElement> {
                 const bundleName = s.schema_name.replace(/^seed_/, "");
                 return (
                   <tr key={s.schema_name} className="border-t border-border">
-                    <td className="py-2 pr-3 font-mono text-emerald-300">
+                    <td className="py-2 pr-3 font-mono text-success">
                       {s.schema_name}
                     </td>
                     <td className="py-2 pr-3 font-mono text-foreground">
@@ -80,7 +80,7 @@ export default async function SeedIndexPage(): Promise<React.ReactElement> {
                     <td className="py-2 pr-3">
                       <Link
                         href={`/seed/${bundleName}`}
-                        className="text-emerald-400 hover:text-emerald-300"
+                        className="text-success hover:text-emerald-300"
                       >
                         explore →
                       </Link>

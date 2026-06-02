@@ -46,9 +46,9 @@ const REASON_COLORS: Record<string, string> = {
 };
 
 const REVERSIBILITY_COLORS: Record<string, string> = {
-  easy: "bg-emerald-500",
-  moderate: "bg-amber-500",
-  permanent: "bg-red-500",
+  easy: "bg-success",
+  moderate: "bg-warning",
+  permanent: "bg-destructive",
 };
 
 function ReversibilityDot({ reversibility }: { reversibility: string }) {

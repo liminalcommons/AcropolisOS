@@ -100,7 +100,7 @@ export default async function OrganizePage({
             Classify each raw inbox row to generate a typed proposal, then confirm or reject.
           </p>
           {!isSteward && (
-            <p className="mt-2 text-xs text-amber-500/80">
+            <p className="mt-2 text-xs text-warning/80">
               View-only — steward role required to classify.
             </p>
           )}

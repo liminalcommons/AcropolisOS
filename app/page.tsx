@@ -169,7 +169,7 @@ export default async function Home({
           </div>
 
           {previewing ? (
-            <p className="text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2">
+            <p className="text-xs text-warning/90 bg-warning/10 border border-warning/30 rounded-md px-3 py-2">
               Viewing as <span className="font-medium">{effectiveRole}</span>.{" "}
               <Link href="/" className="underline hover:text-amber-200">
                 Back to your board

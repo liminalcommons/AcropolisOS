@@ -84,7 +84,7 @@ export function InboxDropzone() {
         </p>
       ) : null}
       {result ? (
-        <p className="mt-3 text-xs text-emerald-400">
+        <p className="mt-3 text-xs text-success">
           Ingested {result.count} row{result.count === 1 ? "" : "s"}.
         </p>
       ) : null}

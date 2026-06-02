@@ -95,16 +95,16 @@ export default async function SetupPage(): Promise<React.ReactElement> {
           >
             {dbStatus.ok ? (
               <div className="flex items-center gap-2">
-                <span className="text-emerald-400 text-sm">✓</span>
-                <p className="text-sm text-emerald-400 font-medium">
+                <span className="text-success text-sm">✓</span>
+                <p className="text-sm text-success font-medium">
                   {dbStatus.detail}
                 </p>
               </div>
             ) : (
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-rose-400 text-sm">✗</span>
-                  <p className="text-sm text-rose-400 font-medium">
+                  <span className="text-destructive text-sm">✗</span>
+                  <p className="text-sm text-destructive font-medium">
                     Database unreachable
                   </p>
                 </div>

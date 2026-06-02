@@ -222,7 +222,7 @@ export function FileDropStrip() {
           <span className="text-emerald-400">{successHeadline(state.count)}</span>
           <Link
             href={ORGANIZE_HREF}
-            className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20"
+            className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 font-medium text-success transition-colors hover:bg-emerald-500/20"
           >
             Go classify →
           </Link>

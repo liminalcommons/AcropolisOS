@@ -117,7 +117,7 @@ export function GrowPanel({ rows }: { rows: Row[] }): React.ReactElement {
       {result && (
         <div className="rounded-md border border-border bg-background/40 p-3 text-xs space-y-1">
           {result.error ? (
-            <p className="text-rose-400">Couldn&apos;t grow: {result.error}</p>
+            <p className="text-destructive">Couldn&apos;t grow: {result.error}</p>
           ) : !result.grew ? (
             <p className="text-muted-foreground">That row already fits the ontology — nothing to grow.</p>
           ) : (

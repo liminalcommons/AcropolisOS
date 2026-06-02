@@ -30,13 +30,13 @@ export function CommittedBanner({
 
   return (
     <div className="flex items-center gap-2 flex-wrap text-xs">
-      <p className="text-emerald-400">
+      <p className="text-success">
         Committed — {label} row{" "}
         <span className="font-mono opacity-70">{typed_row_id}</span>
       </p>
       <Link
         href={`/${target_type}`}
-        className="inline-flex items-center whitespace-nowrap rounded-md border border-emerald-800/50 bg-emerald-900/15 px-3 py-1 font-medium text-emerald-300 hover:bg-emerald-900/30 transition-colors"
+        className="inline-flex items-center whitespace-nowrap rounded-md border border-emerald-800/50 bg-emerald-900/15 px-3 py-1 font-medium text-success hover:bg-emerald-900/30 transition-colors"
       >
         View in {label} →
       </Link>

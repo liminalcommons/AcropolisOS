@@ -99,7 +99,7 @@ export function ObjectForm({
           <label key={f.name} className="block text-xs">
             <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
               {f.name}
-              {f.required && <span className="text-rose-400"> *</span>}
+              {f.required && <span className="text-destructive"> *</span>}
               <span className="ml-1 normal-case opacity-50">· {f.kind}</span>
             </span>
             <FieldInput field={f} initial={initial?.[f.name]} />
@@ -115,7 +115,7 @@ export function ObjectForm({
           {pending ? "Saving…" : submitLabel}
         </button>
         {msg && (
-          <span className={`text-xs ${msg.kind === "ok" ? "text-emerald-400" : "text-rose-400"}`}>{msg.text}</span>
+          <span className={`text-xs ${msg.kind === "ok" ? "text-success" : "text-destructive"}`}>{msg.text}</span>
         )}
       </div>
     </form>
@@ -162,7 +162,7 @@ export function DeleteButton({
       >
         {pending ? "Deleting…" : armed ? "Click again to confirm" : label}
       </button>
-      {err && <span className="text-xs text-rose-400">{err}</span>}
+      {err && <span className="text-xs text-destructive">{err}</span>}
     </span>
   );
 }

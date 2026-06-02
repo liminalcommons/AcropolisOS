@@ -58,9 +58,9 @@ function sourceBadgeClass(source: string): string {
 }
 
 function confidenceColor(conf: number): string {
-  if (conf >= 0.8) return "bg-emerald-500";
-  if (conf >= 0.5) return "bg-amber-500";
-  return "bg-red-500";
+  if (conf >= 0.8) return "bg-success";
+  if (conf >= 0.5) return "bg-warning";
+  return "bg-destructive";
 }
 
 function payloadPreview(payload: unknown): string {
@@ -194,7 +194,7 @@ function ProposalCard({
             {allMapped.map(([src, tgt]) => (
               <tr key={src} className="border-t border-border/60">
                 <td className="py-1 pr-4 font-mono text-foreground">{src}</td>
-                <td className="py-1 font-mono text-emerald-400">{tgt}</td>
+                <td className="py-1 font-mono text-success">{tgt}</td>
               </tr>
             ))}
             {proposal.unmapped.map((src) => (
@@ -230,9 +230,9 @@ function ProposalCard({
             typed_row_id={confirmState.typed_row_id}
           />
         ) : confirmState.tag === "already_classified" ? (
-          <p className="text-xs text-amber-400/80">Already committed — no double-write.</p>
+          <p className="text-xs text-warning/80">Already committed — no double-write.</p>
         ) : confirmState.tag === "forbidden" ? (
-          <p className="text-xs text-red-400">Forbidden — steward role required.</p>
+          <p className="text-xs text-destructive">Forbidden — steward role required.</p>
         ) : confirmState.tag === "incomplete_refs" ? (
           <div className="text-xs text-muted-foreground space-y-0.5">
             <p className="text-muted-foreground">
@@ -243,11 +243,11 @@ function ProposalCard({
             </p>
           </div>
         ) : confirmState.tag === "commit_error" ? (
-          <p className="text-xs text-red-400">
+          <p className="text-xs text-destructive">
             Write error — {confirmState.detail.slice(0, 120)}
           </p>
         ) : confirmState.tag === "error" ? (
-          <p className="text-xs text-red-400 font-mono">{confirmState.message}</p>
+          <p className="text-xs text-destructive font-mono">{confirmState.message}</p>
         ) : confirmState.tag === "merged" ? (
           <p className="text-xs text-muted-foreground">
             Merged into existing row{" "}
