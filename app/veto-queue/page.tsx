@@ -20,7 +20,12 @@ import {
   type DecisionInput,
 } from "@/lib/blockers/decision-view";
 import { DecisionFocus } from "@/components/decisions/decision-focus";
-import { resolveVetoAction, dismissVetoAction } from "./actions";
+import {
+  resolveVetoAction,
+  resolveWithInputAction,
+  confirmBlockerAction,
+  dismissVetoAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -89,6 +94,8 @@ export default async function VetoQueuePage(): Promise<React.ReactElement> {
           key={views.length}
           decisions={views}
           resolveAction={resolveVetoAction}
+          resolveInputAction={resolveWithInputAction}
+          confirmAction={confirmBlockerAction}
           dismissAction={dismissVetoAction}
         />
       </div>

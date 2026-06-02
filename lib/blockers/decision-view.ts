@@ -28,6 +28,8 @@ export interface DecisionInput {
   blocked_actor_id?: string | null;
   resolution_mode?: string | null;
   pathways?: unknown;
+  input_schema?: unknown; // text_input: { kind, prompt }
+  confirm_action?: unknown; // confirm_binary: { label, action, reversibility? }
   resolved_via_pathway_id?: string | null;
 }
 
@@ -48,6 +50,10 @@ export interface DecisionView {
   blockedActorId: string | null;
   mode: ResolutionMode;
   scenarios: DecisionScenario[];
+  /** text_input: the specific question the human should answer (null ⇒ generic label). */
+  inputPrompt: string | null;
+  /** confirm_binary: the single proposed action + its stakes (null ⇒ generic Resolve). */
+  confirm: { label: string; reversibility: ReversibilityTier } | null;
   /** "the community usually picks X (count/total)" — never reorders scenarios. */
   trace: { label: string; count: number; total: number } | null;
 }
@@ -60,6 +66,20 @@ function asTier(r: string | undefined): ReversibilityTier {
 }
 function asMode(m: string | null | undefined): ResolutionMode {
   return m && (MODES as string[]).includes(m) ? (m as ResolutionMode) : "pathways";
+}
+
+/** Tolerant: a jsonb column comes back as either a parsed object or a JSON string. */
+function parseJsonObject(raw: unknown): Record<string, unknown> | null {
+  let v: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      v = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (v == null || typeof v !== "object" || Array.isArray(v)) return null;
+  return v as Record<string, unknown>;
 }
 
 /** Oldest-first (SLA): don't let escalated judgment calls rot. Stable, non-mutating. */
@@ -95,6 +115,25 @@ export function buildDecisionView(blocker: DecisionInput, allBlockers: DecisionI
     recommended: i === 0,
   }));
 
+  // text_input: the agent's specific question for the human (null ⇒ generic label).
+  let inputPrompt: string | null = null;
+  if (mode === "text_input") {
+    const schema = parseJsonObject(blocker.input_schema);
+    inputPrompt = schema && typeof schema.prompt === "string" ? schema.prompt : null;
+  }
+
+  // confirm_binary: the single proposed action + its reversibility stakes.
+  let confirm: DecisionView["confirm"] = null;
+  if (mode === "confirm_binary") {
+    const ca = parseJsonObject(blocker.confirm_action);
+    if (ca && typeof ca.label === "string") {
+      confirm = {
+        label: ca.label,
+        reversibility: asTier(typeof ca.reversibility === "string" ? ca.reversibility : undefined),
+      };
+    }
+  }
+
   // Trace: the most-chosen identity for this reason_kind (transparency only).
   let trace: DecisionView["trace"] = null;
   if (preference.size > 0) {
@@ -122,6 +161,35 @@ export function buildDecisionView(blocker: DecisionInput, allBlockers: DecisionI
     blockedActorId: blocker.blocked_actor_id ?? null,
     mode,
     scenarios,
+    inputPrompt,
+    confirm,
     trace,
   };
+}
+
+/**
+ * Seed text for the "Discuss with the agent" affordance — the deep-link that
+ * opens the chat scoped to THIS decision so the human can interrogate it before
+ * disposing it. Pure: turns a DecisionView into a first message that hands the
+ * agent the decision's framing + whatever options it already offered, and asks
+ * for advice WITHOUT taking action (discussion, not disposition). The composer
+ * is pre-filled (not auto-sent) so the human edits before sending.
+ */
+export function buildDiscussPrompt(d: DecisionView): string {
+  const lines = [
+    "I want to talk through a decision you escalated to me before I act on it.",
+    `Decision: ${d.summary}`,
+  ];
+  if (d.detail) lines.push(`Context you gave: ${d.detail}`);
+  if (d.scenarios.length > 0) {
+    lines.push(`The paths you offered: ${d.scenarios.map((s) => s.label).join("; ")}.`);
+  } else if (d.confirm) {
+    lines.push(`You proposed: ${d.confirm.label}.`);
+  } else if (d.inputPrompt) {
+    lines.push(`You asked: ${d.inputPrompt}`);
+  }
+  lines.push(
+    "Walk me through the trade-offs and tell me what you'd recommend and why — but don't take any action yet.",
+  );
+  return lines.join("\n");
 }

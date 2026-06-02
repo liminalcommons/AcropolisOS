@@ -1,27 +1,61 @@
 // The Focus decision surface (client): presents ONE decision at a time — the
-// most urgent (oldest) — as a weighty card. Disposing it (pick a path / resolve
-// / dismiss) revalidates the queue server-side; the list shrinks and this
-// component remounts (keyed on length by the page) to surface the next. "skip →"
-// peeks ahead without disposing. Embodies the opinion: a decision is a deliberate
-// act, not a list item. Reuses the existing audited server actions.
+// most urgent (oldest) — as a weighty card. Disposing it (pick a path / submit
+// an answer / confirm / dismiss) revalidates the queue server-side; the list
+// shrinks and this component remounts (keyed on length by the page) to surface
+// the next. "skip →" peeks ahead without disposing. Embodies the opinion: a
+// decision is a deliberate act, not a list item. Reuses the existing audited
+// server actions.
+//
+// LAYOUT: every option reads top-to-bottom (vertical, mobile-first). For
+// pathways, each path is a full-width block with a colored LEFT RAIL encoding
+// reversibility — because the queue is safest-first, the column becomes a
+// green→red safety gradient (the opinion made spatial). No side-by-side rows.
 "use client";
 
 import { useState } from "react";
-import type { DecisionView, ReversibilityTier } from "@/lib/blockers/decision-view";
+import { MessageSquare } from "lucide-react";
+import { buildDiscussPrompt, type DecisionView, type ReversibilityTier } from "@/lib/blockers/decision-view";
 
 type ResolveAction = (blockerId: string, pathwayId?: string) => Promise<void>;
 type DismissAction = (blockerId: string, reason?: string) => Promise<void>;
+type FormAction = (blockerId: string, form: FormData) => Promise<void>;
 
 const REV_LABEL: Record<ReversibilityTier, string> = {
   easy: "reversible",
   moderate: "reversible · some effort",
   permanent: "irreversible",
 };
-const REV_CLS: Record<ReversibilityTier, string> = {
-  easy: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  moderate: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  permanent: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+const REV_GLYPH: Record<ReversibilityTier, string> = { easy: "✓", moderate: "~", permanent: "✕" };
+// Left rail + tier text: the safety gradient (emerald → amber → rose).
+const RAIL_CLS: Record<ReversibilityTier, string> = {
+  easy: "border-l-emerald-500",
+  moderate: "border-l-amber-500",
+  permanent: "border-l-rose-500",
 };
+const TIER_TEXT: Record<ReversibilityTier, string> = {
+  easy: "text-emerald-400",
+  moderate: "text-amber-400",
+  permanent: "text-rose-400",
+};
+
+// "Discuss with the agent" (the 4th affordance): doesn't dispose the decision —
+// it opens the co-pilot chat scoped to THIS decision so the human can ask "why
+// these options?" / "what if X?" before picking. Reuses the existing
+// acropolisos:prompt seam (fills + focuses the composer); a fresh
+// acropolisos:open-chat first expands the dock, since ChatPanel is unmounted —
+// and so deaf to acropolisos:prompt — while the dock is collapsed.
+function discussDecision(d: DecisionView): void {
+  if (typeof window === "undefined") return;
+  const prompt = buildDiscussPrompt(d);
+  window.dispatchEvent(new CustomEvent("acropolisos:open-chat"));
+  const fire = (): void => {
+    window.dispatchEvent(new CustomEvent("acropolisos:prompt", { detail: { prompt } }));
+  };
+  fire(); // dock already open (the common case) catches it immediately
+  // …and again once a collapsed dock has un-collapsed + ChatPanel re-mounted its
+  // listener. setInput(prompt) is idempotent, so the double-fire is harmless.
+  setTimeout(fire, 120);
+}
 
 function AllClear(): React.ReactElement {
   return (
@@ -37,10 +71,14 @@ function AllClear(): React.ReactElement {
 export function DecisionFocus({
   decisions,
   resolveAction,
+  resolveInputAction,
+  confirmAction,
   dismissAction,
 }: {
   decisions: DecisionView[];
   resolveAction: ResolveAction;
+  resolveInputAction: FormAction;
+  confirmAction: FormAction;
   dismissAction: DismissAction;
 }): React.ReactElement {
   const [cursor, setCursor] = useState(0);
@@ -81,35 +119,77 @@ export function DecisionFocus({
           {d.detail && <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{d.detail}</p>}
         </div>
 
-        {/* Disposition */}
-        {d.scenarios.length > 0 ? (
+        {/* Disposition — shape depends on the agent's chosen resolution mode */}
+        {d.mode === "pathways" && d.scenarios.length > 0 ? (
           <div className="space-y-2">
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Choose a path</p>
             {d.scenarios.map((s) => (
               <form key={s.id} action={resolveAction.bind(null, d.id, s.id)}>
                 <button
                   type="submit"
-                  className="w-full rounded-lg border border-border bg-card/60 px-4 py-3 text-left transition-colors hover:border-foreground/40 hover:bg-card"
+                  className={`block w-full rounded-r-lg border-l-4 bg-card/40 py-3 pl-4 pr-4 text-left transition-colors hover:bg-card ${RAIL_CLS[s.reversibility]}`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium text-foreground">{s.label}</span>
-                    <span className="flex shrink-0 items-center gap-1.5">
-                      {s.recommended && (
-                        <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-300">
-                          recommended
-                        </span>
-                      )}
-                      <span className={`rounded border px-1.5 py-0.5 text-[9px] font-medium ${REV_CLS[s.reversibility]}`}>
-                        {REV_LABEL[s.reversibility]}
-                      </span>
-                    </span>
-                  </div>
-                  {s.consequence && <p className="mt-1 text-xs text-muted-foreground">{s.consequence}</p>}
+                  {s.recommended && (
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                      ● recommended
+                    </p>
+                  )}
+                  <p className="text-[15px] font-semibold leading-snug text-foreground">{s.label}</p>
+                  {s.consequence && (
+                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{s.consequence}</p>
+                  )}
+                  <p className={`mt-1.5 text-[11px] font-medium ${TIER_TEXT[s.reversibility]}`}>
+                    {REV_GLYPH[s.reversibility]} {REV_LABEL[s.reversibility]}
+                  </p>
                 </button>
               </form>
             ))}
           </div>
+        ) : d.mode === "text_input" ? (
+          <form action={resolveInputAction.bind(null, d.id)} className="space-y-2">
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              {d.inputPrompt ?? "Your answer"}
+            </p>
+            <textarea
+              name="answer"
+              required
+              rows={3}
+              placeholder="Type your answer…"
+              className="w-full rounded-lg border border-border bg-card/60 px-3 py-2 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50 focus:border-foreground/40 focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="w-full rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-medium text-emerald-50 hover:bg-emerald-600"
+            >
+              Submit answer
+            </button>
+          </form>
+        ) : d.mode === "confirm_binary" && d.confirm ? (
+          <div className="space-y-2">
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Confirm or decline</p>
+            <form action={confirmAction.bind(null, d.id)}>
+              <button
+                type="submit"
+                className="block w-full rounded-r-lg border-l-4 border-l-emerald-500 bg-emerald-700/20 py-3 pl-4 pr-4 text-left transition-colors hover:bg-emerald-700/30"
+              >
+                <span className="text-[15px] font-semibold text-foreground">{d.confirm.label}</span>
+                <span className={`mt-1 block text-[11px] font-medium ${TIER_TEXT[d.confirm.reversibility]}`}>
+                  {REV_GLYPH[d.confirm.reversibility]} {REV_LABEL[d.confirm.reversibility]}
+                </span>
+              </button>
+            </form>
+            <form action={dismissAction.bind(null, d.id, "declined")}>
+              <button
+                type="submit"
+                className="block w-full rounded-lg border border-border px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-card/40 hover:text-foreground"
+              >
+                Decline
+              </button>
+            </form>
+          </div>
         ) : (
+          // Fallback: pathways mode with no curated paths, or a confirm_binary
+          // whose proposal failed to parse — a generic resolve still clears it.
           <form action={resolveAction.bind(null, d.id, undefined)}>
             <button
               type="submit"
@@ -119,6 +199,16 @@ export function DecisionFocus({
             </button>
           </form>
         )}
+
+        {/* Discuss (4th affordance): talk it through before disposing */}
+        <button
+          type="button"
+          onClick={() => discussDecision(d)}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card/30 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+        >
+          <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+          Discuss with the agent
+        </button>
 
         {/* Learning trace (transparency — never reorders the scenarios) */}
         {d.trace && (

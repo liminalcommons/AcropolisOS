@@ -38,4 +38,18 @@ describe("AGENT_INSTRUCTIONS — M4.4 system prompt contracts", () => {
   it("instructs agent not to silently abandon work", () => {
     expect(AGENT_INSTRUCTIONS).toMatch(/do NOT silently abandon|Do NOT silently abandon/i);
   });
+
+  it("enforces text_input authoring contract (input_schema with a specific prompt)", () => {
+    expect(AGENT_INSTRUCTIONS).toMatch(/text_input/);
+    expect(AGENT_INSTRUCTIONS).toMatch(/input_schema/);
+    expect(AGENT_INSTRUCTIONS).toMatch(/prompt/);
+  });
+
+  it("enforces confirm_binary authoring contract (confirm_action with label + reversibility)", () => {
+    expect(AGENT_INSTRUCTIONS).toMatch(/confirm_binary/);
+    expect(AGENT_INSTRUCTIONS).toMatch(/confirm_action/);
+    expect(AGENT_INSTRUCTIONS).toMatch(/label/);
+    // reversibility shown so the human sees the stakes before confirming
+    expect(AGENT_INSTRUCTIONS).toMatch(/reversibility/);
+  });
 });

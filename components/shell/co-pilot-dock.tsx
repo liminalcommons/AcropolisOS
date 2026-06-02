@@ -16,6 +16,18 @@ export function CoPilotDock({ actorRole, actorEmail, modelName }: Props): React.
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => setCollapsed(readCollapsed(DOCK_KEY)), []);
 
+  // Programmatic open: the "Discuss with the agent" affordance (and any future
+  // deep-link into the chat) fires acropolisos:open-chat so a collapsed dock
+  // expands before the acropolisos:prompt seed lands on the (re-mounted) panel.
+  useEffect(() => {
+    const open = (): void => {
+      setCollapsed(false);
+      writeCollapsed(DOCK_KEY, false);
+    };
+    window.addEventListener("acropolisos:open-chat", open);
+    return () => window.removeEventListener("acropolisos:open-chat", open);
+  }, []);
+
   const toggle = (): void => {
     setCollapsed((c) => {
       const next = !c;
