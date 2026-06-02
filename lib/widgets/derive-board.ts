@@ -41,7 +41,7 @@ function isPrimaryKey(fieldName: string, def: unknown): boolean {
 // from the ontology's own row-action definitions (no domain literals): the row
 // id (action target), each resolver's choices column, each confirm's source
 // column. These are stripped from the visible table by the renderer.
-function rowActionColumns(token: string, ontology: Ontology): string[] {
+export function rowActionColumns(token: string, ontology: Ontology): string[] {
   const cols = new Set<string>(["id"]);
   for (const r of resolversForType(token, ontology)) cols.add(r.choicesFrom);
   for (const c of confirmsForType(token, ontology)) cols.add(c.source);
