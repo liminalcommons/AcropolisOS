@@ -15,6 +15,7 @@
 import { useState } from "react";
 import { MessageSquare } from "lucide-react";
 import { buildDiscussPrompt, type DecisionView, type ReversibilityTier } from "@/lib/blockers/decision-view";
+import { storePendingDiscussPrompt } from "@/lib/decisions/discuss-prompt-state";
 
 type ResolveAction = (blockerId: string, pathwayId?: string) => Promise<void>;
 type DismissAction = (blockerId: string, reason?: string) => Promise<void>;
@@ -48,6 +49,10 @@ function discussDecision(d: DecisionView): void {
   if (typeof window === "undefined") return;
   const prompt = buildDiscussPrompt(d);
   window.dispatchEvent(new CustomEvent("acropolisos:open-chat"));
+  // Park the prompt in sessionStorage BEFORE firing the in-memory event. If the
+  // dock was collapsed (ChatPanel unmounted) the events miss, but ChatPanel
+  // reads this on its next mount/hydration — the prompt survives the race.
+  storePendingDiscussPrompt(prompt);
   const fire = (): void => {
     window.dispatchEvent(new CustomEvent("acropolisos:prompt", { detail: { prompt } }));
   };
