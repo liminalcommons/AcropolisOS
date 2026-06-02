@@ -426,9 +426,30 @@ export function createReadOnlyDataApi(
       if (!resolved || !canReadType(resolved)) return NULL_METRICS;
 
       // ALL agent_blocker rows (the KPIs span open + closed). Typed drizzle select.
+      //
+      // COLUMN-PROJECTION DISCIPLINE: computeCommunityIntelligence consumes ONLY the
+      // MetricBlockerRow contract — 7 columns. agent_blocker carries many more
+      // (detail, blocked_work_ref, resolution_mode, pathways, input_schema,
+      // confirm_action, resolved_by_action_audit_id, id) the metric never reads.
+      // Project EXACTLY those 7 columns instead of SELECT * so a large steward
+      // board does not stream every blocker column over the wire. This mirrors
+      // byDate's projection and the composition layer's hidden-column discipline
+      // (commit 80d76c3): the read layer fetches precisely what the compute
+      // consumes, nothing more. resolveType guarantees a real table object, so each
+      // table[col] is a defined Drizzle column. Stable key order matches the
+      // MetricBlockerRow mapping below.
+      const blockerTable = tableFor(resolved) as unknown as Record<string, PgColumn>;
       const blockerRows = (await db
-        .select()
-        .from(tableFor(resolved))
+        .select({
+          status: blockerTable.status,
+          created_at: blockerTable.created_at,
+          resolved_at: blockerTable.resolved_at,
+          resolved_via_pathway_id: blockerTable.resolved_via_pathway_id,
+          reason_kind: blockerTable.reason_kind,
+          blocked_actor_id: blockerTable.blocked_actor_id,
+          summary: blockerTable.summary,
+        })
+        .from(blockerTable as unknown as AnyTable)
         .limit(2000)) as Record<string, unknown>[];
       const toIso = (v: unknown): string | null =>
         v instanceof Date ? v.toISOString() : typeof v === "string" ? v : null;

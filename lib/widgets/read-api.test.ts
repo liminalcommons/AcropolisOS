@@ -296,6 +296,78 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
     });
   });
 
+  describe("communityIntelligence column projection (data-access hygiene)", () => {
+    // communityIntelligence fetches ALL agent_blocker rows to compute the five M3
+    // KPIs — but the pure compute (computeCommunityIntelligence → MetricBlockerRow)
+    // consumes ONLY 7 columns: status, created_at, resolved_at,
+    // resolved_via_pathway_id, reason_kind, blocked_actor_id, summary. A bare
+    // db.select() streams every agent_blocker column (detail, blocked_work_ref,
+    // resolution_mode, pathways, input_schema, confirm_action,
+    // resolved_by_action_audit_id, id) the metric never touches. Project EXACTLY
+    // the MetricBlockerRow contract instead — mirroring byDate's discipline and the
+    // 80d76c3 hidden-column pattern: the read layer fetches precisely what the
+    // compute consumes, never bulk raw rows. agent_blocker read perms are
+    // [steward, member_self], so a steward viewer reaches SQL.
+    const CONTRACT_COLUMNS = [
+      "status",
+      "created_at",
+      "resolved_at",
+      "resolved_via_pathway_id",
+      "reason_kind",
+      "blocked_actor_id",
+      "summary",
+    ];
+
+    it("projects ONLY the 7 MetricBlockerRow contract columns, not SELECT *", async () => {
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(
+        db.asDatabase(),
+        buildCanReadType(steward, ontology),
+        ontology,
+      );
+      await api.communityIntelligence();
+      // The projection passed to db.select(...) must be exactly the 7-column
+      // MetricBlockerRow contract — never a bare db.select() (lastSelectCols
+      // undefined) that streams every agent_blocker column.
+      expect(db.lastSelectCols).toEqual(CONTRACT_COLUMNS);
+      // No over-fetched columns leak into the projection.
+      for (const extra of [
+        "detail",
+        "blocked_work_ref",
+        "resolution_mode",
+        "pathways",
+        "input_schema",
+        "confirm_action",
+        "resolved_by_action_audit_id",
+      ]) {
+        expect(db.lastSelectCols).not.toContain(extra);
+      }
+    });
+
+    it("a denied viewer (member) never touches SQL — projection does not weaken the gate", async () => {
+      // agent_blocker read:[steward, member_self] — the coarse type gate denies a
+      // plain member BEFORE any db.select; the projection must not introduce a
+      // pre-gate SQL path.
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(
+        db.asDatabase(),
+        buildCanReadType(member, ontology),
+        ontology,
+      );
+      const metrics = await api.communityIntelligence();
+      // All-null KPIs (the "no data" value) and no SQL of any kind.
+      expect(metrics).toEqual({
+        autonomyRatio: null,
+        scenarioAcceptanceRate: null,
+        decisionLatencyMsMedian: null,
+        coordinationCoverage: null,
+        resolutionAccuracy: null,
+      });
+      expect(db.selectCalls).toBe(0);
+      expect(db.lastSelectCols).toBeUndefined();
+    });
+  });
+
   describe("data_table filter pass-through (agent_blocker veto-queue)", () => {
     // The /org default veto-queue is a data_table over agent_blocker filtered
     // to status=open. agent_blocker read perms are [steward, member_self], so a
