@@ -232,8 +232,21 @@ async function runDescriptors(
         ...(rowResolvers ? { rowResolvers } : {}),
         ...(rowConfirms ? { rowConfirms } : {}),
       });
-    } catch {
-      // Skip widgets whose binding throws — don't crash the dashboard
+    } catch (e) {
+      // A single widget's data binding threw (transient DB error, bad cast). Do
+      // NOT drop it (silent vanish) and do NOT let it nuke the whole board:
+      // surface a status:"error" widget so the failure is VISIBLE and ISOLATED.
+      // The raw error is logged server-side ONLY — never sent to the client.
+      console.error(`[widget:${kind}] resolve failed`, e);
+      resolved.push({
+        id: d.id ?? `derived-${i}`,
+        kind,
+        config,
+        data: null,
+        status: "error",
+        error: { message: "This widget could not be loaded." },
+        title: (d as { title?: string }).title,
+      });
     }
   }
 

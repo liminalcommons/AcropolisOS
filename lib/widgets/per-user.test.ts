@@ -24,9 +24,12 @@ const SMALL = path.resolve(__dirname, "..", "..", "scenarios", "small-community"
 // is used, so the stub only matters for the partial-invalid "good survives" case.
 vi.mock("@/lib/widgets/read-api", async (importActual) => {
   const actual = await importActual<typeof import("@/lib/widgets/read-api")>();
+  // A vi.fn() (not a plain arrow) so individual tests can override the returned
+  // api per-call via mockReturnValueOnce (e.g. the throwing-binding case). The
+  // default implementation is the original non-throwing stub.
   return {
     ...actual,
-    createReadOnlyDataApi: () => ({
+    createReadOnlyDataApi: vi.fn(() => ({
       count: async () => 3,
       select: async () => ({ columns: [], rows: [] }),
       byDate: async () => [],
@@ -37,11 +40,12 @@ vi.mock("@/lib/widgets/read-api", async (importActual) => {
         coordinationCoverage: 0,
         resolutionAccuracy: 0,
       }),
-    }),
+    })),
   };
 });
 
 import { resolveDescriptors } from "@/lib/widgets/per-user";
+import { createReadOnlyDataApi } from "@/lib/widgets/read-api";
 
 describe("resolveDescriptors — surfaces validation errors instead of dropping widgets", () => {
   const prev = process.env.ACROPOLISOS_ONTOLOGY_DIR;
@@ -114,5 +118,54 @@ describe("resolveDescriptors — surfaces validation errors instead of dropping 
     expect(() => JSON.stringify(out[0])).not.toThrow();
     const round = JSON.parse(JSON.stringify(out[0]));
     expect(round.validation_error.kind).toBe("unknown_type");
+  });
+});
+
+describe("resolveDescriptors — a throwing data binding becomes a status:error widget (not dropped)", () => {
+  const prev = process.env.ACROPOLISOS_ONTOLOGY_DIR;
+  beforeAll(() => {
+    process.env.ACROPOLISOS_ONTOLOGY_DIR = SMALL;
+  });
+  afterAll(() => {
+    process.env.ACROPOLISOS_ONTOLOGY_DIR = prev;
+  });
+
+  it("surfaces an error widget and does NOT drop it or throw", async () => {
+    // A valid metric descriptor (passes validateWidgetConfig) whose queryBinding
+    // throws because the db rejects every query. The widget must SURVIVE as
+    // status:"error", length preserved, with a generic (non-leaky) message.
+    //
+    // PLUMBING NOTE: this file module-mocks read-api's createReadOnlyDataApi, so a
+    // throwing raw db handle never reaches a real api (the factory ignores `db`).
+    // Per the plan's implementer note ("only the stub plumbing may change; the
+    // TEST CONTRACT is fixed"), we instead override the mocked factory for this one
+    // call to return an api whose count() throws — metric's queryBinding calls
+    // api.count(), so this genuinely drives the resolve into the catch site. The
+    // raw error text carries an internal detail to assert it is NOT surfaced.
+    vi.mocked(createReadOnlyDataApi).mockReturnValueOnce({
+      count: async () => {
+        throw new Error("db down: relation does not exist");
+      },
+      select: async () => {
+        throw new Error("db down");
+      },
+      selectByIds: async () => {
+        throw new Error("db down");
+      },
+      byDate: async () => {
+        throw new Error("db down");
+      },
+      communityIntelligence: async () => {
+        throw new Error("db down");
+      },
+    });
+    const descriptors = [{ id: "w1", kind: "metric", config: { type: "member", agg: "count" } }];
+    const out = await resolveDescriptors({} as never, descriptors, () => true);
+    expect(out).toHaveLength(1);
+    expect(out[0].status).toBe("error");
+    expect(out[0].data).toBeNull();
+    expect(out[0].error?.message).toBeTruthy();
+    // viewer-safe: the raw exception text must NOT be surfaced
+    expect(out[0].error?.message).not.toContain("relation does not exist");
   });
 });

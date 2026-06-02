@@ -280,8 +280,17 @@ export async function resolveDashboard(
         status: isEmptyWidgetData(kind, data) ? "empty" : "ok",
         title: descriptor.title,
       });
-    } catch {
-      // Skip widgets whose queryBinding throws — don't crash the whole dashboard
+    } catch (e) {
+      console.error(`[widget:${kind}] resolve failed`, e);
+      resolved.push({
+        id: descriptor.id,
+        kind,
+        config: descriptor.config,
+        data: null,
+        status: "error",
+        error: { message: "This widget could not be loaded." },
+        title: descriptor.title,
+      });
     }
   }
 
