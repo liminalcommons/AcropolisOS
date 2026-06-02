@@ -2,7 +2,7 @@ import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { loadOntology } from "@/lib/ontology/load";
 import type { Ontology } from "@/lib/ontology/schema";
-import { deriveDefaultBoard } from "@/lib/widgets/derive-board";
+import { deriveDefaultBoard, rowActionColumns } from "@/lib/widgets/derive-board";
 
 const ALL = () => true;
 
@@ -41,6 +41,55 @@ describe("deriveDefaultBoard — hostel ontology", () => {
 
   it("permission-filters: a viewer who can read nothing gets an empty board (floor)", () => {
     expect(deriveDefaultBoard(onto, () => false)).toEqual([]);
+  });
+});
+
+// The hidden-column contract is what makes row affordances kind-AGNOSTIC: a
+// data_table opting into row_actions has its visible columns selected by the
+// read fence, so the columns the Dismiss/pathway/confirm affordances READ from
+// must be requested explicitly. rowActionColumns derives that set from the
+// ontology's own row-action definitions (row id + each resolver's choicesFrom +
+// each confirm's source) — never a per-type literal. These tests prove the
+// derivation is correct, deterministic, and not silently dropped by the board
+// derivation. Because rowActionColumns is keyed by TYPE TOKEN (not by widget
+// KIND), the same logic applies symmetrically to any kind that ever opts into
+// row_actions (roster/calendar future): this suite is the symmetry sentinel.
+describe("deriveDefaultBoard — row-action column hygiene across kinds", () => {
+  let onto: Ontology;
+  beforeAll(async () => { onto = await loadOntology(path.resolve(__dirname, "../../ontology")); });
+
+  it("rowActionColumns derives the correct hidden columns from ontology row-resolvers + row-confirms", () => {
+    const hidden = rowActionColumns("agent_blocker", onto);
+    expect(hidden).toContain("id");             // action target (row id)
+    expect(hidden).toContain("pathways");       // resolver choices source
+    expect(hidden).toContain("confirm_action"); // confirm source
+    expect(hidden.length).toBe(3);              // exactly these, no extra columns
+  });
+
+  it("rowActionColumns is deterministic and kind-agnostic: same call over same type always returns same set", () => {
+    const h1 = rowActionColumns("agent_blocker", onto);
+    const h2 = rowActionColumns("agent_blocker", onto);
+    expect(h1).toEqual(h2);
+    expect(new Set(h1).size).toBe(h1.length);   // no duplicate columns
+
+    // Kind-AGNOSTIC by construction: the function is keyed on the type token,
+    // not on a widget kind. A type with NO row-action definitions (e.g. member)
+    // yields ONLY the row id — the same deterministic floor for every kind.
+    const memberHidden = rowActionColumns("member", onto);
+    expect(memberHidden).toEqual(["id"]);
+  });
+
+  it("admin board's agent_blocker data_table includes all hidden columns in config.columns (not dropped)", () => {
+    const board = deriveDefaultBoard(onto, ALL, { admin: true });
+    const vq = board.find(
+      (d) => d.kind === "data_table" && (d.config as { type: string }).type === "agent_blocker",
+    );
+    expect(vq).toBeTruthy();
+    const cols = (vq!.config as { columns: string[] }).columns;
+    const hidden = rowActionColumns("agent_blocker", onto);
+    for (const h of hidden) {
+      expect(cols).toContain(h);
+    }
   });
 });
 

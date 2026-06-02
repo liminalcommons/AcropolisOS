@@ -225,6 +225,16 @@ async function runDescriptors(
 // data_table → resolve over config.columns, rewrite data.rows.
 // roster      → resolve over config.fields,  rewrite data.entries.
 // metric/calendar → no column-based ref values; returned unchanged.
+//
+// HIDDEN-COLUMN INVARIANT (regression safeguard — see
+// lib/widgets/derive-board.ts rowActionColumns + the "row-action column hygiene
+// across kinds" suite in derive-board.test.ts): the row-affordance columns
+// (row id, each resolver's choicesFrom, each confirm's source) are requested in
+// config.columns ONLY so the Dismiss/pathway/confirm affordances can read them.
+// They are NOT visible table data — the renderer strips them. This resolver must
+// therefore never PROMOTE a hidden column into visible output, and any future
+// kind that opts into row_actions (roster/calendar) inherits the same contract:
+// hidden columns stay hidden, identically across kinds.
 
 async function applyRefResolution(
   kind: CatalogKind,
