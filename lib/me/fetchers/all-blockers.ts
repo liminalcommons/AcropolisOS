@@ -20,6 +20,10 @@ export interface OpenBlocker {
   blocked_work_ref: string | null;
   resolution_mode: ResolutionMode;
   pathways: BlockerPathway[] | null;
+  // text_input / confirm_binary payloads (jsonb-as-text). Carried opaque so the
+  // Focus surface (buildDecisionView) can render those two modes; parsed there.
+  input_schema: unknown;
+  confirm_action: unknown;
   created_at: string;
 }
 
@@ -37,6 +41,8 @@ export async function getAllOpenBlockers(ctx: OntologyCtx): Promise<OpenBlocker[
       blocked_work_ref: b.blocked_work_ref ?? null,
       resolution_mode: (b.resolution_mode ?? "pathways") as ResolutionMode,
       pathways: (b.pathways ?? null) as BlockerPathway[] | null,
+      input_schema: b.input_schema ?? null,
+      confirm_action: b.confirm_action ?? null,
       created_at:
         typeof b.created_at === "string" ? b.created_at : (b.created_at as Date).toISOString(),
     }));
