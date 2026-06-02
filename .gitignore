@@ -33,3 +33,11 @@ book-club-instance/
 # transient empty second-instance (docker demo, :3032) — not committed (scaffolding)
 empty-instance/
 .decontam-baseline.txt
+
+# Ephemeral session/loop coordination + stray backups & scratch — never committed
+.chora/
+.opponent-log.md
+.m3-backup/
+ontology-backup-small-community/
+/package-lock.json
+*casing-test.mjs
