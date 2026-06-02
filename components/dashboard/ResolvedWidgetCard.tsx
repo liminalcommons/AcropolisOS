@@ -28,6 +28,18 @@ import {
 } from "@/lib/widgets/row-action.server";
 import { parseConfirmAction } from "@/lib/widgets/row-confirm";
 
+// Pure dispatch decision — exported so it is node-testable without a DOM. error
+// (a runtime load failure) takes precedence over drift (structural mismatch);
+// validation_error is honored for back-compat with any widget built before the
+// status field existed.
+export function widgetCardVariant(
+  w: { status?: import("@/lib/widgets/compose").WidgetStatus; validation_error?: { kind: string; error: string } },
+): "error" | "drift" | "render" {
+  if (w.status === "error") return "error";
+  if (w.status === "drift" || w.validation_error) return "drift";
+  return "render";
+}
+
 // ── CardTitle ─────────────────────────────────────────────────────────────────
 // A card's title. When the widget is bound to an ontology type, the title links
 // to that type's full collection view (/[type]) — this is how the board doubles
@@ -379,15 +391,33 @@ function WidgetErrorCard({ widget }: { widget: ResolvedWidget }) {
   );
 }
 
+// ── WidgetLoadErrorCard ───────────────────────────────────────────────────────
+//
+// Rendered when a widget's data binding threw at resolve time (status:"error").
+// Distinct from drift (WidgetErrorCard, dashed): a transient/load failure, not a
+// structural-config mismatch. Tokens only — no hardcoded palette, no new token.
+function WidgetLoadErrorCard({ widget }: { widget: ResolvedWidget }) {
+  const label = widget.title ?? prettify(widget.kind);
+  return (
+    <div className="rounded-lg border border-border bg-card p-5">
+      <div className="flex items-center gap-2 mb-2">
+        <span aria-hidden className="text-muted-foreground">⚠</span>
+        <p className={TITLE_CLS}>{label}</p>
+      </div>
+      <p className="text-xs text-foreground mb-1">This widget couldn’t load.</p>
+      <p className="text-xs text-muted-foreground">
+        {widget.error?.message ?? "Something went wrong fetching its data. Try again shortly."}
+      </p>
+    </div>
+  );
+}
+
 // ── ResolvedWidgetCard (dispatcher) ──────────────────────────────────────────
 
 export function ResolvedWidgetCard({ widget }: { widget: ResolvedWidget }) {
-  // Drift guard: a widget carrying a validation_error has data:null — render the
-  // error card instead of dispatching to a kind renderer (which would crash on
-  // the null data). This is the visible signal of structural drift.
-  if (widget.validation_error) {
-    return <WidgetErrorCard widget={widget} />;
-  }
+  const variant = widgetCardVariant(widget);
+  if (variant === "error") return <WidgetLoadErrorCard widget={widget} />;
+  if (variant === "drift") return <WidgetErrorCard widget={widget} />;
   switch (widget.kind) {
     case "metric":
       return <MetricWidget widget={widget} />;
