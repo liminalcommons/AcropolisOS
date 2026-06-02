@@ -22,6 +22,7 @@ import {
   CATALOG_KINDS,
   WIDGET_CATALOG,
   validateWidgetConfig,
+  describeValidationError,
   type CatalogKind,
   type MetricData,
   type DataTableData,
@@ -49,7 +50,18 @@ export interface ResolvedWidget {
   id: string;
   kind: CatalogKind;
   config: unknown;
-  data: MetricData | DataTableData | RosterData | CalendarData;
+  // `null` ONLY when validation_error is set: a descriptor whose config no longer
+  // validates against the loaded ontology (structural drift — a type renamed/
+  // removed, a field deleted) is surfaced as a data-less error widget, never
+  // silently dropped. The renderer shows an error card so the steward SEES the
+  // broken view (governance over silent mutation).
+  data: MetricData | DataTableData | RosterData | CalendarData | null;
+  // Set when this widget's stored config failed validateWidgetConfig against the
+  // current ontology. Plain serializable strings only (the Zod-issue detail is
+  // NOT carried) so the error card hydrates without circular-ref / non-clonable
+  // payloads. `kind` is the validateWidgetConfig error code (e.g. "unknown_type",
+  // "unknown_columns"); `error` is a human-readable, type-naming message.
+  validation_error?: { kind: string; error: string };
   title?: string;
   // Populated only for data_table widgets opted into row_actions: the
   // ontology-derived one-click actions (e.g. dismiss_blocker → blocker_id) the
@@ -223,9 +235,23 @@ export async function resolveDashboard(
 
     const entry = WIDGET_CATALOG[kind];
 
-    // Re-validate config from storage (defensive — garbage in storage is skipped)
+    // Re-validate config from storage. On failure DO NOT drop the widget — a
+    // stored config that no longer validates is STRUCTURAL DRIFT (a type renamed/
+    // removed, a field deleted). Surface it as a data-less error widget so the
+    // steward SEES the broken view instead of it silently vanishing (governance
+    // over silent mutation).
     const validation = validateWidgetConfig(kind, descriptor.config, ontology);
-    if (!validation.ok) continue;
+    if (!validation.ok) {
+      resolved.push({
+        id: descriptor.id,
+        kind,
+        config: descriptor.config,
+        data: null,
+        validation_error: describeValidationError(validation),
+        title: descriptor.title,
+      });
+      continue;
+    }
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

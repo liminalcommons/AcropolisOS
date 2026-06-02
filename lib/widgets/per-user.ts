@@ -21,6 +21,7 @@ import {
   WIDGET_CATALOG,
   CATALOG_KINDS,
   validateWidgetConfig,
+  describeValidationError,
   type CatalogKind,
   type MetricData,
   type DataTableData,
@@ -158,8 +159,22 @@ async function runDescriptors(
     const config = d.config ?? {};
 
     // Validate config — membership + field whitelist come from the loaded ontology.
+    // On failure DO NOT drop the widget: a stored/derived config that no longer
+    // validates is STRUCTURAL DRIFT (type renamed/removed, field deleted). Surface
+    // it as a data-less error widget so the steward SEES the broken view instead
+    // of it silently vanishing (governance over silent mutation).
     const validation = validateWidgetConfig(kind, config, ontology);
-    if (!validation.ok) continue;
+    if (!validation.ok) {
+      resolved.push({
+        id: d.id ?? `derived-${i}`,
+        kind,
+        config,
+        data: null,
+        validation_error: describeValidationError(validation),
+        title: (d as { title?: string }).title,
+      });
+      continue;
+    }
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -349,9 +349,45 @@ function CalendarWidget({ widget }: { widget: ResolvedWidget }) {
   );
 }
 
+// ── WidgetErrorCard ───────────────────────────────────────────────────────────
+//
+// Rendered when a widget's stored config no longer validates against the current
+// ontology (structural drift — a type renamed/removed, a field deleted). The
+// resolve path returns the widget with data:null + validation_error instead of
+// silently dropping it, so the steward SEES the broken view and can act on it
+// (governance over silent mutation). Tokens only — no hardcoded palette.
+function WidgetErrorCard({ widget }: { widget: ResolvedWidget }) {
+  const ve = widget.validation_error;
+  const label = widget.title ?? prettify(widget.kind);
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-card p-5">
+      <div className="flex items-center gap-2 mb-2">
+        <span aria-hidden className="text-muted-foreground">
+          ⚠
+        </span>
+        <p className={TITLE_CLS}>{label}</p>
+      </div>
+      <p className="text-xs text-foreground mb-1">This widget no longer matches the ontology.</p>
+      <p className="text-xs text-muted-foreground">
+        {ve?.error ?? "Its saved configuration is no longer valid."}
+      </p>
+      <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mt-3 font-mono">
+        {widget.kind}
+        {ve?.kind ? ` · ${ve.kind}` : ""}
+      </p>
+    </div>
+  );
+}
+
 // ── ResolvedWidgetCard (dispatcher) ──────────────────────────────────────────
 
 export function ResolvedWidgetCard({ widget }: { widget: ResolvedWidget }) {
+  // Drift guard: a widget carrying a validation_error has data:null — render the
+  // error card instead of dispatching to a kind renderer (which would crash on
+  // the null data). This is the visible signal of structural drift.
+  if (widget.validation_error) {
+    return <WidgetErrorCard widget={widget} />;
+  }
   switch (widget.kind) {
     case "metric":
       return <MetricWidget widget={widget} />;

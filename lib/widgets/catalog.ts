@@ -353,3 +353,41 @@ export function validateWidgetConfig(
 
   return { ok: true, config: parsed.data };
 }
+
+// ── describeValidationError ──────────────────────────────────────────────────
+//
+// Turns a FAILED ConfigValidationResult into the small, fully-serializable
+// { kind, error } payload carried on a ResolvedWidget.validation_error. This is
+// what makes ontology drift VISIBLE: instead of a stale widget vanishing, the
+// resolve path returns a data-less error widget the renderer shows as an error
+// card. We DELIBERATELY do not carry the raw Zod-issue `detail` array (it can be
+// large / awkward to clone across the RSC boundary) — only a plain human-readable
+// message that names the offending type / columns / field, derived from `detail`.
+export function describeValidationError(
+  result: Extract<ConfigValidationResult, { ok: false }>,
+): { kind: string; error: string } {
+  const d = result.detail as
+    | { type?: string; unknown_columns?: string[]; unknown_field?: string }
+    | undefined;
+  switch (result.error) {
+    case "unknown_type":
+      return {
+        kind: "unknown_type",
+        error: `This widget references a type that no longer exists in the ontology: "${d?.type ?? "?"}".`,
+      };
+    case "unknown_columns":
+      return {
+        kind: "unknown_columns",
+        error: `This widget references field(s) that were removed from "${d?.type ?? "?"}": ${(d?.unknown_columns ?? []).join(", ")}.`,
+      };
+    case "unknown_filter_field":
+      return {
+        kind: "unknown_filter_field",
+        error: `This widget references a field "${d?.unknown_field ?? "?"}" that no longer exists on "${d?.type ?? "?"}".`,
+      };
+    case "invalid_config":
+      return { kind: "invalid_config", error: "This widget's saved configuration is no longer valid." };
+    default:
+      return { kind: result.error, error: `This widget could not be resolved (${result.error}).` };
+  }
+}
