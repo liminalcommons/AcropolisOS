@@ -7,7 +7,7 @@
 // row (source='webhook') that surfaces in /organize for classify + grow.
 import { timingSafeEqual } from "node:crypto";
 import { getDb } from "@/lib/db/client";
-import { raw_inbox } from "@/lib/db/schema";
+import { ingestChannelRows } from "@/lib/channels/ingest";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -55,11 +55,14 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: "each row must be a JSON object" }, { status: 400 });
   }
 
-  const db = getDb();
-  const inserted = await db
-    .insert(raw_inbox)
-    .values(rows.map((payload) => ({ source: "webhook", payload: payload as Record<string, unknown> })))
-    .returning({ id: raw_inbox.id });
+  // Shared raw_inbox intake path (also used by the channel webhooks). The
+  // route-level MAX_ROWS guard above already bounds the input, so the helper's
+  // own (higher) cap never trips here.
+  const { ids, count } = await ingestChannelRows(
+    getDb(),
+    "webhook",
+    rows as Record<string, unknown>[],
+  );
 
-  return Response.json({ ok: true, count: inserted.length, ids: inserted.map((r) => r.id) }, { status: 201 });
+  return Response.json({ ok: true, count, ids }, { status: 201 });
 }
