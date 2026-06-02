@@ -22,6 +22,7 @@
 import { useState } from "react";
 import type { RawInboxRow } from "@/lib/db/schema";
 import { confirmProposal } from "./actions";
+import { CommittedBanner } from "./committed-banner";
 import type { CommitProposalInput, Resolution } from "@/lib/organize/commit";
 import type { DuplicateCandidate } from "@/lib/organize/resolve";
 
@@ -224,10 +225,10 @@ function ProposalCard({
       {/* Controls */}
       <div className="flex items-center gap-3 pt-1 flex-wrap">
         {confirmState.tag === "committed" ? (
-          <p className="text-xs text-emerald-400">
-            Committed — {confirmState.target_type} row{" "}
-            <span className="font-mono opacity-70">{confirmState.typed_row_id}</span>
-          </p>
+          <CommittedBanner
+            target_type={confirmState.target_type}
+            typed_row_id={confirmState.typed_row_id}
+          />
         ) : confirmState.tag === "already_classified" ? (
           <p className="text-xs text-amber-400/80">Already committed — no double-write.</p>
         ) : confirmState.tag === "forbidden" ? (
