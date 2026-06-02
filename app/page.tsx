@@ -124,41 +124,33 @@ export default async function Home({
       previewing ? (requested as string) : undefined,
     );
 
-    let widgets: ResolvedWidget[] = [];
-    try {
-      let descriptors: unknown[];
-      if (previewing) {
-        // Preview another role's slice — the DERIVED board for that lens.
-        descriptors = deriveDefaultBoard(ontology, canReadType, { admin: false });
+    // No board-level catch: readOrgDashboard is fail-soft, the optional blocker
+    // count keeps its own .catch(() => 0), and per-widget binding failures are
+    // already status:"error" widgets (lib/widgets). A genuine DB/ontology outage
+    // here PROPAGATES to app/error.tsx — an empty board must never mask a broken
+    // one (the totality-of-states keystone).
+    let descriptors: unknown[];
+    if (previewing) {
+      descriptors = deriveDefaultBoard(ontology, canReadType, { admin: false });
+    } else {
+      const stored = await readOrgDashboard();
+      if (stored.widgets.length > 0) {
+        descriptors = stored.widgets;
       } else {
-        // The steward's own board: stored composition wins, else the derived
-        // admin floor (veto-queue + per-type metrics/tables) + org approved views.
-        const stored = await readOrgDashboard();
-        if (stored.widgets.length > 0) {
-          descriptors = stored.widgets;
-        } else {
-          // cold_board: the four community-intelligence KPI cards are hollow
-          // (0% / em-dash) until there is something to measure. Count
-          // agent_blocker behind the SAME read fence the KPIs ride; the floor
-          // only emits them once history exists. count() returns 0 if the
-          // viewer can't read the type or the table is absent (fresh install).
-          const api = createReadOnlyDataApi(db, canReadType, ontology);
-          const blockerCount = await api.count("agent_blocker").catch(() => 0);
-          const floor = adminDefaultBoard(ontology, canReadType, {
-            hasBlockerHistory: blockerCount > 0,
-          });
-          const approved = await resolveApprovedViews(
-            new PgApprovedViewsRegistry(db),
-            { id: actor.userId, role: actor.role },
-            canReadType,
-          );
-          descriptors = mergeApprovedIntoFloor(floor, approved);
-        }
+        const api = createReadOnlyDataApi(db, canReadType, ontology);
+        const blockerCount = await api.count("agent_blocker").catch(() => 0);
+        const floor = adminDefaultBoard(ontology, canReadType, {
+          hasBlockerHistory: blockerCount > 0,
+        });
+        const approved = await resolveApprovedViews(
+          new PgApprovedViewsRegistry(db),
+          { id: actor.userId, role: actor.role },
+          canReadType,
+        );
+        descriptors = mergeApprovedIntoFloor(floor, approved);
       }
-      widgets = await resolveDescriptors(db, descriptors, canReadType);
-    } catch {
-      // Non-fatal — renders empty state if resolution fails.
     }
+    const widgets: ResolvedWidget[] = await resolveDescriptors(db, descriptors, canReadType);
 
     const orgProfile = await readOrgProfile();
 
@@ -241,17 +233,14 @@ export default async function Home({
 
   const me = memberRows[0];
   const canReadType = buildCanReadType(actor, ontology);
-  let widgets: ResolvedWidget[] = [];
-  try {
-    widgets = await resolvePerUserDashboard(
-      db,
-      { id: me.id, tier_role: me.tier_role },
-      canReadType,
-      new PgApprovedViewsRegistry(db),
-    );
-  } catch {
-    // Non-fatal — renders empty dashboard if resolution fails.
-  }
+  // No catch: a genuine resolution failure PROPAGATES to app/error.tsx rather
+  // than rendering a misleading empty slice (totality-of-states keystone).
+  const widgets: ResolvedWidget[] = await resolvePerUserDashboard(
+    db,
+    { id: me.id, tier_role: me.tier_role },
+    canReadType,
+    new PgApprovedViewsRegistry(db),
+  );
 
   return (
     <div className="font-sans">
