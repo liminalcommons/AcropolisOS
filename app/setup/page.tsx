@@ -18,8 +18,9 @@
 import Link from "next/link";
 import { readOrgProfile } from "@/lib/org-profile/store";
 import { getDb } from "@/lib/db/client";
-import { isSetupComplete } from "@/lib/setup/state";
+import { isSetupComplete, resolveSetupProgress } from "@/lib/setup/state";
 import { getSetupFile } from "@/lib/setup/config";
+import { getEnvFile } from "@/lib/setup/paths";
 import { listScenarioChoices } from "@/lib/setup/scenario-choices";
 import { FileUserStore } from "@/lib/auth/users";
 import { getUsersFile } from "@/lib/auth/config";
@@ -52,16 +53,26 @@ async function checkDatabase(): Promise<{ ok: boolean; detail: string }> {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function SetupPage(): Promise<React.ReactElement> {
-  const [dbStatus, profile, scenarios, setupComplete, stewardCount] = await Promise.all([
-    checkDatabase(),
-    readOrgProfile(),
-    listScenarioChoices(),
-    isSetupComplete(getSetupFile()),
-    new FileUserStore(getUsersFile()).countStewards().catch(() => 0),
-  ]);
+  const [dbStatus, profile, scenarios, setupComplete, stewardCount, progress] =
+    await Promise.all([
+      checkDatabase(),
+      readOrgProfile(),
+      listScenarioChoices(),
+      isSetupComplete(getSetupFile()),
+      new FileUserStore(getUsersFile()).countStewards().catch(() => 0),
+      resolveSetupProgress({
+        envFile: getEnvFile(),
+        usersFile: getUsersFile(),
+      }).catch(() => ({ providerConfigured: false, stewardExists: false })),
+    ]);
   const initialName = profile?.name ?? "";
   const initialDescription = profile?.description ?? "";
   const stewardExists = stewardCount > 0;
+  // Real per-step signals (no longer hardcoded "pending"):
+  //   Step 3 (LLM key)     — done once a provider (+key) is persisted to .env.
+  //   Step 4 (org profile) — done once the org has a name or description.
+  const providerConfigured = progress.providerConfigured;
+  const orgProfileFilled = Boolean(profile?.name || profile?.description);
 
   return (
     <main className="min-h-screen bg-background text-foreground font-sans">
@@ -122,8 +133,8 @@ export default async function SetupPage(): Promise<React.ReactElement> {
           <SetupStep
             step={3}
             title="Bring your own LLM key"
-            status="pending"
-            defaultExpanded={true}
+            status={providerConfigured ? "ok" : "pending"}
+            defaultExpanded={!providerConfigured}
           >
             <LLMKeyForm />
           </SetupStep>
@@ -132,8 +143,8 @@ export default async function SetupPage(): Promise<React.ReactElement> {
           <SetupStep
             step={4}
             title="What kind of org is this?"
-            status="pending"
-            defaultExpanded={true}
+            status={orgProfileFilled ? "ok" : "pending"}
+            defaultExpanded={!orgProfileFilled}
           >
             <OrgProfileForm
               initialName={initialName}

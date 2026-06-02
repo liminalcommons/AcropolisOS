@@ -31,4 +31,14 @@ describe("first-run /setup reachability (redirect_deadlock)", () => {
       expect(src).toMatch(new RegExp(`step=\\{${step}\\}`));
     }
   });
+
+  it("wires real per-step progress (steps 3 & 4 not hardcoded 'pending')", async () => {
+    const src = await readFile(PAGE, "utf8");
+    // The page must derive step status from real signals, not a literal.
+    expect(src).toMatch(/resolveSetupProgress\(/);
+    expect(src).toMatch(/providerConfigured \? "ok" : "pending"/);
+    expect(src).toMatch(/orgProfileFilled \? "ok" : "pending"/);
+    // No bare hardcoded status="pending" should remain on any card.
+    expect(src).not.toMatch(/status="pending"/);
+  });
 });
