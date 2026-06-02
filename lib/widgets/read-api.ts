@@ -21,6 +21,7 @@
 //   (e) SELECT-only — no insert/update/delete anywhere in this file.
 
 import { getTableName, sql } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import type { Database } from "@/lib/db/client";
 import type { Actor } from "@/lib/ctx";
 import { actorMatchesTokens, buildObjectPermissionsMap } from "@/lib/ontology/ctx";
@@ -390,12 +391,20 @@ export function createReadOnlyDataApi(
       if (!allowed.has(dateField)) return [];
 
       const safeLimit = Math.min(Math.max(1, limit), 200);
-      const table = tableFor(resolved);
+      const table = tableFor(resolved) as unknown as Record<string, PgColumn>;
 
-      // drizzle typed select — no raw column list needed
+      // COLUMN-PROJECTION DISCIPLINE: byDate buckets rows by a single date field
+      // in-memory — it needs ONLY that field plus the id. Project EXACTLY those
+      // two columns instead of SELECT * so a many-field type (Member, Event) does
+      // not stream every column over the wire. This mirrors the composition
+      // layer's hidden-column discipline (commit 80d76c3): the read layer fetches
+      // precisely what the widget consumes, nothing more. dateField is already
+      // verified against the ontology field whitelist above, and resolveType
+      // guarantees a real table object, so table[dateField] / table.id are
+      // defined Drizzle columns. Stable key order [dateField, "id"] is preserved.
       const rows = await db
-        .select()
-        .from(table)
+        .select({ [dateField]: table[dateField], id: table.id })
+        .from(table as unknown as AnyTable)
         .limit(safeLimit) as Record<string, unknown>[];
 
       return rows;

@@ -56,6 +56,10 @@ const steward: Actor = {
 interface StubDb {
   executeCalls: number;
   selectCalls: number;
+  /** Column-projection keys passed to the most recent db.select(cols) call.
+   *  undefined for a bare db.select() (the all-columns shape). Lets a test
+   *  assert that byDate projects ONLY [dateField, "id"], not every column. */
+  lastSelectCols: string[] | undefined;
   asDatabase(): Database;
 }
 
@@ -63,6 +67,7 @@ function makeStubDb(): StubDb {
   const stub = {
     executeCalls: 0,
     selectCalls: 0,
+    lastSelectCols: undefined as string[] | undefined,
     asDatabase(): Database {
       return this as unknown as Database;
     },
@@ -74,8 +79,10 @@ function makeStubDb(): StubDb {
       return [{ count: 7, full_name: "Sentinel", id: "row-1" }];
     },
     // count(no filter) + byDate() path: db.select(...).from(table)[.limit(n)]
-    select(_cols?: unknown) {
+    select(cols?: unknown) {
       this.selectCalls++;
+      this.lastSelectCols =
+        cols && typeof cols === "object" ? Object.keys(cols as Record<string, unknown>) : undefined;
       const rows = [{ count: 7, id: "row-1", from_date: "2026-05-25" }];
       const chain = {
         from(_t: unknown) {
@@ -178,6 +185,44 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
       const result = await api.byDate("booking", "from_date", 10);
       expect(result.length).toBeGreaterThan(0);
       expect(db.selectCalls).toBeGreaterThan(0);
+    });
+  });
+
+  describe("byDate column projection (data-access hygiene)", () => {
+    // byDate buckets results by a single date field in-memory; it does NOT need
+    // every column. Projecting ONLY [dateField, "id"] mirrors the composition
+    // layer's hidden-column discipline (commit 80d76c3) — disciplined data access
+    // over the read-only fence. Member is a many-column type (full_name, email,
+    // phone, tier_role, started_at, notes); started_at is its declared date field.
+    it("projects ONLY [dateField, 'id'], not all columns", async () => {
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(
+        db.asDatabase(),
+        buildCanReadType(steward, ontology),
+        ontology,
+      );
+      const result = await api.byDate("member", "started_at", 10);
+      // The projection passed to db.select(...) must be exactly the date field
+      // plus id — never the full column set (no full_name / email / notes / …).
+      expect(db.lastSelectCols).toEqual(["started_at", "id"]);
+      // And the read still reaches SQL and returns rows (no behavioral change).
+      expect(db.selectCalls).toBeGreaterThan(0);
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it("a denied viewer still never touches SQL (projection does not weaken the gate)", async () => {
+      // member viewer on a restricted type (booking) → fail-closed BEFORE any
+      // db.select; the new projection must not introduce a pre-gate SQL path.
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(
+        db.asDatabase(),
+        buildCanReadType(member, ontology),
+        ontology,
+      );
+      const result = await api.byDate("booking", "from_date", 10);
+      expect(result).toEqual([]);
+      expect(db.selectCalls).toBe(0);
+      expect(db.lastSelectCols).toBeUndefined();
     });
   });
 
