@@ -36,8 +36,11 @@ empty-instance/
 
 # Ephemeral session/loop coordination + stray backups & scratch — never committed
 .chora/
-.opponent-log.md
+.opponent-log*.md
 .m3-backup/
 ontology-backup-small-community/
 /package-lock.json
 *casing-test.mjs
+
+# Runtime instance data (steward-edited org profile etc.) — mirrors data/
+uploads/
