@@ -50,7 +50,11 @@ services:
       # installs (e.g. AUTH_URL=https://acropolisos.example.com behind a
       # reverse proxy).
       AUTH_TRUST_HOST: "true"
-      AUTH_URL: "http://localhost:3030"
+      # Behind the cloudflared tunnel (acropolisos.castalia.one). AuthJS uses this
+      # as the canonical base, so post-login redirects + session cookies land on
+      # the public host instead of localhost:3030 (which a remote browser can't
+      # reach). Revert to http://localhost:3030 for purely-local use.
+      AUTH_URL: "https://acropolisos.castalia.one"
       # Inngest client defaults to "cloud mode" and complains about a
       # missing signing key on every request. We ship a self-hosted Inngest
       # dev server in this compose, so dev mode is correct here.

@@ -1,0 +1,37 @@
+services:
+  empty:
+    image: acropolisos-app
+    container_name: acropolisos-empty
+    restart: unless-stopped
+    command: npm run dev
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://acropolisos:acropolisos@postgres:5432/empty_dev
+      AUTH_URL: http://127.0.0.1:3032
+      AUTH_TRUST_HOST: "true"
+      INNGEST_DEV: "1"
+      ACROPOLISOS_PKG_ROOT: /app
+      NODE_ENV: development
+      PORT: "3030"
+    volumes:
+      - ./scenarios/clean-base/ontology:/app/ontology
+      - ./empty-instance/lib:/app/lib
+      - ./app:/app/app
+      - ./components:/app/components
+      - ./scripts:/app/scripts
+      - ./functions:/app/functions
+      - ./drizzle:/app/drizzle
+      - empty_data:/app/data
+      - empty_next:/app/.next
+    ports:
+      - "3032:3030"
+    networks:
+      - acropolis
+networks:
+  acropolis:
+    name: acropolisos_default
+    external: true
+volumes:
+  empty_data:
+  empty_next:
