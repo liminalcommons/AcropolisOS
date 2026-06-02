@@ -233,6 +233,36 @@ export async function commitProposalCore(
       // Uses the existing action_audit table (schema.ts) — no schema change.
       // subject_type = target_type, subject_id = mergeTarget (the canonical row),
       // metadata carries inbox_id for full traceability of the resolution.
+      //
+      // DATA-LOSS FIX: the incoming duplicate may carry fields the canonical row
+      // lacks (e.g. a phone number). Merging into the canonical row writes no
+      // typed columns, so without recording them those fields would vanish with
+      // no trace. Map the inbox payload through field_map and stash the result
+      // as metadata.incomingFields so a steward can later inspect — and reconcile
+      // — what the duplicate contributed. Best-effort: a payload read failure
+      // must not undo the already-committed merge.
+      let incomingFields: Record<string, unknown> = {};
+      try {
+        const payloadRows = (await db.execute(
+          sql`SELECT payload FROM raw_inbox WHERE id = ${inbox_id}`,
+        )) as unknown as Array<Record<string, unknown>>;
+        const payloadArray: Array<Record<string, unknown>> = Array.isArray(
+          payloadRows,
+        )
+          ? payloadRows
+          : ((payloadRows as { rows?: Array<Record<string, unknown>> }).rows ??
+            []);
+        const raw = payloadArray[0]?.payload;
+        if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+          incomingFields = applyFieldMap(
+            raw as Record<string, unknown>,
+            field_map,
+          );
+        }
+      } catch {
+        // Non-fatal — the merge stands; we just couldn't capture the payload.
+      }
+
       try {
         await db.insert(action_audit).values({
           actor: actorId,
@@ -246,6 +276,7 @@ export async function commitProposalCore(
             inbox_id,
             merged_into: mergeTarget,
             target_type,
+            incomingFields,
           },
         });
       } catch {

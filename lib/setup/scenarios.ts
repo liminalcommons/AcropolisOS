@@ -86,8 +86,22 @@ export async function discoverScenarios(
       throw err;
     }
 
+    // Cold-start hardening: a single malformed manifest (invalid JSON or a
+    // schema violation) must NOT take down discovery for every other bundle —
+    // /setup needs to list the good ones. Skip the bad bundle, keep going.
+    let manifest: ScenarioManifest;
+    try {
+      manifest = parseScenarioManifest(JSON.parse(raw));
+    } catch (err) {
+      console.error(
+        `[scenarios] skipping malformed bundle at ${manifestPath}:`,
+        err instanceof Error ? err.message : err,
+      );
+      continue;
+    }
+
     found.push({
-      manifest: parseScenarioManifest(JSON.parse(raw)),
+      manifest,
       dir,
       ontologyDir: path.join(dir, "ontology"),
       seedDir: path.join(dir, "seed"),

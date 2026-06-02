@@ -51,7 +51,7 @@ export function rowActionColumns(token: string, ontology: Ontology): string[] {
 export function deriveDefaultBoard(
   ontology: Ontology,
   canReadType: CanReadType,
-  opts: { admin?: boolean } = {},
+  opts: { admin?: boolean; hasBlockerHistory?: boolean } = {},
 ): SliceDescriptor[] {
   const board: SliceDescriptor[] = [];
   const objectTypes = Object.keys(ontology.object_types); // order as loaded (insertion order of object_types)
@@ -77,8 +77,16 @@ export function deriveDefaultBoard(
       // fence over agent_blocker + action_audit (api.communityIntelligence), so
       // they ride the SAME agent_blocker read gate as the queue above — steward
       // sees them, a member never does. Titles come from the resolved KPI label.
-      for (const kpi of ["autonomy", "acceptance", "coverage", "accuracy"] as const) {
-        board.push({ kind: "intelligence_metric", config: { kpi } });
+      //
+      // cold_board: gate on real history. With no agent_blocker rows the KPIs
+      // are all 0% / em-dash — hollow cards that misrepresent a fresh install as
+      // a failing one. Suppress them until there is something to measure (the
+      // veto-queue data_table above keeps its own informative empty state). The
+      // caller passes hasBlockerHistory from a COUNT behind the read fence.
+      if (opts.hasBlockerHistory) {
+        for (const kpi of ["autonomy", "acceptance", "coverage", "accuracy"] as const) {
+          board.push({ kind: "intelligence_metric", config: { kpi } });
+        }
       }
     }
   }

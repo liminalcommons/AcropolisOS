@@ -1,7 +1,10 @@
 // F1 — First-run setup wizard.
 //
-// Server component. Auth-gated (any authenticated user — steward-to-be runs
-// this on first install). Anonymous callers are redirected to /signin.
+// Server component. The MIDDLEWARE is the auth gate: on a first install
+// (anonymous + setup incomplete) it routes the user HERE, and once a steward
+// exists + setup completes it routes /setup -> /signin. SetupPage must NOT add
+// its own anonymous -> /signin redirect — that would loop against the
+// middleware and make the wizard unreachable on first run (redirect deadlock).
 //
 // Five step cards rendered in a vertical stack:
 //   Step 1 — "Install confirmed"   : reads DATABASE_URL env var + runs SELECT 1.
@@ -13,12 +16,11 @@
 // Bottom: "You're in →" link to / — always visible, no progression gate.
 
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { readOrgProfile } from "@/lib/org-profile/store";
 import { getDb } from "@/lib/db/client";
-import { isSetupComplete } from "@/lib/setup/state";
+import { isSetupComplete, resolveSetupProgress } from "@/lib/setup/state";
 import { getSetupFile } from "@/lib/setup/config";
+import { getEnvFile } from "@/lib/setup/paths";
 import { listScenarioChoices } from "@/lib/setup/scenario-choices";
 import { FileUserStore } from "@/lib/auth/users";
 import { getUsersFile } from "@/lib/auth/config";
@@ -51,21 +53,26 @@ async function checkDatabase(): Promise<{ ok: boolean; detail: string }> {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function SetupPage(): Promise<React.ReactElement> {
-  const chatRuntime = await buildChatRuntime();
-  if (isAnonymous(chatRuntime.actor)) {
-    redirect("/signin");
-  }
-
-  const [dbStatus, profile, scenarios, setupComplete, stewardCount] = await Promise.all([
-    checkDatabase(),
-    readOrgProfile(),
-    listScenarioChoices(),
-    isSetupComplete(getSetupFile()),
-    new FileUserStore(getUsersFile()).countStewards().catch(() => 0),
-  ]);
+  const [dbStatus, profile, scenarios, setupComplete, stewardCount, progress] =
+    await Promise.all([
+      checkDatabase(),
+      readOrgProfile(),
+      listScenarioChoices(),
+      isSetupComplete(getSetupFile()),
+      new FileUserStore(getUsersFile()).countStewards().catch(() => 0),
+      resolveSetupProgress({
+        envFile: getEnvFile(),
+        usersFile: getUsersFile(),
+      }).catch(() => ({ providerConfigured: false, stewardExists: false })),
+    ]);
   const initialName = profile?.name ?? "";
   const initialDescription = profile?.description ?? "";
   const stewardExists = stewardCount > 0;
+  // Real per-step signals (no longer hardcoded "pending"):
+  //   Step 3 (LLM key)     — done once a provider (+key) is persisted to .env.
+  //   Step 4 (org profile) — done once the org has a name or description.
+  const providerConfigured = progress.providerConfigured;
+  const orgProfileFilled = Boolean(profile?.name || profile?.description);
 
   return (
     <main className="min-h-screen bg-background text-foreground font-sans">
@@ -126,8 +133,8 @@ export default async function SetupPage(): Promise<React.ReactElement> {
           <SetupStep
             step={3}
             title="Bring your own LLM key"
-            status="pending"
-            defaultExpanded={true}
+            status={providerConfigured ? "ok" : "pending"}
+            defaultExpanded={!providerConfigured}
           >
             <LLMKeyForm />
           </SetupStep>
@@ -136,8 +143,8 @@ export default async function SetupPage(): Promise<React.ReactElement> {
           <SetupStep
             step={4}
             title="What kind of org is this?"
-            status="pending"
-            defaultExpanded={true}
+            status={orgProfileFilled ? "ok" : "pending"}
+            defaultExpanded={!orgProfileFilled}
           >
             <OrgProfileForm
               initialName={initialName}

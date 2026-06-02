@@ -68,22 +68,41 @@ describe("deriveDefaultBoard — intelligence_metric on the steward board", () =
 
   const allow: CanReadType = () => true;
 
-  it("includes the four KPI widgets for a steward when agent_blocker is readable", () => {
-    const board = deriveDefaultBoard(ontology, allow, { admin: true });
+  it("includes the four KPI widgets for a steward when agent_blocker is readable AND has history", () => {
+    // cold_board: the KPIs are gated on real history — 0% cards on a fresh
+    // install are hollow. With history present they appear.
+    const board = deriveDefaultBoard(ontology, allow, {
+      admin: true,
+      hasBlockerHistory: true,
+    });
     const kpis = board
       .filter((d) => d.kind === "intelligence_metric")
       .map((d) => (d.config as { kpi: string }).kpi);
     expect(kpis).toEqual(["autonomy", "acceptance", "coverage", "accuracy"]);
   });
 
+  it("omits the KPI widgets on a cold board (agent_blocker readable but no history)", () => {
+    const board = deriveDefaultBoard(ontology, allow, {
+      admin: true,
+      hasBlockerHistory: false,
+    });
+    expect(board.filter((d) => d.kind === "intelligence_metric")).toHaveLength(0);
+  });
+
   it("omits the KPI widgets when agent_blocker is NOT readable (fail-closed)", () => {
     const deny: CanReadType = () => false;
-    const board = deriveDefaultBoard(ontology, deny, { admin: true });
+    const board = deriveDefaultBoard(ontology, deny, {
+      admin: true,
+      hasBlockerHistory: true,
+    });
     expect(board.filter((d) => d.kind === "intelligence_metric")).toHaveLength(0);
   });
 
   it("omits the KPI widgets in non-admin (member) mode", () => {
-    const board = deriveDefaultBoard(ontology, allow, { admin: false });
+    const board = deriveDefaultBoard(ontology, allow, {
+      admin: false,
+      hasBlockerHistory: true,
+    });
     expect(board.filter((d) => d.kind === "intelligence_metric")).toHaveLength(0);
   });
 });

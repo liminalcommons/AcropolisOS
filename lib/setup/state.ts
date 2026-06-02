@@ -58,13 +58,38 @@ export async function resolveInitialStep(opts: {
   envFile: string;
   usersFile: string;
 }): Promise<1 | 2 | 3> {
-  const [providerDone, stewardDone] = await Promise.all([
+  const { providerConfigured, stewardExists } =
+    await resolveSetupProgress(opts);
+  if (!providerConfigured) return 1;
+  if (!stewardExists) return 2;
+  return 3;
+}
+
+export interface SetupProgress {
+  /** LLM_PROVIDER (+key for non-ollama) present in the env file. */
+  providerConfigured: boolean;
+  /** At least one user record exists in the users file. */
+  stewardExists: boolean;
+}
+
+/**
+ * Per-step completion signals for the wizard cards. Unlike resolveInitialStep
+ * (which collapses the signals into a single "next open step" 1|2|3), this
+ * exposes each signal independently so the page can mark step 3 (LLM key) and
+ * step 2 (steward) "ok" or "pending" without conflating them.
+ *
+ * Replaces the hardcoded status="pending" on the LLM-key card: the card's real
+ * state is whether a provider is configured, which is exactly providerConfigured.
+ */
+export async function resolveSetupProgress(opts: {
+  envFile: string;
+  usersFile: string;
+}): Promise<SetupProgress> {
+  const [providerConfigured, stewardExists] = await Promise.all([
     hasProviderConfigured(opts.envFile),
     hasAnyUser(opts.usersFile),
   ]);
-  if (!providerDone) return 1;
-  if (!stewardDone) return 2;
-  return 3;
+  return { providerConfigured, stewardExists };
 }
 
 async function hasProviderConfigured(envFile: string): Promise<boolean> {

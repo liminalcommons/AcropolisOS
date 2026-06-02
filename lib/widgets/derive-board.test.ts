@@ -42,6 +42,37 @@ describe("deriveDefaultBoard — hostel ontology", () => {
   it("permission-filters: a viewer who can read nothing gets an empty board (floor)", () => {
     expect(deriveDefaultBoard(onto, () => false)).toEqual([]);
   });
+
+  // cold_board: the four community-intelligence KPI cards are hollow (0% with no
+  // history) on a brand-new install. Suppress them until the agent_blocker table
+  // has at least one row; the veto-queue data_table itself stays (its empty
+  // state — "nothing awaiting decision" — is informative, the 0% KPIs are not).
+  it("suppresses intelligence_metric KPIs when there is no agent_blocker history", () => {
+    const board = deriveDefaultBoard(onto, ALL, {
+      admin: true,
+      hasBlockerHistory: false,
+    });
+    expect(board.some((d) => d.kind === "intelligence_metric")).toBe(false);
+    // the veto-queue table still leads the board
+    expect(board[0].kind).toBe("data_table");
+    expect((board[0].config as { type: string }).type).toBe("agent_blocker");
+  });
+
+  it("emits the four intelligence_metric KPIs once agent_blocker has history", () => {
+    const board = deriveDefaultBoard(onto, ALL, {
+      admin: true,
+      hasBlockerHistory: true,
+    });
+    const kpis = board
+      .filter((d) => d.kind === "intelligence_metric")
+      .map((d) => (d.config as { kpi: string }).kpi);
+    expect(kpis).toEqual(["autonomy", "acceptance", "coverage", "accuracy"]);
+  });
+
+  it("defaults to suppressing the KPIs when no history flag is given (cold floor)", () => {
+    const board = deriveDefaultBoard(onto, ALL, { admin: true });
+    expect(board.some((d) => d.kind === "intelligence_metric")).toBe(false);
+  });
 });
 
 // The hidden-column contract is what makes row affordances kind-AGNOSTIC: a
