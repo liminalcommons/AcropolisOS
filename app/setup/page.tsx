@@ -1,7 +1,10 @@
 // F1 — First-run setup wizard.
 //
-// Server component. Auth-gated (any authenticated user — steward-to-be runs
-// this on first install). Anonymous callers are redirected to /signin.
+// Server component. The MIDDLEWARE is the auth gate: on a first install
+// (anonymous + setup incomplete) it routes the user HERE, and once a steward
+// exists + setup completes it routes /setup -> /signin. SetupPage must NOT add
+// its own anonymous -> /signin redirect — that would loop against the
+// middleware and make the wizard unreachable on first run (redirect deadlock).
 //
 // Five step cards rendered in a vertical stack:
 //   Step 1 — "Install confirmed"   : reads DATABASE_URL env var + runs SELECT 1.
@@ -13,8 +16,6 @@
 // Bottom: "You're in →" link to / — always visible, no progression gate.
 
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { buildChatRuntime, isAnonymous } from "@/lib/agent/chat-runtime";
 import { readOrgProfile } from "@/lib/org-profile/store";
 import { getDb } from "@/lib/db/client";
 import { isSetupComplete } from "@/lib/setup/state";
@@ -51,11 +52,6 @@ async function checkDatabase(): Promise<{ ok: boolean; detail: string }> {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function SetupPage(): Promise<React.ReactElement> {
-  const chatRuntime = await buildChatRuntime();
-  if (isAnonymous(chatRuntime.actor)) {
-    redirect("/signin");
-  }
-
   const [dbStatus, profile, scenarios, setupComplete, stewardCount] = await Promise.all([
     checkDatabase(),
     readOrgProfile(),
