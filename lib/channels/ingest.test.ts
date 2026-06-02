@@ -28,7 +28,15 @@ function makeFakeDb() {
   const insertedChunks: { source: string; payload: unknown }[][] = [];
   let idCounter = 0;
 
-  const tx = {
+  type FakeTx = {
+    insert: (table: unknown) => {
+      values: (values: { source: string; payload: unknown }[]) => {
+        returning: (cols: unknown) => Promise<{ id: string }[]>;
+      };
+    };
+  };
+
+  const tx: FakeTx = {
     insert: (_table: unknown) => ({
       values: (values: { source: string; payload: unknown }[]) => ({
         returning: async (_cols: unknown) => {
@@ -39,7 +47,7 @@ function makeFakeDb() {
     }),
   };
 
-  const transaction = vi.fn(async (cb: (tx: typeof tx) => Promise<void>) => {
+  const transaction = vi.fn(async (cb: (tx: FakeTx) => Promise<void>) => {
     await cb(tx);
   });
 
