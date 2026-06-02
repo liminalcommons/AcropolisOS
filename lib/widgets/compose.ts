@@ -65,11 +65,12 @@ export interface ResolvedWidget {
   // Generic, VIEWER-SAFE message for a status:"error" widget. NEVER the raw
   // exception (that is console.error'd server-side only) — no SQL/internal leak.
   error?: { message: string };
-  // `null` ONLY when validation_error is set: a descriptor whose config no longer
-  // validates against the loaded ontology (structural drift — a type renamed/
-  // removed, a field deleted) is surfaced as a data-less error widget, never
-  // silently dropped. The renderer shows an error card so the steward SEES the
-  // broken view (governance over silent mutation).
+  // `null` on a non-OK widget — either structural drift (paired with
+  // validation_error: a type renamed/removed, a field deleted) OR a runtime load
+  // failure (status:"error", paired with `error`: the data binding threw). Either
+  // way the widget is SURFACED as a data-less error card, never silently dropped,
+  // so the steward SEES the broken/failed view (governance over silent mutation).
+  // Non-null on status "ok"/"empty".
   data: MetricData | DataTableData | RosterData | CalendarData | null;
   // Set when this widget's stored config failed validateWidgetConfig against the
   // current ontology. Plain serializable strings only (the Zod-issue detail is

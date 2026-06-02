@@ -92,9 +92,11 @@ export async function resolvePerUserDashboard(
         // At least one valid widget → return the valid set (partial-invalid is fine).
         return pinned;
       }
-      // All pinned configs stale/invalid (zero valid after validateWidgetConfig) →
-      // fall through to the derived default so the member always sees SOMETHING.
-      // The derived board is the floor, not a blank "No widgets configured".
+      // runDescriptors returned nothing — now reachable ONLY when `stored` held no
+      // descriptors of a known kind (drift AND load-failure widgets are SURFACED
+      // with status, not dropped, so any known-kind descriptor yields a widget).
+      // Fall through to the derived default so the member always sees SOMETHING —
+      // the floor, not a blank "No widgets configured".
     }
   }
 
