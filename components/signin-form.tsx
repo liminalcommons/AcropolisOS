@@ -15,9 +15,11 @@ export function SignInForm() {
   const [error, setError] = useState<string | null>(
     errorParam === "CredentialsSignin"
       ? "Invalid email or password."
-      : errorParam
-        ? "Sign-in failed. Please try again."
-        : null,
+      : errorParam === "magiclink"
+        ? "That sign-in link is invalid or has expired. Ask for a fresh one."
+        : errorParam
+          ? "Sign-in failed. Please try again."
+          : null,
   );
 
   async function handleSubmit(e: React.FormEvent) {
