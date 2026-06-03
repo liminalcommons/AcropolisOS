@@ -23,6 +23,30 @@ for SQL in drizzle/0004_proposals.sql drizzle/0005_notification.sql drizzle/0006
   fi
 done
 
+# channel_bindings — steward's allow-list of discovered Telegram/Discord targets.
+# Hand-managed infra table (like raw_inbox / approved_views), defined in lib/db/schema.ts
+# but NOT created by drizzle-kit push (push silently skips NEW tables on non-TTY stdin).
+# Created here inline (not as a drizzle/ file) so it lands with the entrypoint change.
+# sub_id "" = whole group/server; a non-empty sub_id is a Telegram topic / Discord channel|thread.
+echo "[entrypoint] ensuring channel_bindings infra table..."
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
+CREATE TABLE IF NOT EXISTS channel_bindings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  platform text NOT NULL,
+  scope text NOT NULL,
+  external_id text NOT NULL,
+  sub_id text NOT NULL DEFAULT '',
+  title text,
+  label text,
+  status text NOT NULL DEFAULT 'bound',
+  enabled boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS channel_bindings_unique
+  ON channel_bindings (platform, external_id, sub_id);
+SQL
+
 # Regenerate codegen artifacts (schema.generated.ts and friends) from the
 # bind-mounted ontology/ before drizzle-kit push. Container-baked generated
 # files would otherwise be stale relative to any proposal previously applied
@@ -93,6 +117,11 @@ check_column "member_context"     "member_id"
 # table push silently skips on non-TTY stdin — verifying it is what turns that
 # skip from a silent loss of the registry into a loud boot failure.
 check_column "approved_views"     "descriptors"
+# channel_bindings (steward allow-list). NEW infra table — push silently skips new
+# tables on non-TTY stdin, so the inline pre-apply CREATE above is what materializes
+# it. Verifying a column here turns a missing table from a silent loss of the
+# allow-list into a loud boot failure.
+check_column "channel_bindings"   "external_id"
 
 if [ "$VERIFY_FAIL" -ne 0 ]; then
   echo "[entrypoint] FATAL: schema verification failed after push — one or more critical columns are absent." >&2
