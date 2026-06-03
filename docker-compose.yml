@@ -108,6 +108,47 @@ services:
       retries: 12
       start_period: 20s
 
+  # Discord Gateway worker (Phase E) — an ALWAYS-ON, INBOUND-ONLY service that
+  # gives Discord full Telegram parity. It holds DISCORD_BOT_TOKEN at runtime and
+  # opens a persistent Gateway websocket (Guilds + GuildMessages + MessageContent
+  # intents), depositing each guild message into raw_inbox via the SAME data-only
+  # ingest path the Telegram webhook uses. Reuses the app image (discord.js is a
+  # prod dep, tsx a devDep — both already installed) and shares the same Postgres.
+  #
+  # INERT WHEN UNSET: with no DISCORD_BOT_TOKEN in .env the worker logs
+  # "Discord Gateway idle (no token)" and idles without connecting or crashing
+  # (workers/discord-gateway/index.ts main()), mirroring the webhook inert-503
+  # ethos. The token is supplied ONLY via the gitignored .env (env_file) — it is
+  # NEVER hardcoded here. Set it + enable MESSAGE_CONTENT, then recreate this
+  # service: docker compose up -d --no-deps acropolisos-discord-gateway
+  acropolisos-discord-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: acropolisos-discord-gateway
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://acropolisos:acropolisos@postgres:5432/acropolisos
+      NODE_ENV: development
+      # main() only fires when this flag is set, so a plain import (vitest/tsc)
+      # stays side-effect-free; the worker process sets it to actually connect.
+      WORKER_ENTRY: discord-gateway
+    # DISCORD_BOT_TOKEN comes from .env ONLY (gitignored). When absent the worker
+    # is inert. No token is ever written here.
+    env_file:
+      - .env
+    # Run the worker from source via tsx (resolves the @/ tsconfig path alias).
+    command: npx tsx workers/discord-gateway/index.ts
+    volumes:
+      # The worker + its @/lib imports + the path-alias tsconfig, bind-mounted so
+      # host edits are picked up without an image rebuild (dev parity with app).
+      - ./workers:/app/workers
+      - ./lib:/app/lib
+      - ./tsconfig.json:/app/tsconfig.json
+
   inngest:
     image: inngest/inngest:latest
     container_name: acropolisos-inngest

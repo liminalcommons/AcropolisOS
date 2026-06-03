@@ -8,6 +8,7 @@ const COMPOSE_PATH = path.join(PKG_ROOT, "docker-compose.yml");
 const DOCKERFILE_PATH = path.join(PKG_ROOT, "Dockerfile");
 const ENTRYPOINT_PATH = path.join(PKG_ROOT, "docker-entrypoint.sh");
 const DOCKERIGNORE_PATH = path.join(PKG_ROOT, ".dockerignore");
+const ENV_EXAMPLE_PATH = path.join(PKG_ROOT, ".env.example");
 
 interface ComposeService {
   image?: string;
@@ -29,6 +30,17 @@ interface ComposeShape {
 
 function loadCompose(): ComposeShape {
   return parseYaml(readFileSync(COMPOSE_PATH, "utf8")) as ComposeShape;
+}
+
+// docker-compose `environment:` accepts BOTH a map ({KEY: val}) and a list
+// (["KEY=val"]). Flatten either form to a single string so a test can grep for
+// a key=value pair without caring which form the author used.
+function flatEnv(env: Record<string, string> | string[] | undefined): string {
+  if (!env) return "";
+  if (Array.isArray(env)) return env.join("\n");
+  return Object.entries(env)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("\n");
 }
 
 describe("docker-compose.yml — US-036 single-host install", () => {
@@ -231,5 +243,102 @@ describe(".dockerignore — reproducible builds", () => {
     const ignore = readFileSync(DOCKERIGNORE_PATH, "utf8");
     expect(ignore).toMatch(/node_modules/);
     expect(ignore).toMatch(/\.next/);
+  });
+});
+
+describe("docker-compose.yml — Discord Gateway worker service (Phase E3)", () => {
+  const SVC = "acropolisos-discord-gateway";
+
+  it("declares the acropolisos-discord-gateway service", () => {
+    const compose = loadCompose();
+    expect(compose.services[SVC]).toBeDefined();
+  });
+
+  it("shares the app's build/image so discord.js + tsx are already installed", () => {
+    // Reuse the same Node image (build context) the app uses — discord.js is a
+    // prod dependency and tsx is a devDependency already present in the image.
+    // A separate Dockerfile would duplicate the dependency tree.
+    const compose = loadCompose();
+    expect(compose.services[SVC].build).toBeDefined();
+  });
+
+  it("restarts unless-stopped (always-on worker)", () => {
+    const compose = loadCompose();
+    expect(compose.services[SVC].restart).toBe("unless-stopped");
+  });
+
+  it("shares the database via the same DATABASE_URL the app uses", () => {
+    // The worker writes raw_inbox + channel_bindings on the SAME Postgres the
+    // app reads. It must reach postgres:5432 over the internal Docker network.
+    const compose = loadCompose();
+    const env = flatEnv(compose.services[SVC].environment);
+    expect(env).toMatch(/DATABASE_URL=postgres:\/\/.*@postgres:5432\/acropolisos/);
+  });
+
+  it("loads .env (env_file) so DISCORD_BOT_TOKEN comes from the gitignored file ONLY", () => {
+    // The token is read from process.env at runtime. It is supplied ONLY via the
+    // gitignored .env (env_file) — NEVER hardcoded in the compose environment.
+    const compose = loadCompose();
+    const envFile = compose.services[SVC].env_file;
+    const files = Array.isArray(envFile) ? envFile : envFile ? [envFile] : [];
+    expect(files.some((f) => f.includes(".env"))).toBe(true);
+  });
+
+  it("runs the discord-gateway worker entry via tsx with WORKER_ENTRY set", () => {
+    // The worker's index.ts only calls main() when WORKER_ENTRY=discord-gateway
+    // (so a plain import under vitest/tsc stays side-effect-free). The command
+    // runs it with tsx, which resolves the @/ tsconfig path alias in-container.
+    const compose = loadCompose();
+    const cmd = compose.services[SVC].command;
+    const flat = Array.isArray(cmd) ? cmd.join(" ") : (cmd ?? "");
+    expect(flat).toMatch(/tsx/);
+    expect(flat).toMatch(/workers\/discord-gateway\/index\.ts/);
+    const env = flatEnv(compose.services[SVC].environment);
+    expect(env).toMatch(/WORKER_ENTRY=discord-gateway/);
+  });
+
+  it("waits for postgres to be healthy before connecting", () => {
+    const compose = loadCompose();
+    const dep = compose.services[SVC].depends_on;
+    if (!dep || Array.isArray(dep)) {
+      throw new Error(`${SVC}.depends_on must be the object form with a condition`);
+    }
+    expect(dep.postgres?.condition).toBe("service_healthy");
+  });
+
+  it("bind-mounts the source the worker imports (workers/, lib/, tsconfig.json)", () => {
+    // Dev compose runs from source via tsx, so the worker + its @/lib imports +
+    // the path-alias tsconfig must be mounted into the container.
+    const compose = loadCompose();
+    const volumes = compose.services[SVC].volumes ?? [];
+    const flat = volumes.join("\n");
+    expect(flat).toMatch(/\.\/workers/);
+    expect(flat).toMatch(/\.\/lib/);
+    expect(flat).toMatch(/tsconfig\.json/);
+  });
+
+  it("hardcodes NO Discord bot token anywhere in the service (inert when unset)", () => {
+    // Security fence: the compose service must contain no literal token. The only
+    // token crossing is the gitignored .env (env_file). When unset the worker
+    // logs "idle" and does not crash (asserted by the worker unit tests).
+    const compose = loadCompose();
+    const svcText = JSON.stringify(compose.services[SVC]);
+    // A real Discord bot token is a long opaque string; ensure DISCORD_BOT_TOKEN
+    // is never assigned an inline value in the compose service.
+    expect(svcText).not.toMatch(/DISCORD_BOT_TOKEN=\S/);
+  });
+});
+
+describe(".env.example — DISCORD_BOT_TOKEN placeholder (Phase E3)", () => {
+  it("declares an EMPTY DISCORD_BOT_TOKEN placeholder (no real token committed)", () => {
+    const env = readFileSync(ENV_EXAMPLE_PATH, "utf8");
+    // The line must exist and be empty (key with no value). A non-empty value
+    // would mean a token leaked into a tracked file.
+    expect(env).toMatch(/^DISCORD_BOT_TOKEN=\s*$/m);
+  });
+
+  it("documents the manual token-reset + MESSAGE_CONTENT intent steps", () => {
+    const env = readFileSync(ENV_EXAMPLE_PATH, "utf8");
+    expect(env).toMatch(/MESSAGE_CONTENT/);
   });
 });
