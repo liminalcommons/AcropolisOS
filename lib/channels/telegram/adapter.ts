@@ -53,6 +53,10 @@ function rowFromMessage(
     message_id: msg.message_id ?? null,
     update_id: updateId,
     document_file_id: documentFileId,
+    // Additive context for channel discovery (jsonb payload): omit when absent.
+    chat_title: msg.chat?.title ?? undefined,
+    chat_type: msg.chat?.type ?? undefined,
+    message_thread_id: msg.message_thread_id ?? undefined,
   };
 }
 

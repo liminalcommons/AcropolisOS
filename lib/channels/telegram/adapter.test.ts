@@ -164,4 +164,64 @@ describe("telegramAdapter.parsePayload", () => {
       /invalid telegram update/i,
     );
   });
+
+  it("additively captures chat title, chat type, and message thread (topic) id", async () => {
+    const rows = await telegramAdapter.parsePayload({
+      update_id: 12,
+      message: {
+        message_id: 7,
+        from: { id: 9, is_bot: false },
+        chat: { id: -1002233445566, type: "supergroup", title: "Hostel Ops" },
+        message_thread_id: 42,
+        date: 1,
+        text: "topic message",
+      },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      chat_title: "Hostel Ops",
+      chat_type: "supergroup",
+      message_thread_id: 42,
+    });
+  });
+
+  it("leaves chat_title / message_thread_id undefined when absent (omitted from jsonb)", async () => {
+    const rows = await telegramAdapter.parsePayload({
+      update_id: 13,
+      message: {
+        message_id: 8,
+        from: { id: 9, is_bot: false },
+        chat: { id: 3, type: "private" },
+        date: 1,
+        text: "private dm, no title or topic",
+      },
+    });
+    expect(rows).toHaveLength(1);
+    // private chats have no title / thread — `?? undefined` leaves the value
+    // undefined so JSON serialization (the jsonb payload) drops the keys.
+    expect(rows[0].chat_title).toBeUndefined();
+    expect(rows[0].message_thread_id).toBeUndefined();
+    const serialized = JSON.parse(JSON.stringify(rows[0]));
+    expect(serialized).not.toHaveProperty("chat_title");
+    expect(serialized).not.toHaveProperty("message_thread_id");
+    // chat_type is still captured for any chat
+    expect(rows[0].chat_type).toBe("private");
+  });
+});
+
+// The additive parsePayload change must NOT weaken the secret gate. These
+// assertions duplicate the verifyRequest guarantees inside the A2 change set so
+// any regression to the gate fails the same suite that widened the payload.
+describe("telegramAdapter.verifyRequest stays intact alongside the A2 payload widening", () => {
+  it("rejects a wrong secret header", () => {
+    expect(telegramAdapter.verifyRequest(reqWithSecret("wrong"), "s3cr3t")).toBe(false);
+  });
+
+  it("rejects when the env secret is unset (inert)", () => {
+    expect(telegramAdapter.verifyRequest(reqWithSecret("anything"), undefined)).toBe(false);
+  });
+
+  it("still accepts a correctly matching secret", () => {
+    expect(telegramAdapter.verifyRequest(reqWithSecret("s3cr3t"), "s3cr3t")).toBe(true);
+  });
 });

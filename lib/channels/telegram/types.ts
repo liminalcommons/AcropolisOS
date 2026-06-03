@@ -18,7 +18,8 @@ export interface TelegramUser {
 
 export interface TelegramChat {
   id: number;
-  type: string; // "private" | "group" | "supergroup" | "channel"
+  type?: string; // "private" | "group" | "supergroup" | "channel"
+  title?: string; // present for group/supergroup/channel chats
 }
 
 export interface TelegramDocument {
@@ -36,6 +37,7 @@ export interface TelegramMessage {
   text?: string;
   caption?: string;
   document?: TelegramDocument;
+  message_thread_id?: number; // forum/topic id within a supergroup
 }
 
 export interface TelegramUpdate {
