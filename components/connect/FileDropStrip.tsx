@@ -219,7 +219,7 @@ export function FileDropStrip() {
 
       {state.phase === "done" && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-emerald-400">{successHeadline(state.count)}</span>
+          <span className="text-success">{successHeadline(state.count)}</span>
           <Link
             href={ORGANIZE_HREF}
             className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 font-medium text-success transition-colors hover:bg-emerald-500/20"
