@@ -7,7 +7,7 @@
 // what gets ingested, what gets dropped, and that the normalized "discord" row
 // is what reaches the ingest path.
 
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 // vi.mock is hoisted above imports — the mock fn must be created via vi.hoisted
 // so it exists when the factory runs (a plain top-level const is not yet bound).
@@ -16,7 +16,11 @@ const { ingestChannelRows } = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/channels/ingest", () => ({ ingestChannelRows }));
 
-import { handleMessage } from "@/workers/discord-gateway/index";
+import {
+  handleMessage,
+  scheduleBoundViewRefresh,
+  BOUND_VIEW_REFRESH_MS,
+} from "@/workers/discord-gateway/index";
 import type { Database } from "@/lib/db/client";
 import type { Message } from "discord.js";
 import type { ChannelBindingRow } from "@/lib/db/schema";
@@ -108,5 +112,42 @@ describe("discord gateway handleMessage (data-only intake)", () => {
     };
     await handleMessage(db, fakeMessage(), [onlyChan7]);
     expect(ingestChannelRows).not.toHaveBeenCalled();
+  });
+});
+
+describe("discord gateway boundView staleness bound (E3 review low #3)", () => {
+  // The anti-flood boundView snapshot was previously refreshed ONLY on
+  // ready/guildCreate, so a steward bind/unbind between guild events stayed
+  // invisible until the next guild join. scheduleBoundViewRefresh installs a
+  // periodic refresh so worst-case staleness is bounded by BOUND_VIEW_REFRESH_MS,
+  // not "until the next guild join". Tested with fake timers — no real wait.
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers()); // restore so other suites use real time
+
+  it("exposes a positive, finite refresh interval", () => {
+    expect(BOUND_VIEW_REFRESH_MS).toBeGreaterThan(0);
+    expect(Number.isFinite(BOUND_VIEW_REFRESH_MS)).toBe(true);
+  });
+
+  it("invokes the refresh callback once per interval (bounds staleness)", () => {
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    const stop = scheduleBoundViewRefresh(refresh);
+    expect(refresh).not.toHaveBeenCalled(); // timer-driven only, no immediate call
+    vi.advanceTimersByTime(BOUND_VIEW_REFRESH_MS);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(BOUND_VIEW_REFRESH_MS * 2);
+    expect(refresh).toHaveBeenCalledTimes(3);
+    stop();
+    vi.advanceTimersByTime(BOUND_VIEW_REFRESH_MS * 5);
+    expect(refresh).toHaveBeenCalledTimes(3); // stop() clears the interval
+  });
+
+  it("swallows a refresh rejection so a transient DB blip never crashes the worker", () => {
+    const refresh = vi.fn().mockRejectedValue(new Error("db blip"));
+    const stop = scheduleBoundViewRefresh(refresh);
+    // advancing must not throw even though the callback rejects
+    expect(() => vi.advanceTimersByTime(BOUND_VIEW_REFRESH_MS)).not.toThrow();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    stop();
   });
 });

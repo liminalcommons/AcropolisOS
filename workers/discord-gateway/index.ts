@@ -33,6 +33,39 @@ import type { ChannelBindingRow } from "@/lib/db/schema";
 
 const IDLE_LOG = "Discord Gateway idle (no token)";
 
+// Anti-flood boundView staleness bound (E3 review low #3). The in-memory
+// channel_bindings snapshot is also refreshed on ready/guildCreate, but a steward
+// bind/unbind BETWEEN guild events would otherwise stay invisible until the next
+// guild join. A periodic refresh bounds worst-case staleness to this interval.
+// 30s is a deliberate balance: small enough that a steward's curation takes
+// effect promptly, large enough that the per-interval listBindings() read is
+// negligible load. The stale bias is fail-safe (drops messages from a
+// just-bound channel for <=30s; never ingests from a just-unbound one early,
+// since unbind only REMOVES allow-list entries the next refresh reflects).
+export const BOUND_VIEW_REFRESH_MS = 30_000;
+
+/**
+ * Install a periodic boundView refresh. PURE scheduling primitive (no discord.js,
+ * no DB) so it is unit-testable with fake timers: it calls `refresh` every
+ * BOUND_VIEW_REFRESH_MS and returns a stop() that clears the interval. A rejected
+ * refresh is swallowed (logged) so a transient DB blip never crashes the worker.
+ */
+export function scheduleBoundViewRefresh(
+  refresh: () => Promise<void>,
+): () => void {
+  const handle = setInterval(() => {
+    void refresh().catch((err) =>
+      console.error("Discord Gateway boundView refresh error:", err),
+    );
+  }, BOUND_VIEW_REFRESH_MS);
+  // Don't keep the event loop alive solely for this timer (the Gateway socket
+  // is what keeps the worker running); unref is a no-op where unsupported.
+  if (typeof handle === "object" && handle && "unref" in handle) {
+    (handle as { unref: () => void }).unref();
+  }
+  return () => clearInterval(handle);
+}
+
 // Discord channel type discriminants we INVENTORY for the dashboard. Only
 // text-bearing channels pipeline messages, so voice/category/etc are skipped.
 // Values per the Discord API (discord.js `ChannelType`): 0 GuildText,
@@ -142,9 +175,10 @@ export async function main(): Promise<void> {
   });
 
   // The worker holds the latest channel_bindings snapshot in memory for the
-  // anti-flood filter (avoids a DB read per message). Refreshed whenever the
-  // inventory changes (ready/guildCreate) — the steward's bind/unbind picks up
-  // on the next refresh.
+  // anti-flood filter (avoids a DB read per message). Refreshed on
+  // ready/guildCreate AND on a BOUND_VIEW_REFRESH_MS timer (scheduleBoundViewRefresh
+  // below), so a steward bind/unbind made between guild events is picked up within
+  // the interval rather than only at the next guild join (E3 review low #3).
   let boundView: ChannelBindingRow[] = [];
   async function refreshBoundView(): Promise<void> {
     boundView = await listBindings(db);
@@ -174,6 +208,10 @@ export async function main(): Promise<void> {
       console.error("Discord Gateway ingest error:", err);
     });
   });
+
+  // Bound the anti-flood snapshot's staleness with a periodic refresh (in
+  // addition to the ready/guildCreate refreshes above).
+  scheduleBoundViewRefresh(refreshBoundView);
 
   await client.login(token);
 }
