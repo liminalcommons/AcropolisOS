@@ -26,6 +26,8 @@ import { getDb } from "@/lib/db/client";
 import { raw_inbox } from "@/lib/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { buildTargetVocab, validateFieldMap } from "@/app/api/organize/classify/route";
+import { listBindings } from "@/lib/channels/bindings";
+import { boundSourceFilter, isChannelSource, sourceKeyFromRow } from "@/lib/channels/eligibility";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -102,12 +104,29 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: "no_rows_for_source", source }, { status: 404 });
   }
 
-  const sample: SampleRow[] = await db
+  let sample: SampleRow[] = await db
     .select({ payload: raw_inbox.payload })
     .from(raw_inbox)
     .where(and(isNull(raw_inbox.classified_as), eq(raw_inbox.source, source)))
     .orderBy(raw_inbox.received_at)
     .limit(SAMPLE_SIZE);
+
+  // Channel allow-list (additive, behind the binding view): for a managed channel
+  // source (telegram/discord), only sample rows whose (platform, external_id[,
+  // sub_id]) the steward has BOUND and ENABLED. Unbound/ignored discovery stays
+  // visible in the channels UI, it just isn't auto-pipelined here. Non-channel
+  // sources (csv-upload etc.) are untouched — sourceKeyFromRow returns null and
+  // the row passes unchanged.
+  if (isChannelSource(source)) {
+    const eligible = boundSourceFilter(await listBindings(db));
+    sample = sample.filter((r) => {
+      const key = sourceKeyFromRow(source, r.payload);
+      return key === null ? true : eligible(key);
+    });
+    if (sample.length === 0) {
+      return Response.json({ error: "no_bound_rows_for_source", source }, { status: 404 });
+    }
+  }
 
   const sampleKeys = mergeSampleKeys(sample);
   if (sampleKeys.length === 0) {
