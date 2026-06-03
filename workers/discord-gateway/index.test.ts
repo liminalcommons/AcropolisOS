@@ -19,8 +19,27 @@ vi.mock("@/lib/channels/ingest", () => ({ ingestChannelRows }));
 import { handleMessage } from "@/workers/discord-gateway/index";
 import type { Database } from "@/lib/db/client";
 import type { Message } from "discord.js";
+import type { ChannelBindingRow } from "@/lib/db/schema";
 
 const db = {} as Database; // never used — ingest is mocked
+
+// A bound+enabled whole-guild row covering the fakeMessage's guild: with this in
+// the boundView, the guild message is allowed through the anti-flood filter.
+function boundGuild(externalId: string): ChannelBindingRow {
+  return {
+    id: "00000000-0000-0000-0000-000000000000",
+    platform: "discord",
+    scope: "group",
+    external_id: externalId,
+    sub_id: "",
+    title: null,
+    label: null,
+    status: "bound",
+    enabled: true,
+    created_at: new Date(),
+    updated_at: new Date(),
+  } as ChannelBindingRow;
+}
 
 // Build a discord.js-shaped Message just far enough for handleMessage +
 // discordMessageToRow. Cast to Message for the signature; the normalizer only
@@ -42,7 +61,7 @@ describe("discord gateway handleMessage (data-only intake)", () => {
   beforeEach(() => ingestChannelRows.mockClear());
 
   it("ingests a guild message as a normalized discord payload (source re-stamped by ingest)", async () => {
-    await handleMessage(db, fakeMessage());
+    await handleMessage(db, fakeMessage(), [boundGuild("1098000000000000001")]);
     expect(ingestChannelRows).toHaveBeenCalledTimes(1);
     const [, source, rows] = ingestChannelRows.mock.calls[0];
     // The worker passes source="discord" and the PAYLOAD (not the {source,payload}
@@ -64,12 +83,30 @@ describe("discord gateway handleMessage (data-only intake)", () => {
   });
 
   it("skips the bot's own messages (never re-ingests)", async () => {
-    await handleMessage(db, fakeMessage({ author: { id: "bot-1", username: "acropolis-bot", bot: true } }));
+    await handleMessage(db, fakeMessage({ author: { id: "bot-1", username: "acropolis-bot", bot: true } }), [
+      boundGuild("1098000000000000001"),
+    ]);
     expect(ingestChannelRows).not.toHaveBeenCalled();
   });
 
   it("skips DMs (no guildId)", async () => {
-    await handleMessage(db, fakeMessage({ guildId: null, guild: null }));
+    await handleMessage(db, fakeMessage({ guildId: null, guild: null }), [boundGuild("1098000000000000001")]);
+    expect(ingestChannelRows).not.toHaveBeenCalled();
+  });
+
+  it("DROPS a message from an UN-bound (guild,channel) — anti-flood (E2)", async () => {
+    // Empty boundView ⇒ nothing is bound ⇒ the guild message must NOT be ingested.
+    await handleMessage(db, fakeMessage(), []);
+    expect(ingestChannelRows).not.toHaveBeenCalled();
+  });
+
+  it("DROPS a message from a different channel when only ONE channel is bound (E2)", async () => {
+    const onlyChan7: ChannelBindingRow = {
+      ...boundGuild("1098000000000000001"),
+      scope: "channel",
+      sub_id: "chan-7", // the fakeMessage's channel is 1097000000000000001, not chan-7
+    };
+    await handleMessage(db, fakeMessage(), [onlyChan7]);
     expect(ingestChannelRows).not.toHaveBeenCalled();
   });
 });

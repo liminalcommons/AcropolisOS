@@ -27,22 +27,97 @@ import {
 import { getDb, type Database } from "@/lib/db/client";
 import { ingestChannelRows } from "@/lib/channels/ingest";
 import { discordMessageToRow, type GatewayMessage } from "@/lib/channels/discord/normalize";
+import { isBound } from "@/lib/channels/eligibility";
+import { listBindings, upsertDiscovered } from "@/lib/channels/bindings";
+import type { ChannelBindingRow } from "@/lib/db/schema";
 
 const IDLE_LOG = "Discord Gateway idle (no token)";
 
+// Discord channel type discriminants we INVENTORY for the dashboard. Only
+// text-bearing channels pipeline messages, so voice/category/etc are skipped.
+// Values per the Discord API (discord.js `ChannelType`): 0 GuildText,
+// 5 GuildAnnouncement, 15 GuildForum, 11/12 public/private threads.
+const TEXT_CHANNEL_TYPES = new Set<number>([0, 5, 15, 11, 12]);
+
+/**
+ * E2 anti-flood predicate. The worker ingests a guild message ONLY when its
+ * (guild,channel) is BOUND + ENABLED in channel_bindings. PURE — it delegates to
+ * the SAME eligibility semantics batch-classify uses (isBound): a whole-guild
+ * bind (sub_id "") covers every channel; a channel bind (sub_id = channel_id)
+ * covers just that one; discovered/ignored/disabled rows do not pass.
+ */
+export function shouldIngest(
+  boundView: ChannelBindingRow[],
+  guildId: string,
+  channelId: string,
+): boolean {
+  return isBound(boundView, { platform: "discord", externalId: guildId, subId: channelId });
+}
+
 /**
  * Handle one inbound Gateway message: skip the bot's own messages and DMs
- * (no guild), then normalize + ingest into raw_inbox. Data-only — no auth, no
- * ontology, no outbound reply. Exported for unit testing with a fake message.
+ * (no guild), then apply the E2 anti-flood bound-filter (`boundView`), then
+ * normalize + ingest into raw_inbox. Data-only — no auth, no ontology, no
+ * outbound reply. `boundView` is the latest channel_bindings snapshot the worker
+ * holds (refreshed on ready/guildCreate). Exported for unit testing.
  */
-export async function handleMessage(db: Database, msg: Message): Promise<void> {
+export async function handleMessage(
+  db: Database,
+  msg: Message,
+  boundView: ChannelBindingRow[],
+): Promise<void> {
   if (msg.author.bot) return; // never re-ingest the bot's own messages
   if (!msg.guildId) return; // DMs carry no guild — out of scope, dropped
+  // ANTI-FLOOD: drop messages from (guild,channel) the steward hasn't bound. The
+  // channel id discovery groups discord by is the message's channelId.
+  if (!shouldIngest(boundView, msg.guildId, msg.channelId)) return;
   // discordMessageToRow returns the self-describing { source, payload } row; the
   // shared ingestChannelRows path re-stamps source and wraps each payload as a
   // raw_inbox row, so we hand it the payload (no double-wrap, source unduplicated).
   const { payload } = discordMessageToRow(msg as unknown as GatewayMessage);
   await ingestChannelRows(db, "discord", [payload]);
+}
+
+/** The channel subset discoverGuild reads (a discord.js GuildChannel structural slice). */
+export interface DiscoverableChannel {
+  id: string;
+  name?: string;
+  type: number;
+}
+
+/** The guild subset discoverGuild reads (a discord.js Guild structural slice). */
+export interface DiscoverableGuild {
+  id: string;
+  name?: string;
+  channels: { cache: Map<string, DiscoverableChannel> | Iterable<[string, DiscoverableChannel]> };
+}
+
+/**
+ * E2 discovery inventory. On 'ready'/'guildCreate' record each visible guild and
+ * its TEXT channels into channel_bindings as status:"discovered", enabled:false
+ * via upsertDiscovered — which is onConflictDoNothing, so an already
+ * bound/ignored/discovered row is LEFT UNTOUCHED (the steward's curation wins).
+ * Data-only inventory: the only store touch is upsertDiscovered.
+ */
+export async function discoverGuild(db: Database, guild: DiscoverableGuild): Promise<void> {
+  // the guild itself (sub_id "" = the whole server)
+  await upsertDiscovered(db, {
+    platform: "discord",
+    scope: "group",
+    external_id: guild.id,
+    sub_id: "",
+    title: guild.name,
+  });
+  for (const [, ch] of guild.channels.cache) {
+    if (!TEXT_CHANNEL_TYPES.has(ch.type)) continue; // only text channels pipeline
+    await upsertDiscovered(db, {
+      platform: "discord",
+      scope: "channel",
+      external_id: guild.id,
+      sub_id: ch.id,
+      title: ch.name,
+    });
+  }
 }
 
 /**
@@ -66,13 +141,36 @@ export async function main(): Promise<void> {
     ],
   });
 
+  // The worker holds the latest channel_bindings snapshot in memory for the
+  // anti-flood filter (avoids a DB read per message). Refreshed whenever the
+  // inventory changes (ready/guildCreate) — the steward's bind/unbind picks up
+  // on the next refresh.
+  let boundView: ChannelBindingRow[] = [];
+  async function refreshBoundView(): Promise<void> {
+    boundView = await listBindings(db);
+  }
+
   client.once(Events.ClientReady, (c) => {
     // Identify by the bot's tag only — NEVER the token.
     console.log(`Discord Gateway connected as ${c.user.tag}`);
+    void (async () => {
+      // Inventory every guild already in cache, then load the binding snapshot.
+      for (const [, guild] of c.guilds.cache) {
+        await discoverGuild(db, guild as unknown as DiscoverableGuild);
+      }
+      await refreshBoundView();
+    })().catch((err) => console.error("Discord Gateway ready/discovery error:", err));
+  });
+
+  client.on(Events.GuildCreate, (guild) => {
+    void (async () => {
+      await discoverGuild(db, guild as unknown as DiscoverableGuild);
+      await refreshBoundView();
+    })().catch((err) => console.error("Discord Gateway guildCreate/discovery error:", err));
   });
 
   client.on(Events.MessageCreate, (msg) => {
-    void handleMessage(db, msg).catch((err) => {
+    void handleMessage(db, msg, boundView).catch((err) => {
       console.error("Discord Gateway ingest error:", err);
     });
   });
