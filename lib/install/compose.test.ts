@@ -2,13 +2,23 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
+import { manifestExists, readManifest } from "./manifest-paths";
 
+// The five install-manifest files are NOT baked into the runtime image (the
+// Dockerfile runner stage COPYs only source dirs) and were not bind-mounted by
+// the original app-service volume list — so a bare readFileSync used to produce
+// 30 cryptic ENOENT failures in the as-running container, "green" only after a
+// transient `docker cp`. docker-compose.yml now bind-mounts all five read-only
+// into /app, so any `compose up` makes this suite reproducible. readManifest()
+// throws ONE actionable error (naming the provisioning command) if a file is
+// still absent in an already-running container created before that mount — so
+// this suite can never again masquerade as green when the manifests are missing.
+//
+// The five manifest files are read through readManifest()/manifestExists() (which
+// resolve the bind-mounts and throw an actionable error on absence). scripts/ and
+// package.json below are read directly: scripts/ is bind-mounted and package.json
+// is baked into the image (Dockerfile COPYs it), so both are reproducibly present.
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
-const COMPOSE_PATH = path.join(PKG_ROOT, "docker-compose.yml");
-const DOCKERFILE_PATH = path.join(PKG_ROOT, "Dockerfile");
-const ENTRYPOINT_PATH = path.join(PKG_ROOT, "docker-entrypoint.sh");
-const DOCKERIGNORE_PATH = path.join(PKG_ROOT, ".dockerignore");
-const ENV_EXAMPLE_PATH = path.join(PKG_ROOT, ".env.example");
 
 interface ComposeService {
   image?: string;
@@ -29,7 +39,7 @@ interface ComposeShape {
 }
 
 function loadCompose(): ComposeShape {
-  return parseYaml(readFileSync(COMPOSE_PATH, "utf8")) as ComposeShape;
+  return parseYaml(readManifest("docker-compose.yml")) as ComposeShape;
 }
 
 // docker-compose `environment:` accepts BOTH a map ({KEY: val}) and a list
@@ -45,7 +55,7 @@ function flatEnv(env: Record<string, string> | string[] | undefined): string {
 
 describe("docker-compose.yml — US-036 single-host install", () => {
   it("exists at package root", () => {
-    expect(existsSync(COMPOSE_PATH)).toBe(true);
+    expect(manifestExists("docker-compose.yml")).toBe(true);
   });
 
   it("declares postgres, app, and inngest services", () => {
@@ -74,6 +84,32 @@ describe("docker-compose.yml — US-036 single-host install", () => {
     expect(flat).toMatch(/\.\/functions/);
     expect(flat).toMatch(/\.\/uploads/);
     expect(flat).toMatch(/\.\/\.env/);
+  });
+
+  it("app read-only bind-mounts the five install-manifest files into /app", () => {
+    // DURABILITY FIX: the install-manifest files (docker-compose.yml, Dockerfile,
+    // docker-entrypoint.sh, .dockerignore, .env.example) are NOT baked into the
+    // runtime image (the Dockerfile runner stage COPYs only source dirs and routes
+    // docker-entrypoint.sh to /usr/local/bin). Without these mounts the
+    // in-container install suite reads them via a transient `docker cp` — a
+    // non-reproducible green. Mounting them read-only makes any `compose up`
+    // reproduce the suite with zero cp. Read-only (`:ro`) because the container
+    // must never mutate the operator's manifests.
+    const compose = loadCompose();
+    const volumes = compose.services.app.volumes ?? [];
+    const flat = volumes.join("\n");
+    for (const f of [
+      "docker-compose.yml",
+      "Dockerfile",
+      "docker-entrypoint.sh",
+      ".dockerignore",
+      ".env.example",
+    ]) {
+      // Match `./<file>:/app/<file>:ro` allowing the dotfile escape in regex.
+      const esc = f.replace(/\./g, "\\.");
+      const re = new RegExp(`\\./${esc}:/app/${esc}:ro`);
+      expect(flat, `app must read-only bind-mount ${f}`).toMatch(re);
+    }
   });
 
   it("app waits for postgres to be healthy before starting", () => {
@@ -114,28 +150,28 @@ describe("docker-compose.yml — US-036 single-host install", () => {
 
 describe("Dockerfile — US-036 reproducible image", () => {
   it("exists at package root", () => {
-    expect(existsSync(DOCKERFILE_PATH)).toBe(true);
+    expect(manifestExists("Dockerfile")).toBe(true);
   });
 
   it("uses a Node.js LTS base image", () => {
-    const dockerfile = readFileSync(DOCKERFILE_PATH, "utf8");
+    const dockerfile = readManifest("Dockerfile");
     expect(dockerfile).toMatch(/FROM node:/);
   });
 
   it("runs the Next.js production build", () => {
-    const dockerfile = readFileSync(DOCKERFILE_PATH, "utf8");
+    const dockerfile = readManifest("Dockerfile");
     expect(dockerfile).toMatch(/npm run build/);
   });
 
   it("invokes the entrypoint so first boot runs migrations", () => {
-    const dockerfile = readFileSync(DOCKERFILE_PATH, "utf8");
+    const dockerfile = readManifest("Dockerfile");
     expect(dockerfile).toMatch(/docker-entrypoint\.sh/);
   });
 });
 
 describe("docker-entrypoint.sh — first-boot schema sync", () => {
   it("exists", () => {
-    expect(existsSync(ENTRYPOINT_PATH)).toBe(true);
+    expect(manifestExists("docker-entrypoint.sh")).toBe(true);
   });
 
   it("runs drizzle-kit push before starting the app", () => {
@@ -144,7 +180,7 @@ describe("docker-entrypoint.sh — first-boot schema sync", () => {
     // the codegen'd object tables, so `migrate` always failed at
     // 0003_data_audit. `push --force` syncs the full Drizzle schema
     // (incl. the re-exported schema.generated) idempotently.
-    const entrypoint = readFileSync(ENTRYPOINT_PATH, "utf8");
+    const entrypoint = readManifest("docker-entrypoint.sh");
     expect(entrypoint).toMatch(/drizzle-kit push --force/);
     expect(entrypoint).toMatch(/exec/);
   });
@@ -156,7 +192,7 @@ describe("docker-entrypoint.sh — first-boot schema sync", () => {
     // explicitly via psql after push is the pragmatic fix; 0003 itself is
     // idempotent (CREATE TABLE IF NOT EXISTS, CREATE OR REPLACE FUNCTION,
     // DROP TRIGGER IF EXISTS).
-    const entrypoint = readFileSync(ENTRYPOINT_PATH, "utf8");
+    const entrypoint = readManifest("docker-entrypoint.sh");
     expect(entrypoint).toMatch(/psql .*0003_data_audit\.sql/);
     expect(entrypoint).toMatch(/ON_ERROR_STOP=1/);
   });
@@ -236,11 +272,11 @@ describe("scripts/smoke-compose.ts — I3 boot smoke", () => {
 
 describe(".dockerignore — reproducible builds", () => {
   it("exists at package root", () => {
-    expect(existsSync(DOCKERIGNORE_PATH)).toBe(true);
+    expect(manifestExists(".dockerignore")).toBe(true);
   });
 
   it("excludes node_modules and .next so build context stays small", () => {
-    const ignore = readFileSync(DOCKERIGNORE_PATH, "utf8");
+    const ignore = readManifest(".dockerignore");
     expect(ignore).toMatch(/node_modules/);
     expect(ignore).toMatch(/\.next/);
   });
@@ -331,14 +367,14 @@ describe("docker-compose.yml — Discord Gateway worker service (Phase E3)", () 
 
 describe(".env.example — DISCORD_BOT_TOKEN placeholder (Phase E3)", () => {
   it("declares an EMPTY DISCORD_BOT_TOKEN placeholder (no real token committed)", () => {
-    const env = readFileSync(ENV_EXAMPLE_PATH, "utf8");
+    const env = readManifest(".env.example");
     // The line must exist and be empty (key with no value). A non-empty value
     // would mean a token leaked into a tracked file.
     expect(env).toMatch(/^DISCORD_BOT_TOKEN=\s*$/m);
   });
 
   it("documents the manual token-reset + MESSAGE_CONTENT intent steps", () => {
-    const env = readFileSync(ENV_EXAMPLE_PATH, "utf8");
+    const env = readManifest(".env.example");
     expect(env).toMatch(/MESSAGE_CONTENT/);
   });
 });

@@ -92,6 +92,19 @@ services:
       # the baked seed/ dir. Bind-mount so the dev container sees them without an
       # image rebuild (the Dockerfile COPYs scenarios/ for prod images).
       - ./scenarios:/app/scenarios
+      # Install-manifest files, read-only. The Dockerfile runner stage COPYs only
+      # source dirs (and routes docker-entrypoint.sh to /usr/local/bin), so none
+      # of these five live in /app of the runtime image. The in-container install
+      # suite (lib/install/compose.test.ts) reads them via readManifest(); without
+      # these mounts it could only pass after a transient `docker cp`, which is a
+      # non-reproducible green. Mounting them read-only makes any `compose up`
+      # reproduce the suite with zero cp. `:ro` so the container never mutates the
+      # operator's manifests.
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
+      - ./Dockerfile:/app/Dockerfile:ro
+      - ./docker-entrypoint.sh:/app/docker-entrypoint.sh:ro
+      - ./.dockerignore:/app/.dockerignore:ro
+      - ./.env.example:/app/.env.example:ro
       # Protect the compiled .next/ dir from host-side shadowing.
       - nexttmp:/app/.next
     ports:
