@@ -182,22 +182,45 @@ export function mergeDiscoveryWithBindings(
   }
 
   const items: MergedChannelItem[] = [];
+  const emitted = new Set<string>();
   const platforms: Platform[] = ["telegram", "discord"];
 
+  const emit = (
+    platform: Platform,
+    externalId: string,
+    subId: string,
+    scope: string,
+    discoveredTitle: string | undefined,
+    messageCount: number,
+    lastReceivedAt: Date | null,
+  ): void => {
+    const key = keyOf(platform, externalId, subId);
+    if (emitted.has(key)) return; // raw_inbox discovery already covered this target
+    emitted.add(key);
+    items.push(
+      toItem(platform, externalId, subId, scope, discoveredTitle, messageCount, lastReceivedAt, byKey, opts.configured[platform] ?? false, opts.now),
+    );
+  };
+
+  // 1) raw_inbox-derived discovery — carries the REAL message counts + last-seen.
   for (const platform of platforms) {
-    const configured = opts.configured[platform] ?? false;
     for (const group of discovery[platform]) {
-      // the group itself (sub_id "")
-      items.push(
-        toItem(platform, group.externalId, "", "group", group.title, group.messageCount, group.lastReceivedAt, byKey, configured, opts.now),
-      );
-      // each sub-channel
+      emit(platform, group.externalId, "", "group", group.title, group.messageCount, group.lastReceivedAt);
       for (const s of group.subChannels) {
-        items.push(
-          toItem(platform, group.externalId, s.subId, s.scope, s.title, s.messageCount, s.lastReceivedAt, byKey, configured, opts.now),
-        );
+        emit(platform, group.externalId, s.subId, s.scope, s.title, s.messageCount, s.lastReceivedAt);
       }
     }
+  }
+
+  // 2) Ledger-only targets — a channel_bindings row the Gateway INVENTORIED (or the
+  //    steward curated) that has NOT yet produced a raw_inbox message. Without this
+  //    union such a target is invisible: a Discord channel only emits rows once
+  //    BOUND, but the steward can only bind what the view shows — a deadlock. We
+  //    surface it here with count 0 / no last-seen so it becomes selectable. The
+  //    `emitted` guard means a target present in BOTH sources keeps its real count.
+  for (const b of bindings) {
+    if (b.platform !== "telegram" && b.platform !== "discord") continue;
+    emit(b.platform, b.external_id, b.sub_id, b.scope, b.title ?? undefined, 0, null);
   }
 
   return items;

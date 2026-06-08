@@ -324,4 +324,46 @@ describe("mergeDiscoveryWithBindings", () => {
     const b = mergeDiscoveryWithBindings(discovery, [], { configured, now: NOW + HOUR * 0 });
     expect(JSON.stringify(a)).toEqual(JSON.stringify(b));
   });
+
+  it("surfaces a ledger-only target that has NO raw_inbox discovery yet (the Gateway-inventory deadlock)", () => {
+    // The Discord deadlock: the Gateway inventories a guild + its channels into
+    // channel_bindings as 'discovered' BEFORE any message reaches raw_inbox,
+    // because the Gateway ingests from BOUND channels ONLY. If the merge keyed
+    // discovery off raw_inbox alone, such a target would be forever invisible —
+    // the steward could never bind it, so it could never produce a raw_inbox row.
+    // It MUST surface from the ledger with count 0 / no last-seen.
+    const emptyDiscovery: ChannelDiscovery = { telegram: [], discord: [] };
+    const cfg = { telegram: true, discord: true };
+    const bindings = [
+      binding({ platform: "discord", external_id: "limicon", sub_id: "", scope: "group", title: "limicon", status: "discovered", enabled: false }),
+      binding({ platform: "discord", external_id: "limicon", sub_id: "chan-general", scope: "channel", title: "general", status: "discovered", enabled: false }),
+    ];
+    const items = mergeDiscoveryWithBindings(emptyDiscovery, bindings, { configured: cfg, now: NOW });
+    expect(items).toHaveLength(2);
+    const k = byKey(items);
+    const group = k["discord:limicon:"];
+    const chan = k["discord:limicon:chan-general"];
+    expect(group).toBeTruthy();
+    expect(chan).toBeTruthy();
+    expect(chan.status).toBe("discovered");
+    expect(chan.liveness).toBe("unbound");
+    expect(chan.title).toBe("general");
+    expect(chan.scope).toBe("channel");
+    expect(chan.messageCount).toBe(0);
+    expect(chan.lastReceivedAt).toBeNull();
+  });
+
+  it("does NOT duplicate a target present in BOTH discovery and the ledger (discovery's real count wins)", () => {
+    // discovery already carries discord:g1:c1 with messageCount 3; a ledger row
+    // for the same key must annotate it, not spawn a second item.
+    const bindings = [
+      binding({ platform: "discord", external_id: "g1", sub_id: "c1", scope: "channel", status: "bound" }),
+    ];
+    const cfg = { telegram: true, discord: true };
+    const items = mergeDiscoveryWithBindings(discovery, bindings, { configured: cfg, now: NOW });
+    const matches = items.filter((i) => i.platform === "discord" && i.externalId === "g1" && i.subId === "c1");
+    expect(matches).toHaveLength(1);
+    expect(matches[0].status).toBe("bound");
+    expect(matches[0].messageCount).toBe(3); // from discovery, not the ledger's 0
+  });
 });
