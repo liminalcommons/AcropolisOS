@@ -186,6 +186,8 @@ describe("committed generated artifact matches codegen output", () => {
       path.join(PKG_ROOT, "lib", "agent", "tools.generated.ts"),
       "utf8",
     );
-    expect(actual).toBe(expected);
+    // Compare content, not line endings (the file may be checked out CRLF on
+    // Windows while codegen emits LF — EOL is a checkout artifact).
+    expect(actual.replace(/\r\n/g, "\n")).toBe(expected.replace(/\r\n/g, "\n"));
   });
 });
