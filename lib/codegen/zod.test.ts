@@ -209,6 +209,10 @@ describe("committed generated artifacts match codegen output", () => {
   // (packages/acropolisos/ontology/), not from any scenario seed. This test
   // guards that the committed files stay in sync with a regenerate-from-live run.
   const LIVE_ONTOLOGY = path.join(PKG_ROOT, "ontology");
+  // Compare CONTENT, not line endings: the committed file may be checked out
+  // CRLF on Windows while codegen emits LF. EOL is a checkout artifact, not part
+  // of "is the artifact in sync with the ontology".
+  const lf = (s: string): string => s.replace(/\r\n/g, "\n");
 
   it("types.generated.ts is in sync with the live ontology", async () => {
     const { readFile } = await import("node:fs/promises");
@@ -218,7 +222,7 @@ describe("committed generated artifacts match codegen output", () => {
       path.join(PKG_ROOT, "lib", "ontology", "types.generated.ts"),
       "utf8",
     );
-    expect(actual).toBe(expected);
+    expect(lf(actual)).toBe(lf(expected));
   });
 
   it("ontology.generated.ts is in sync with the live ontology", async () => {
@@ -229,6 +233,6 @@ describe("committed generated artifacts match codegen output", () => {
       path.join(PKG_ROOT, "lib", "ontology", "ontology.generated.ts"),
       "utf8",
     );
-    expect(actual).toBe(expected);
+    expect(lf(actual)).toBe(lf(expected));
   });
 });

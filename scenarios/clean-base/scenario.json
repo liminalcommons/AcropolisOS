@@ -1,6 +1,0 @@
-{
-  "name": "small-community",
-  "description": "A small community or org: members, blockers, notifications, events, and meeting minutes. The default starting point.",
-  "default": true,
-  "version": "1.0.0"
-}

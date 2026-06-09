@@ -1,18 +1,17 @@
+import { getDb } from "../db/client";
 import { InMemoryInboxStore, PgInboxStore, type InboxStore } from "./store";
 
 let instance: InboxStore | null = null;
 
 export function getInboxStore(): InboxStore {
   if (!instance) {
-    if (process.env.DATABASE_URL) {
-      // Lazy-import the DB client so the module graph is not broken in test
-      // environments where DATABASE_URL is unset and getDb() would throw.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { getDb } = require("../db/client") as { getDb: () => import("../db/client").Database };
-      instance = new PgInboxStore(getDb());
-    } else {
-      instance = new InMemoryInboxStore();
-    }
+    // Importing db/client is side-effect-free — getDb() only opens a connection
+    // when called, and that call is still gated on DATABASE_URL. The previous
+    // lazy require() broke under vitest (it could not resolve the relative path
+    // from the transformed module), failing every test that hit this path.
+    instance = process.env.DATABASE_URL
+      ? new PgInboxStore(getDb())
+      : new InMemoryInboxStore();
   }
   return instance;
 }
