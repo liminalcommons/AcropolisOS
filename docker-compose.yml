@@ -105,6 +105,14 @@ services:
       - ./docker-entrypoint.sh:/app/docker-entrypoint.sh:ro
       - ./.dockerignore:/app/.dockerignore:ro
       - ./.env.example:/app/.env.example:ro
+      # next.config.ts is NOT copied into the runtime image (the Dockerfile's
+      # final stage only COPYs select dirs). Mounting it makes the dev server
+      # read allowedDevOrigins on every `compose up` — without it the tunnel's
+      # /_next/webpack-hmr is blocked and the app never hydrates (durable fix
+      # for the cp'd hydration patch). eslint.config.mjs is mounted so the
+      # function-backed-sandbox ESLint tests find a config in-container.
+      - ./next.config.ts:/app/next.config.ts:ro
+      - ./eslint.config.mjs:/app/eslint.config.mjs:ro
       # Protect the compiled .next/ dir from host-side shadowing.
       - nexttmp:/app/.next
     ports:
