@@ -116,7 +116,7 @@ export default async function MePage(): Promise<React.ReactElement> {
           <div className="flex items-center gap-2 mb-4">
             <span
               className={`text-xs font-bold uppercase tracking-widest ${
-                blockers.length > 0 ? "text-amber-400" : "text-muted-foreground"
+                blockers.length > 0 ? "text-warning" : "text-muted-foreground"
               }`}
             >
               Agent blockers
@@ -193,7 +193,7 @@ export default async function MePage(): Promise<React.ReactElement> {
                       <ul className="space-y-1">
                         {(b.pathways as Array<{ id: string; label: string; rationale: string; reversibility: string }>).map((p) => (
                           <li key={p.id} className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${p.reversibility === "permanent" ? "bg-red-500" : p.reversibility === "moderate" ? "bg-amber-500" : "bg-emerald-500"}`} title={p.reversibility} />
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${p.reversibility === "permanent" ? "bg-destructive" : p.reversibility === "moderate" ? "bg-warning" : "bg-success"}`} title={p.reversibility} />
                             <form action={resolveBlockerAction.bind(null, b.id, p.id)} className="inline">
                               <button type="submit" className="text-[10px] text-foreground hover:text-foreground text-left">
                                 {p.label} — <span className="text-muted-foreground">{p.rationale}</span>

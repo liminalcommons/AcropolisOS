@@ -15,6 +15,7 @@
 import { useState } from "react";
 import { MessageSquare } from "lucide-react";
 import { buildDiscussPrompt, type DecisionView, type ReversibilityTier } from "@/lib/blockers/decision-view";
+import { storePendingDiscussPrompt } from "@/lib/decisions/discuss-prompt-state";
 
 type ResolveAction = (blockerId: string, pathwayId?: string) => Promise<void>;
 type DismissAction = (blockerId: string, reason?: string) => Promise<void>;
@@ -33,9 +34,9 @@ const RAIL_CLS: Record<ReversibilityTier, string> = {
   permanent: "border-l-rose-500",
 };
 const TIER_TEXT: Record<ReversibilityTier, string> = {
-  easy: "text-emerald-400",
-  moderate: "text-amber-400",
-  permanent: "text-rose-400",
+  easy: "text-success",
+  moderate: "text-warning",
+  permanent: "text-destructive",
 };
 
 // "Discuss with the agent" (the 4th affordance): doesn't dispose the decision —
@@ -48,6 +49,10 @@ function discussDecision(d: DecisionView): void {
   if (typeof window === "undefined") return;
   const prompt = buildDiscussPrompt(d);
   window.dispatchEvent(new CustomEvent("acropolisos:open-chat"));
+  // Park the prompt in sessionStorage BEFORE firing the in-memory event. If the
+  // dock was collapsed (ChatPanel unmounted) the events miss, but ChatPanel
+  // reads this on its next mount/hydration — the prompt survives the race.
+  storePendingDiscussPrompt(prompt);
   const fire = (): void => {
     window.dispatchEvent(new CustomEvent("acropolisos:prompt", { detail: { prompt } }));
   };
@@ -106,7 +111,7 @@ export function DecisionFocus({
         {/* Framing */}
         <div>
           <div className="flex items-center gap-2">
-            <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-300">
+            <span className="rounded bg-warning/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-warning">
               {d.reasonKind}
             </span>
             {d.blockedActorId && (
@@ -130,7 +135,7 @@ export function DecisionFocus({
                   className={`block w-full rounded-r-lg border-l-4 bg-card/40 py-3 pl-4 pr-4 text-left transition-colors hover:bg-card ${RAIL_CLS[s.reversibility]}`}
                 >
                   {s.recommended && (
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-success">
                       ● recommended
                     </p>
                   )}

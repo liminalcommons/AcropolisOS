@@ -57,10 +57,10 @@ export function OrgNameEditor({ initialName }: { initialName: string }) {
         {pending ? "Saving…" : "Save"}
       </button>
       {toast.kind === "ok" && (
-        <span role="status" className="pb-2 text-xs text-emerald-400">Saved</span>
+        <span role="status" className="pb-2 text-xs text-success">Saved</span>
       )}
       {toast.kind === "error" && (
-        <span role="status" className="pb-2 text-xs text-rose-400">{toast.message}</span>
+        <span role="status" className="pb-2 text-xs text-destructive">{toast.message}</span>
       )}
     </form>
   );

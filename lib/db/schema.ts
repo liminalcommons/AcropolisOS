@@ -1,4 +1,4 @@
-import { jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { boolean, jsonb, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // Re-export YAML-derived object/link tables so drizzle-kit sees them when
@@ -117,3 +117,26 @@ export const approved_views = pgTable(
 
 export type ApprovedViewRow = typeof approved_views.$inferSelect;
 export type ApprovedViewInsert = typeof approved_views.$inferInsert;
+
+// Steward's curation of which DISCOVERED channel targets are allow-listed into the
+// org. Infra table (hand-managed, like raw_inbox) — NOT in schema.generated.ts and
+// NOT created by drizzle-kit push (it silently skips new tables); see docker-entrypoint.sh.
+// sub_id "" = the whole group/server; a non-empty sub_id is a Telegram topic /
+// Discord channel|thread. status "bound" = pipelined; "ignored" = muted.
+export const channel_bindings = pgTable("channel_bindings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  platform: text("platform").notNull(),            // "telegram" | "discord"
+  scope: text("scope").notNull(),                  // "group" | "topic" | "channel" | "thread"
+  external_id: text("external_id").notNull(),      // chat_id (telegram) | guild_id (discord)
+  sub_id: text("sub_id").notNull().default(""),    // topic/channel/thread id; "" = whole group
+  title: text("title"),                            // last-seen human title snapshot
+  label: text("label"),                            // steward label
+  status: text("status").notNull().default("bound"), // "bound" | "ignored"
+  enabled: boolean("enabled").notNull().default(true),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  uniq: uniqueIndex("channel_bindings_unique").on(t.platform, t.external_id, t.sub_id),
+}));
+export type ChannelBindingRow = typeof channel_bindings.$inferSelect;
+export type ChannelBindingInsert = typeof channel_bindings.$inferInsert;

@@ -21,6 +21,7 @@ import {
   WIDGET_CATALOG,
   CATALOG_KINDS,
   validateWidgetConfig,
+  describeValidationError,
   type CatalogKind,
   type MetricData,
   type DataTableData,
@@ -28,7 +29,7 @@ import {
   type CalendarData,
 } from "./catalog";
 import { createReadOnlyDataApi, type CanReadType } from "./read-api";
-import { type ResolvedWidget } from "./compose";
+import { isEmptyWidgetData, type ResolvedWidget } from "./compose";
 import { deriveDefaultBoard } from "./derive-board";
 import { resolveApprovedViews } from "@/lib/views/resolve";
 import { mergeApprovedIntoFloor } from "@/lib/views/merge";
@@ -91,9 +92,11 @@ export async function resolvePerUserDashboard(
         // At least one valid widget → return the valid set (partial-invalid is fine).
         return pinned;
       }
-      // All pinned configs stale/invalid (zero valid after validateWidgetConfig) →
-      // fall through to the derived default so the member always sees SOMETHING.
-      // The derived board is the floor, not a blank "No widgets configured".
+      // runDescriptors returned nothing — now reachable ONLY when `stored` held no
+      // descriptors of a known kind (drift AND load-failure widgets are SURFACED
+      // with status, not dropped, so any known-kind descriptor yields a widget).
+      // Fall through to the derived default so the member always sees SOMETHING —
+      // the floor, not a blank "No widgets configured".
     }
   }
 
@@ -158,8 +161,23 @@ async function runDescriptors(
     const config = d.config ?? {};
 
     // Validate config — membership + field whitelist come from the loaded ontology.
+    // On failure DO NOT drop the widget: a stored/derived config that no longer
+    // validates is STRUCTURAL DRIFT (type renamed/removed, field deleted). Surface
+    // it as a data-less error widget so the steward SEES the broken view instead
+    // of it silently vanishing (governance over silent mutation).
     const validation = validateWidgetConfig(kind, config, ontology);
-    if (!validation.ok) continue;
+    if (!validation.ok) {
+      resolved.push({
+        id: d.id ?? `derived-${i}`,
+        kind,
+        config,
+        data: null,
+        status: "drift",
+        validation_error: describeValidationError(validation),
+        title: (d as { title?: string }).title,
+      });
+      continue;
+    }
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -207,13 +225,30 @@ async function runDescriptors(
         kind,
         config,
         data: resolvedData as MetricData | DataTableData | RosterData | CalendarData,
+        status: isEmptyWidgetData(
+          kind,
+          resolvedData as MetricData | DataTableData | RosterData | CalendarData,
+        ) ? "empty" : "ok",
         title: (d as { title?: string }).title,
         ...(rowActions ? { rowActions } : {}),
         ...(rowResolvers ? { rowResolvers } : {}),
         ...(rowConfirms ? { rowConfirms } : {}),
       });
-    } catch {
-      // Skip widgets whose binding throws — don't crash the dashboard
+    } catch (e) {
+      // A single widget's data binding threw (transient DB error, bad cast). Do
+      // NOT drop it (silent vanish) and do NOT let it nuke the whole board:
+      // surface a status:"error" widget so the failure is VISIBLE and ISOLATED.
+      // The raw error is logged server-side ONLY — never sent to the client.
+      console.error(`[widget:${kind}] resolve failed`, e);
+      resolved.push({
+        id: d.id ?? `derived-${i}`,
+        kind,
+        config,
+        data: null,
+        status: "error",
+        error: { message: "This widget could not be loaded." },
+        title: (d as { title?: string }).title,
+      });
     }
   }
 
@@ -225,6 +260,16 @@ async function runDescriptors(
 // data_table → resolve over config.columns, rewrite data.rows.
 // roster      → resolve over config.fields,  rewrite data.entries.
 // metric/calendar → no column-based ref values; returned unchanged.
+//
+// HIDDEN-COLUMN INVARIANT (regression safeguard — see
+// lib/widgets/derive-board.ts rowActionColumns + the "row-action column hygiene
+// across kinds" suite in derive-board.test.ts): the row-affordance columns
+// (row id, each resolver's choicesFrom, each confirm's source) are requested in
+// config.columns ONLY so the Dismiss/pathway/confirm affordances can read them.
+// They are NOT visible table data — the renderer strips them. This resolver must
+// therefore never PROMOTE a hidden column into visible output, and any future
+// kind that opts into row_actions (roster/calendar) inherits the same contract:
+// hidden columns stay hidden, identically across kinds.
 
 async function applyRefResolution(
   kind: CatalogKind,

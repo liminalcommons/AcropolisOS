@@ -2,12 +2,23 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
+import { manifestExists, readManifest } from "./manifest-paths";
 
+// The five install-manifest files are NOT baked into the runtime image (the
+// Dockerfile runner stage COPYs only source dirs) and were not bind-mounted by
+// the original app-service volume list — so a bare readFileSync used to produce
+// 30 cryptic ENOENT failures in the as-running container, "green" only after a
+// transient `docker cp`. docker-compose.yml now bind-mounts all five read-only
+// into /app, so any `compose up` makes this suite reproducible. readManifest()
+// throws ONE actionable error (naming the provisioning command) if a file is
+// still absent in an already-running container created before that mount — so
+// this suite can never again masquerade as green when the manifests are missing.
+//
+// The five manifest files are read through readManifest()/manifestExists() (which
+// resolve the bind-mounts and throw an actionable error on absence). scripts/ and
+// package.json below are read directly: scripts/ is bind-mounted and package.json
+// is baked into the image (Dockerfile COPYs it), so both are reproducibly present.
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
-const COMPOSE_PATH = path.join(PKG_ROOT, "docker-compose.yml");
-const DOCKERFILE_PATH = path.join(PKG_ROOT, "Dockerfile");
-const ENTRYPOINT_PATH = path.join(PKG_ROOT, "docker-entrypoint.sh");
-const DOCKERIGNORE_PATH = path.join(PKG_ROOT, ".dockerignore");
 
 interface ComposeService {
   image?: string;
@@ -28,12 +39,23 @@ interface ComposeShape {
 }
 
 function loadCompose(): ComposeShape {
-  return parseYaml(readFileSync(COMPOSE_PATH, "utf8")) as ComposeShape;
+  return parseYaml(readManifest("docker-compose.yml")) as ComposeShape;
+}
+
+// docker-compose `environment:` accepts BOTH a map ({KEY: val}) and a list
+// (["KEY=val"]). Flatten either form to a single string so a test can grep for
+// a key=value pair without caring which form the author used.
+function flatEnv(env: Record<string, string> | string[] | undefined): string {
+  if (!env) return "";
+  if (Array.isArray(env)) return env.join("\n");
+  return Object.entries(env)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("\n");
 }
 
 describe("docker-compose.yml — US-036 single-host install", () => {
   it("exists at package root", () => {
-    expect(existsSync(COMPOSE_PATH)).toBe(true);
+    expect(manifestExists("docker-compose.yml")).toBe(true);
   });
 
   it("declares postgres, app, and inngest services", () => {
@@ -62,6 +84,32 @@ describe("docker-compose.yml — US-036 single-host install", () => {
     expect(flat).toMatch(/\.\/functions/);
     expect(flat).toMatch(/\.\/uploads/);
     expect(flat).toMatch(/\.\/\.env/);
+  });
+
+  it("app read-only bind-mounts the five install-manifest files into /app", () => {
+    // DURABILITY FIX: the install-manifest files (docker-compose.yml, Dockerfile,
+    // docker-entrypoint.sh, .dockerignore, .env.example) are NOT baked into the
+    // runtime image (the Dockerfile runner stage COPYs only source dirs and routes
+    // docker-entrypoint.sh to /usr/local/bin). Without these mounts the
+    // in-container install suite reads them via a transient `docker cp` — a
+    // non-reproducible green. Mounting them read-only makes any `compose up`
+    // reproduce the suite with zero cp. Read-only (`:ro`) because the container
+    // must never mutate the operator's manifests.
+    const compose = loadCompose();
+    const volumes = compose.services.app.volumes ?? [];
+    const flat = volumes.join("\n");
+    for (const f of [
+      "docker-compose.yml",
+      "Dockerfile",
+      "docker-entrypoint.sh",
+      ".dockerignore",
+      ".env.example",
+    ]) {
+      // Match `./<file>:/app/<file>:ro` allowing the dotfile escape in regex.
+      const esc = f.replace(/\./g, "\\.");
+      const re = new RegExp(`\\./${esc}:/app/${esc}:ro`);
+      expect(flat, `app must read-only bind-mount ${f}`).toMatch(re);
+    }
   });
 
   it("app waits for postgres to be healthy before starting", () => {
@@ -102,28 +150,28 @@ describe("docker-compose.yml — US-036 single-host install", () => {
 
 describe("Dockerfile — US-036 reproducible image", () => {
   it("exists at package root", () => {
-    expect(existsSync(DOCKERFILE_PATH)).toBe(true);
+    expect(manifestExists("Dockerfile")).toBe(true);
   });
 
   it("uses a Node.js LTS base image", () => {
-    const dockerfile = readFileSync(DOCKERFILE_PATH, "utf8");
+    const dockerfile = readManifest("Dockerfile");
     expect(dockerfile).toMatch(/FROM node:/);
   });
 
   it("runs the Next.js production build", () => {
-    const dockerfile = readFileSync(DOCKERFILE_PATH, "utf8");
+    const dockerfile = readManifest("Dockerfile");
     expect(dockerfile).toMatch(/npm run build/);
   });
 
   it("invokes the entrypoint so first boot runs migrations", () => {
-    const dockerfile = readFileSync(DOCKERFILE_PATH, "utf8");
+    const dockerfile = readManifest("Dockerfile");
     expect(dockerfile).toMatch(/docker-entrypoint\.sh/);
   });
 });
 
 describe("docker-entrypoint.sh — first-boot schema sync", () => {
   it("exists", () => {
-    expect(existsSync(ENTRYPOINT_PATH)).toBe(true);
+    expect(manifestExists("docker-entrypoint.sh")).toBe(true);
   });
 
   it("runs drizzle-kit push before starting the app", () => {
@@ -132,7 +180,7 @@ describe("docker-entrypoint.sh — first-boot schema sync", () => {
     // the codegen'd object tables, so `migrate` always failed at
     // 0003_data_audit. `push --force` syncs the full Drizzle schema
     // (incl. the re-exported schema.generated) idempotently.
-    const entrypoint = readFileSync(ENTRYPOINT_PATH, "utf8");
+    const entrypoint = readManifest("docker-entrypoint.sh");
     expect(entrypoint).toMatch(/drizzle-kit push --force/);
     expect(entrypoint).toMatch(/exec/);
   });
@@ -144,7 +192,7 @@ describe("docker-entrypoint.sh — first-boot schema sync", () => {
     // explicitly via psql after push is the pragmatic fix; 0003 itself is
     // idempotent (CREATE TABLE IF NOT EXISTS, CREATE OR REPLACE FUNCTION,
     // DROP TRIGGER IF EXISTS).
-    const entrypoint = readFileSync(ENTRYPOINT_PATH, "utf8");
+    const entrypoint = readManifest("docker-entrypoint.sh");
     expect(entrypoint).toMatch(/psql .*0003_data_audit\.sql/);
     expect(entrypoint).toMatch(/ON_ERROR_STOP=1/);
   });
@@ -224,12 +272,109 @@ describe("scripts/smoke-compose.ts — I3 boot smoke", () => {
 
 describe(".dockerignore — reproducible builds", () => {
   it("exists at package root", () => {
-    expect(existsSync(DOCKERIGNORE_PATH)).toBe(true);
+    expect(manifestExists(".dockerignore")).toBe(true);
   });
 
   it("excludes node_modules and .next so build context stays small", () => {
-    const ignore = readFileSync(DOCKERIGNORE_PATH, "utf8");
+    const ignore = readManifest(".dockerignore");
     expect(ignore).toMatch(/node_modules/);
     expect(ignore).toMatch(/\.next/);
+  });
+});
+
+describe("docker-compose.yml — Discord Gateway worker service (Phase E3)", () => {
+  const SVC = "acropolisos-discord-gateway";
+
+  it("declares the acropolisos-discord-gateway service", () => {
+    const compose = loadCompose();
+    expect(compose.services[SVC]).toBeDefined();
+  });
+
+  it("shares the app's build/image so discord.js + tsx are already installed", () => {
+    // Reuse the same Node image (build context) the app uses — discord.js is a
+    // prod dependency and tsx is a devDependency already present in the image.
+    // A separate Dockerfile would duplicate the dependency tree.
+    const compose = loadCompose();
+    expect(compose.services[SVC].build).toBeDefined();
+  });
+
+  it("restarts unless-stopped (always-on worker)", () => {
+    const compose = loadCompose();
+    expect(compose.services[SVC].restart).toBe("unless-stopped");
+  });
+
+  it("shares the database via the same DATABASE_URL the app uses", () => {
+    // The worker writes raw_inbox + channel_bindings on the SAME Postgres the
+    // app reads. It must reach postgres:5432 over the internal Docker network.
+    const compose = loadCompose();
+    const env = flatEnv(compose.services[SVC].environment);
+    expect(env).toMatch(/DATABASE_URL=postgres:\/\/.*@postgres:5432\/acropolisos/);
+  });
+
+  it("loads .env (env_file) so DISCORD_BOT_TOKEN comes from the gitignored file ONLY", () => {
+    // The token is read from process.env at runtime. It is supplied ONLY via the
+    // gitignored .env (env_file) — NEVER hardcoded in the compose environment.
+    const compose = loadCompose();
+    const envFile = compose.services[SVC].env_file;
+    const files = Array.isArray(envFile) ? envFile : envFile ? [envFile] : [];
+    expect(files.some((f) => f.includes(".env"))).toBe(true);
+  });
+
+  it("runs the discord-gateway worker entry via tsx with WORKER_ENTRY set", () => {
+    // The worker's index.ts only calls main() when WORKER_ENTRY=discord-gateway
+    // (so a plain import under vitest/tsc stays side-effect-free). The command
+    // runs it with tsx, which resolves the @/ tsconfig path alias in-container.
+    const compose = loadCompose();
+    const cmd = compose.services[SVC].command;
+    const flat = Array.isArray(cmd) ? cmd.join(" ") : (cmd ?? "");
+    expect(flat).toMatch(/tsx/);
+    expect(flat).toMatch(/workers\/discord-gateway\/index\.ts/);
+    const env = flatEnv(compose.services[SVC].environment);
+    expect(env).toMatch(/WORKER_ENTRY=discord-gateway/);
+  });
+
+  it("waits for postgres to be healthy before connecting", () => {
+    const compose = loadCompose();
+    const dep = compose.services[SVC].depends_on;
+    if (!dep || Array.isArray(dep)) {
+      throw new Error(`${SVC}.depends_on must be the object form with a condition`);
+    }
+    expect(dep.postgres?.condition).toBe("service_healthy");
+  });
+
+  it("bind-mounts the source the worker imports (workers/, lib/, tsconfig.json)", () => {
+    // Dev compose runs from source via tsx, so the worker + its @/lib imports +
+    // the path-alias tsconfig must be mounted into the container.
+    const compose = loadCompose();
+    const volumes = compose.services[SVC].volumes ?? [];
+    const flat = volumes.join("\n");
+    expect(flat).toMatch(/\.\/workers/);
+    expect(flat).toMatch(/\.\/lib/);
+    expect(flat).toMatch(/tsconfig\.json/);
+  });
+
+  it("hardcodes NO Discord bot token anywhere in the service (inert when unset)", () => {
+    // Security fence: the compose service must contain no literal token. The only
+    // token crossing is the gitignored .env (env_file). When unset the worker
+    // logs "idle" and does not crash (asserted by the worker unit tests).
+    const compose = loadCompose();
+    const svcText = JSON.stringify(compose.services[SVC]);
+    // A real Discord bot token is a long opaque string; ensure DISCORD_BOT_TOKEN
+    // is never assigned an inline value in the compose service.
+    expect(svcText).not.toMatch(/DISCORD_BOT_TOKEN=\S/);
+  });
+});
+
+describe(".env.example — DISCORD_BOT_TOKEN placeholder (Phase E3)", () => {
+  it("declares an EMPTY DISCORD_BOT_TOKEN placeholder (no real token committed)", () => {
+    const env = readManifest(".env.example");
+    // The line must exist and be empty (key with no value). A non-empty value
+    // would mean a token leaked into a tracked file.
+    expect(env).toMatch(/^DISCORD_BOT_TOKEN=\s*$/m);
+  });
+
+  it("documents the manual token-reset + MESSAGE_CONTENT intent steps", () => {
+    const env = readManifest(".env.example");
+    expect(env).toMatch(/MESSAGE_CONTENT/);
   });
 });

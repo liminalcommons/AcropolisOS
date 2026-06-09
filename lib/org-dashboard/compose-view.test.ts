@@ -323,6 +323,111 @@ describe("multiple widgets coexist (append, not replace)", () => {
   });
 });
 
+describe("row_actions:true — required hidden columns are auto-injected (fail-closed governance)", () => {
+  // A data_table with row_actions:true derives Resolve/Confirm pathways from the
+  // ontology's row-action definitions. Those affordances READ from hidden columns
+  // (id = action target, pathways = resolver choices, confirm_action = confirm
+  // source). The read fence selects ONLY the requested columns, so if the steward
+  // omits the hidden columns the cards render with UNDEFINED pathways — a silent
+  // correctness failure. composeOrgView must auto-inject the required columns.
+  // agent_blocker read:["steward","member_self"] → steward + canWriteDashboard.
+
+  it("missing required columns (only [summary]) → auto-inject id + pathways + confirm_action and persist", async () => {
+    const canReadType = buildCanReadType(steward, ontology);
+    const result = await composeOrgView(
+      {
+        kind: "data_table",
+        type: "agent_blocker",
+        columns: ["summary"],
+        row_actions: true,
+      },
+      { canReadType, canWriteDashboard: true, ontology },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const cfg = result.descriptor.config as { columns: string[]; row_actions?: boolean };
+    expect(cfg.columns).toContain("summary");
+    expect(cfg.columns).toContain("id");
+    expect(cfg.columns).toContain("pathways");
+    expect(cfg.columns).toContain("confirm_action");
+
+    const dashboard = await readOrgDashboard();
+    const persisted = dashboard.widgets.find(
+      (w) => w.id === "compose-agent_blocker-data_table",
+    );
+    expect(persisted).toBeDefined();
+    const pCols = (persisted?.config as { columns: string[] }).columns;
+    expect(pCols).toContain("id");
+    expect(pCols).toContain("pathways");
+    expect(pCols).toContain("confirm_action");
+  });
+
+  it("all required columns already present → no redundant duplicates", async () => {
+    const canReadType = buildCanReadType(steward, ontology);
+    const result = await composeOrgView(
+      {
+        kind: "data_table",
+        type: "agent_blocker",
+        columns: ["summary", "id", "pathways", "confirm_action"],
+        row_actions: true,
+      },
+      { canReadType, canWriteDashboard: true, ontology },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const cols = (result.descriptor.config as { columns: string[] }).columns;
+    // No duplicate of any column (injection must be a set-union, not append).
+    expect(cols.length).toBe(new Set(cols).size);
+    expect(cols).toContain("id");
+    expect(cols).toContain("pathways");
+    expect(cols).toContain("confirm_action");
+  });
+
+  it("row_actions absent → columns unchanged (no injection for plain tables)", async () => {
+    const canReadType = buildCanReadType(steward, ontology);
+    const result = await composeOrgView(
+      {
+        kind: "data_table",
+        type: "agent_blocker",
+        columns: ["summary"],
+        // row_actions omitted → a plain table, no row affordances, no injection.
+      },
+      { canReadType, canWriteDashboard: true, ontology },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const cols = (result.descriptor.config as { columns: string[] }).columns;
+    expect(cols).toEqual(["summary"]);
+  });
+
+  it("type with NO row-action definitions (shift) + row_actions:true → only id injected, no resolver/confirm cols", async () => {
+    // shift has no row_resolver/row_confirm actions, so rowActionColumns yields
+    // only the row-id (["id"]). Injection must add just "id" — never invent a
+    // resolver/confirm column that the ontology does not define.
+    const canReadType = buildCanReadType(steward, ontology);
+    const result = await composeOrgView(
+      {
+        kind: "data_table",
+        type: "shift",
+        columns: ["label"],
+        row_actions: true,
+      },
+      { canReadType, canWriteDashboard: true, ontology },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const cols = (result.descriptor.config as { columns: string[] }).columns;
+    expect(cols).toContain("label");
+    expect(cols).toContain("id");
+    expect(cols).not.toContain("pathways");
+    expect(cols).not.toContain("confirm_action");
+  });
+});
+
 describe("adminDefaultBoard — derived admin floor", () => {
   it("leads with the open-agent_blocker veto-queue and has a count metric per type", () => {
     const board = adminDefaultBoard(ontology, () => true);

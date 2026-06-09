@@ -1,0 +1,80 @@
+AgentBlocker:
+  kind: concept
+  description: |
+    Typed escalation from the agent to a specific human. Written by
+    the flag_blocker action only — humans never edit the row directly
+    (they resolve via the resolve_blocker action or dismiss_blocker).
+  title_property: summary
+  permissions:
+    read: ["steward", "member_self"]
+    write: ["steward", "member_self"]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    blocked_actor_id:
+      type: ref
+      target: Member
+    reason_kind:
+      type: enum
+      values: [approval, confirmation, ambiguity, missing_data, consent, decision, risky_action]
+    summary:
+      type: string
+      description: One-line human-readable headline.
+    detail:
+      type: string
+      description: Agent's full reasoning / context.
+    blocked_work_ref:
+      type: string
+      required: false
+      description: |
+        Free-form handle to the workstream — chat session id, proposal id,
+        action_audit id. Attribution anchor across agent restarts.
+    resolution_mode:
+      type: enum
+      values: [pathways, text_input, confirm_binary]
+      default: pathways
+      description: |
+        Drives the widget UI shape:
+        - pathways: agent's N curated paths forward
+        - text_input: human supplies missing data
+        - confirm_binary: yes/no on a single proposed action
+    pathways:
+      type: string
+      required: false
+      description: |
+        JSON array (present when resolution_mode = pathways). Each element:
+        { id, label, rationale, action: { type, params }, reversibility: easy|moderate|permanent }.
+        N >= 1, <= 5. DB column is jsonb.
+    input_schema:
+      type: string
+      required: false
+      description: |
+        JSON object (present when resolution_mode = text_input).
+        { kind: 'string'|'number'|'date'|'object_ref', target_type?, prompt: string }.
+        DB column is jsonb.
+    confirm_action:
+      type: string
+      required: false
+      description: |
+        JSON object (present when resolution_mode = confirm_binary).
+        { label: string, action: { type, params } }. DB column is jsonb.
+    status:
+      type: enum
+      values: [open, resolved, dismissed, expired]
+      default: open
+    created_at:
+      ref: created_at
+    resolved_at:
+      type: timestamp
+      required: false
+    resolved_by_action_audit_id:
+      type: string
+      required: false
+      description: action_audit.id of the unblocking action invocation.
+    resolved_via_pathway_id:
+      type: uuid
+      required: false
+      description: |
+        Which pathway the human picked (if any). Training signal for
+        pathway preference by situation kind.

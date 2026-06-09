@@ -28,6 +28,18 @@ import {
 } from "@/lib/widgets/row-action.server";
 import { parseConfirmAction } from "@/lib/widgets/row-confirm";
 
+// Pure dispatch decision — exported so it is node-testable without a DOM. error
+// (a runtime load failure) takes precedence over drift (structural mismatch);
+// validation_error is honored for back-compat with any widget built before the
+// status field existed.
+export function widgetCardVariant(
+  w: { status?: import("@/lib/widgets/compose").WidgetStatus; validation_error?: { kind: string; error: string } },
+): "error" | "drift" | "render" {
+  if (w.status === "error") return "error";
+  if (w.status === "drift" || w.validation_error) return "drift";
+  return "render";
+}
+
 // ── CardTitle ─────────────────────────────────────────────────────────────────
 // A card's title. When the widget is bound to an ontology type, the title links
 // to that type's full collection view (/[type]) — this is how the board doubles
@@ -349,9 +361,63 @@ function CalendarWidget({ widget }: { widget: ResolvedWidget }) {
   );
 }
 
+// ── WidgetErrorCard ───────────────────────────────────────────────────────────
+//
+// Rendered when a widget's stored config no longer validates against the current
+// ontology (structural drift — a type renamed/removed, a field deleted). The
+// resolve path returns the widget with data:null + validation_error instead of
+// silently dropping it, so the steward SEES the broken view and can act on it
+// (governance over silent mutation). Tokens only — no hardcoded palette.
+function WidgetErrorCard({ widget }: { widget: ResolvedWidget }) {
+  const ve = widget.validation_error;
+  const label = widget.title ?? prettify(widget.kind);
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-card p-5">
+      <div className="flex items-center gap-2 mb-2">
+        <span aria-hidden className="text-muted-foreground">
+          ⚠
+        </span>
+        <p className={TITLE_CLS}>{label}</p>
+      </div>
+      <p className="text-xs text-foreground mb-1">This widget no longer matches the ontology.</p>
+      <p className="text-xs text-muted-foreground">
+        {ve?.error ?? "Its saved configuration is no longer valid."}
+      </p>
+      <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mt-3 font-mono">
+        {widget.kind}
+        {ve?.kind ? ` · ${ve.kind}` : ""}
+      </p>
+    </div>
+  );
+}
+
+// ── WidgetLoadErrorCard ───────────────────────────────────────────────────────
+//
+// Rendered when a widget's data binding threw at resolve time (status:"error").
+// Distinct from drift (WidgetErrorCard, dashed): a transient/load failure, not a
+// structural-config mismatch. Tokens only — no hardcoded palette, no new token.
+function WidgetLoadErrorCard({ widget }: { widget: ResolvedWidget }) {
+  const label = widget.title ?? prettify(widget.kind);
+  return (
+    <div className="rounded-lg border border-border bg-card p-5">
+      <div className="flex items-center gap-2 mb-2">
+        <span aria-hidden className="text-muted-foreground">⚠</span>
+        <p className={TITLE_CLS}>{label}</p>
+      </div>
+      <p className="text-xs text-foreground mb-1">This widget couldn’t load.</p>
+      <p className="text-xs text-muted-foreground">
+        {widget.error?.message ?? "Something went wrong fetching its data. Try again shortly."}
+      </p>
+    </div>
+  );
+}
+
 // ── ResolvedWidgetCard (dispatcher) ──────────────────────────────────────────
 
 export function ResolvedWidgetCard({ widget }: { widget: ResolvedWidget }) {
+  const variant = widgetCardVariant(widget);
+  if (variant === "error") return <WidgetLoadErrorCard widget={widget} />;
+  if (variant === "drift") return <WidgetErrorCard widget={widget} />;
   switch (widget.kind) {
     case "metric":
       return <MetricWidget widget={widget} />;

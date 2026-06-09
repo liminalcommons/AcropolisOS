@@ -6,6 +6,20 @@ import {
   recomputeImpactedTables,
 } from "./diff";
 
+describe("ProposalDiff.evidence", () => {
+  it("emptyDraft carries an empty evidence map", () => {
+    expect(emptyDraft().evidence).toEqual({});
+  });
+  it("parses a diff WITHOUT evidence (back-compat → defaults to {})", () => {
+    const { evidence: _e, ...noEvidence } = emptyDraft();
+    expect(ProposalDiff.parse(noEvidence).evidence).toEqual({});
+  });
+  it("round-trips evidence keyed by Type.field", () => {
+    const d = { ...emptyDraft(), evidence: { "Guest.passport": ["raw_inbox:abc"] } };
+    expect(ProposalDiff.parse(d).evidence["Guest.passport"]).toEqual(["raw_inbox:abc"]);
+  });
+});
+
 describe("ProposalDiff schema", () => {
   it("accepts an empty draft", () => {
     const parsed = ProposalDiff.safeParse(emptyDraft());

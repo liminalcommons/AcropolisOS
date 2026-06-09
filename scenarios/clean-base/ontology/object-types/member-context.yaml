@@ -1,0 +1,28 @@
+MemberContext:
+  kind: concept
+  description: |
+    One row per Member; auto-created on first /me visit or first
+    query_member_context call. Holds the member's `pinned_widgets`
+    layered on top of the always-on default widget set.
+  title_property: id
+  permissions:
+    read: ["steward", "member_self"]
+    write: ["steward", "member_self"]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    member_id:
+      type: ref
+      target: Member
+    pinned_widgets:
+      type: string
+      default: "[]"
+      description: |
+        JSON array of { id, kind, config } widget descriptors appended
+        after the default widget set in /me render order. DB column is jsonb.
+    created_at:
+      ref: created_at
+    updated_at:
+      type: timestamp
+      description: When pinned_widgets was last modified

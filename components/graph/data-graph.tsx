@@ -197,7 +197,7 @@ export function DataGraph({
               <Link href="/graph" className="underline hover:text-foreground">← schema view</Link>
             </div>
             {focus && (
-              <div className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-amber-300">
+              <div className="rounded border border-warning/30 bg-warning/10 px-2 py-1 text-warning">
                 Focused: <span className="font-mono">{focus.type}</span> · hops{" "}
                 {[1, 2, 3].map((h) => (
                   <Link

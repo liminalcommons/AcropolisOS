@@ -1,0 +1,12 @@
+name:
+  type: string
+  required: true
+  description: Full name of the community member
+email:
+  type: email
+  required: false
+  description: Contact email address (may be absent)
+since:
+  type: date
+  required: true
+  description: Date the member joined the community

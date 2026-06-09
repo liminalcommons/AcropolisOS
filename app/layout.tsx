@@ -45,6 +45,15 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
+        {/* Accessibility: skip link — sr-only until keyboard-focused, then jumps
+            past the chrome to the main content region (#main-content lives on
+            the content wrapper inside AppShell, both authed and unauth branches). */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:border focus:border-ring focus:bg-card focus:px-3 focus:py-2 focus:text-foreground"
+        >
+          Skip to content
+        </a>
         <TopProgressBar />
         <AppShell actor={shellActor} modelName={modelName}>
           {children}

@@ -92,4 +92,30 @@ describe("growDecisionToDiffs", () => {
   it("empty decision -> both null", () => {
     expect(growDecisionToDiffs({ autoApply: [], escalate: [] }, ontology)).toEqual({ additive: null, structural: null });
   });
+
+  it("additive: copies op.evidence onto the diff keyed Type.field", () => {
+    const decision = {
+      autoApply: [
+        { kind: "add_optional_field", object_type: "guest", field: "passport", evidence: ["raw_inbox:r1"] },
+        { kind: "add_optional_field", object_type: "guest", field: "phone", evidence: ["raw_inbox:r2"] },
+      ],
+      escalate: [],
+    } as GrowDecision;
+    const { additive } = growDecisionToDiffs(decision, ontology);
+    // folded critique Medium: two fields on ONE type keep SEPARATE evidence keys
+    expect(additive!.evidence["Guest.passport"]).toEqual(["raw_inbox:r1"]);
+    expect(additive!.evidence["Guest.phone"]).toEqual(["raw_inbox:r2"]);
+  });
+
+  it("structural: copies gp.evidence per field on a new type", () => {
+    const decision = {
+      autoApply: [],
+      escalate: [
+        { kind: "new_type", object_type: "vehicle", fields: ["plate", "make"], evidence: ["raw_inbox:r3"] },
+      ],
+    } as GrowDecision;
+    const { structural } = growDecisionToDiffs(decision, ontology);
+    expect(structural!.evidence["Vehicle.plate"]).toEqual(["raw_inbox:r3"]);
+    expect(structural!.evidence["Vehicle.make"]).toEqual(["raw_inbox:r3"]);
+  });
 });

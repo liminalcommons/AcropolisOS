@@ -32,7 +32,7 @@ function Toast({ state }: { state: ToastState }) {
   if (state.kind === "idle") return null;
   const cls =
     state.kind === "ok"
-      ? "border-emerald-800 bg-emerald-950/30 text-emerald-300"
+      ? "border-emerald-800 bg-emerald-950/30 text-success"
       : "border-rose-800 bg-rose-950/30 text-rose-300";
   return (
     <p role="status" className={`mt-3 rounded border px-3 py-2 text-xs ${cls}`}>

@@ -112,7 +112,7 @@ export default async function InboxPage(): Promise<React.ReactElement> {
                         <div className="mt-2">
                           <Link
                             href={r.link_url}
-                            className="text-xs text-emerald-400 hover:text-emerald-300"
+                            className="text-xs text-success hover:text-emerald-300"
                           >
                             open →
                           </Link>

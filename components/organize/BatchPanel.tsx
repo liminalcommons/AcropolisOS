@@ -46,9 +46,9 @@ type Phase =
   | { tag: "error"; message: string };
 
 function confidenceColor(conf: number): string {
-  if (conf >= 0.8) return "bg-emerald-500";
-  if (conf >= 0.5) return "bg-amber-500";
-  return "bg-red-500";
+  if (conf >= 0.8) return "bg-success";
+  if (conf >= 0.5) return "bg-warning";
+  return "bg-destructive";
 }
 
 export function BatchPanel({ sources }: { sources: SourceGroup[] }): React.ReactElement {
@@ -180,7 +180,7 @@ export function BatchPanel({ sources }: { sources: SourceGroup[] }): React.React
               {mapped.map(([src, tgt]) => (
                 <tr key={src} className="border-t border-border/60">
                   <td className="py-1 pr-4 font-mono text-foreground">{src}</td>
-                  <td className="py-1 font-mono text-emerald-400">{tgt}</td>
+                  <td className="py-1 font-mono text-success">{tgt}</td>
                 </tr>
               ))}
               {phase.proposal.unmapped.map((src) => (
@@ -232,7 +232,7 @@ export function BatchPanel({ sources }: { sources: SourceGroup[] }): React.React
             </p>
           )}
           {phase.result.errors > 0 && (
-            <p className="text-rose-400">
+            <p className="text-destructive">
               {phase.result.errors} error{phase.result.errors !== 1 ? "s" : ""}
               {phase.result.first_error && (
                 <span className="font-mono"> — {phase.result.first_error.slice(0, 120)}</span>
@@ -247,7 +247,7 @@ export function BatchPanel({ sources }: { sources: SourceGroup[] }): React.React
         </div>
       )}
 
-      {phase.tag === "error" && <p className="text-xs text-rose-400 font-mono">{phase.message}</p>}
+      {phase.tag === "error" && <p className="text-xs text-destructive font-mono">{phase.message}</p>}
 
       {selected && phase.tag === "idle" && (
         <p className="text-[10px] text-muted-foreground/70">

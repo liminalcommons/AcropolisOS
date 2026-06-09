@@ -63,6 +63,9 @@ export function growDecisionToDiffs(decision: GrowDecision, ontology: Ontology):
       const ot: ObjectType = diff.new_object_types[pascal] ?? { properties: {} };
       ot.properties[field] = optionalString();
       diff.new_object_types[pascal] = ot;
+      // Receipts-before-consent: carry the rows that justified THIS field. Key by
+      // Type.field (not Type) so two grown fields on one type keep separate receipts.
+      diff.evidence[`${pascal}.${field}`] = op.evidence;
     }
     if (Object.keys(diff.new_object_types).length > 0) additive = diff;
   }
@@ -77,7 +80,12 @@ export function growDecisionToDiffs(decision: GrowDecision, ontology: Ontology):
       const properties: ObjectType["properties"] = {};
       for (const f of gp.fields) {
         const field = sanitizeFieldName(f);
-        if (field) properties[field] = optionalString();
+        if (field) {
+          properties[field] = optionalString();
+          // Key by the SANITIZED field name so it matches the property key the
+          // consent card iterates; the whole new type cites the same gp.evidence.
+          diff.evidence[`${pascal}.${field}`] = gp.evidence;
+        }
       }
       // ObjectType requires >=1 property; guarantee one.
       if (Object.keys(properties).length === 0) properties.name = optionalString();

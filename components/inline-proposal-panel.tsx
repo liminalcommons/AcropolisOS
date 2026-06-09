@@ -256,6 +256,38 @@ export function InlineProposalPanel({
             </li>
           </ul>
         )}
+        {summary.evidenceByField.length > 0 ? (
+          <section
+            data-testid="diff-evidence"
+            className="space-y-1.5 border-t border-border pt-2"
+          >
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              receipts
+            </p>
+            {summary.evidenceByField.map(({ key, rows }) => (
+              <details
+                key={key}
+                className="rounded-md border border-border bg-card px-2 py-1.5"
+              >
+                <summary className="cursor-pointer text-foreground">
+                  <span className="font-medium">{key}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    — proposed because of {rows.length} row
+                    {rows.length === 1 ? "" : "s"} you dropped
+                  </span>
+                </summary>
+                <ul className="mt-1.5 space-y-0.5 pl-2 text-muted-foreground">
+                  {rows.map((ref) => (
+                    <li key={ref} className="font-mono text-[11px]">
+                      {ref}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ))}
+          </section>
+        ) : null}
       </div>
 
       <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-background/40 px-3 py-2">

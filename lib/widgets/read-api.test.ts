@@ -56,6 +56,10 @@ const steward: Actor = {
 interface StubDb {
   executeCalls: number;
   selectCalls: number;
+  /** Column-projection keys passed to the most recent db.select(cols) call.
+   *  undefined for a bare db.select() (the all-columns shape). Lets a test
+   *  assert that byDate projects ONLY [dateField, "id"], not every column. */
+  lastSelectCols: string[] | undefined;
   asDatabase(): Database;
 }
 
@@ -63,6 +67,7 @@ function makeStubDb(): StubDb {
   const stub = {
     executeCalls: 0,
     selectCalls: 0,
+    lastSelectCols: undefined as string[] | undefined,
     asDatabase(): Database {
       return this as unknown as Database;
     },
@@ -74,8 +79,10 @@ function makeStubDb(): StubDb {
       return [{ count: 7, full_name: "Sentinel", id: "row-1" }];
     },
     // count(no filter) + byDate() path: db.select(...).from(table)[.limit(n)]
-    select(_cols?: unknown) {
+    select(cols?: unknown) {
       this.selectCalls++;
+      this.lastSelectCols =
+        cols && typeof cols === "object" ? Object.keys(cols as Record<string, unknown>) : undefined;
       const rows = [{ count: 7, id: "row-1", from_date: "2026-05-25" }];
       const chain = {
         from(_t: unknown) {
@@ -181,6 +188,95 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
     });
   });
 
+  describe("byDate column projection (data-access hygiene)", () => {
+    // byDate buckets results by a single date field in-memory; it does NOT need
+    // every column. Projecting ONLY [dateField, "id"] mirrors the composition
+    // layer's hidden-column discipline (commit 80d76c3) — disciplined data access
+    // over the read-only fence. Member is a many-column type (full_name, email,
+    // phone, tier_role, started_at, notes); started_at is its declared date field.
+    it("projects ONLY [dateField, 'id'], not all columns", async () => {
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(
+        db.asDatabase(),
+        buildCanReadType(steward, ontology),
+        ontology,
+      );
+      const result = await api.byDate("member", "started_at", 10);
+      // The projection passed to db.select(...) must be exactly the date field
+      // plus id — never the full column set (no full_name / email / notes / …).
+      expect(db.lastSelectCols).toEqual(["started_at", "id"]);
+      // And the read still reaches SQL and returns rows (no behavioral change).
+      expect(db.selectCalls).toBeGreaterThan(0);
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it("a denied viewer still never touches SQL (projection does not weaken the gate)", async () => {
+      // member viewer on a restricted type (booking) → fail-closed BEFORE any
+      // db.select; the new projection must not introduce a pre-gate SQL path.
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(
+        db.asDatabase(),
+        buildCanReadType(member, ontology),
+        ontology,
+      );
+      const result = await api.byDate("booking", "from_date", 10);
+      expect(result).toEqual([]);
+      expect(db.selectCalls).toBe(0);
+      expect(db.lastSelectCols).toBeUndefined();
+    });
+
+    it("byDate with rowActionColumns param → projects required hidden columns alongside dateField", async () => {
+      // When calendar (or another kind) opts into row_actions and calls byDate with
+      // required hidden columns (id + resolver choices + confirm source), those
+      // columns must be projected alongside the dateField. This mirrors the
+      // composition layer's hidden-column discipline (commit 80d76c3) and guards
+      // against the latent regression where byDate's projection would silently omit
+      // affordance columns, leaving them undefined at render time. agent_blocker is
+      // steward-readable and carries pathways + confirm_action (the row-affordance
+      // columns), with created_at as a date field.
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(
+        db.asDatabase(),
+        buildCanReadType(steward, ontology),
+        ontology,
+      );
+      // agent_blocker's rowActionColumns would be ["id", "pathways", "confirm_action"]
+      // (its resolver/confirm row-action fields). byDate should project all three
+      // alongside the created_at date field, not just [created_at, id].
+      const result = await api.byDate("agent_blocker", "created_at", 10, [
+        "id",
+        "pathways",
+        "confirm_action",
+      ]);
+      // Verify the projection includes the dateField + all requested hidden columns.
+      expect(db.lastSelectCols).toContain("created_at");
+      expect(db.lastSelectCols).toContain("id");
+      expect(db.lastSelectCols).toContain("pathways");
+      expect(db.lastSelectCols).toContain("confirm_action");
+      expect(db.lastSelectCols).toHaveLength(4);
+      // And the read still reaches SQL and returns rows (no behavioral change).
+      expect(db.selectCalls).toBeGreaterThan(0);
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it("byDate without rowActionColumns → projects [dateField, 'id'] unchanged (backward-compat)", async () => {
+      // The default behavior (rowActionColumns omitted) is identical to today:
+      // exactly [dateField, "id"], never the full column set. This pins that the
+      // forward-compat parameter is purely additive and cannot regress the existing
+      // calendar projection.
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(
+        db.asDatabase(),
+        buildCanReadType(steward, ontology),
+        ontology,
+      );
+      const result = await api.byDate("member", "started_at", 10);
+      expect(db.lastSelectCols).toEqual(["started_at", "id"]);
+      expect(db.selectCalls).toBeGreaterThan(0);
+      expect(result.length).toBeGreaterThan(0);
+    });
+  });
+
   describe("public type (bed, read:[\"*\"]) reaches SQL for BOTH roles", () => {
     it("member can read bed", async () => {
       const db = makeStubDb();
@@ -248,6 +344,78 @@ describe("read-api per-actor read permission gate (fail-closed)", () => {
       expect(result.columns).toContain("code");
       expect(result.rows.length).toBeGreaterThan(0);
       expect(db.executeCalls).toBeGreaterThan(0);
+    });
+  });
+
+  describe("communityIntelligence column projection (data-access hygiene)", () => {
+    // communityIntelligence fetches ALL agent_blocker rows to compute the five M3
+    // KPIs — but the pure compute (computeCommunityIntelligence → MetricBlockerRow)
+    // consumes ONLY 7 columns: status, created_at, resolved_at,
+    // resolved_via_pathway_id, reason_kind, blocked_actor_id, summary. A bare
+    // db.select() streams every agent_blocker column (detail, blocked_work_ref,
+    // resolution_mode, pathways, input_schema, confirm_action,
+    // resolved_by_action_audit_id, id) the metric never touches. Project EXACTLY
+    // the MetricBlockerRow contract instead — mirroring byDate's discipline and the
+    // 80d76c3 hidden-column pattern: the read layer fetches precisely what the
+    // compute consumes, never bulk raw rows. agent_blocker read perms are
+    // [steward, member_self], so a steward viewer reaches SQL.
+    const CONTRACT_COLUMNS = [
+      "status",
+      "created_at",
+      "resolved_at",
+      "resolved_via_pathway_id",
+      "reason_kind",
+      "blocked_actor_id",
+      "summary",
+    ];
+
+    it("projects ONLY the 7 MetricBlockerRow contract columns, not SELECT *", async () => {
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(
+        db.asDatabase(),
+        buildCanReadType(steward, ontology),
+        ontology,
+      );
+      await api.communityIntelligence();
+      // The projection passed to db.select(...) must be exactly the 7-column
+      // MetricBlockerRow contract — never a bare db.select() (lastSelectCols
+      // undefined) that streams every agent_blocker column.
+      expect(db.lastSelectCols).toEqual(CONTRACT_COLUMNS);
+      // No over-fetched columns leak into the projection.
+      for (const extra of [
+        "detail",
+        "blocked_work_ref",
+        "resolution_mode",
+        "pathways",
+        "input_schema",
+        "confirm_action",
+        "resolved_by_action_audit_id",
+      ]) {
+        expect(db.lastSelectCols).not.toContain(extra);
+      }
+    });
+
+    it("a denied viewer (member) never touches SQL — projection does not weaken the gate", async () => {
+      // agent_blocker read:[steward, member_self] — the coarse type gate denies a
+      // plain member BEFORE any db.select; the projection must not introduce a
+      // pre-gate SQL path.
+      const db = makeStubDb();
+      const api = createReadOnlyDataApi(
+        db.asDatabase(),
+        buildCanReadType(member, ontology),
+        ontology,
+      );
+      const metrics = await api.communityIntelligence();
+      // All-null KPIs (the "no data" value) and no SQL of any kind.
+      expect(metrics).toEqual({
+        autonomyRatio: null,
+        scenarioAcceptanceRate: null,
+        decisionLatencyMsMedian: null,
+        coordinationCoverage: null,
+        resolutionAccuracy: null,
+      });
+      expect(db.selectCalls).toBe(0);
+      expect(db.lastSelectCols).toBeUndefined();
     });
   });
 

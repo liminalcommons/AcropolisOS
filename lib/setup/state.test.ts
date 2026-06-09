@@ -2,7 +2,12 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { isSetupComplete, markSetupComplete, resolveInitialStep } from "./state";
+import {
+  isSetupComplete,
+  markSetupComplete,
+  resolveInitialStep,
+  resolveSetupProgress,
+} from "./state";
 
 let dir: string;
 let file: string;
@@ -100,5 +105,63 @@ describe("resolveInitialStep (B12 wizard resume)", () => {
     );
     await writeFile(usersFile, "not json", "utf8");
     expect(await resolveInitialStep({ envFile, usersFile })).toBe(2);
+  });
+});
+
+describe("resolveSetupProgress (per-step status for the wizard cards)", () => {
+  let envFile: string;
+  let usersFile: string;
+  beforeEach(() => {
+    envFile = path.join(dir, ".env");
+    usersFile = path.join(dir, "users.json");
+  });
+
+  it("reports nothing done on a fresh install", async () => {
+    expect(await resolveSetupProgress({ envFile, usersFile })).toEqual({
+      providerConfigured: false,
+      stewardExists: false,
+    });
+  });
+
+  it("reports provider done + steward done independently", async () => {
+    await writeFile(
+      envFile,
+      "LLM_PROVIDER=anthropic\nLLM_API_KEY=sk-x\n",
+      "utf8",
+    );
+    await writeFile(
+      usersFile,
+      JSON.stringify({ users: [{ id: "u1", email: "s@a.com" }] }),
+      "utf8",
+    );
+    expect(await resolveSetupProgress({ envFile, usersFile })).toEqual({
+      providerConfigured: true,
+      stewardExists: true,
+    });
+  });
+
+  it("reports provider done but steward NOT done (key set, no users yet)", async () => {
+    await writeFile(
+      envFile,
+      "LLM_PROVIDER=openai\nLLM_API_KEY=sk-z\n",
+      "utf8",
+    );
+    expect(await resolveSetupProgress({ envFile, usersFile })).toEqual({
+      providerConfigured: true,
+      stewardExists: false,
+    });
+  });
+
+  it("reports provider NOT done when key is missing for a non-ollama provider", async () => {
+    await writeFile(envFile, "LLM_PROVIDER=anthropic\n", "utf8");
+    await writeFile(
+      usersFile,
+      JSON.stringify({ users: [{ id: "u1", email: "s@a.com" }] }),
+      "utf8",
+    );
+    expect(await resolveSetupProgress({ envFile, usersFile })).toEqual({
+      providerConfigured: false,
+      stewardExists: true,
+    });
   });
 });

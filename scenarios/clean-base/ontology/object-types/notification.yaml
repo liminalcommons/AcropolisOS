@@ -1,0 +1,36 @@
+Notification:
+  kind: concept
+  description: |
+    An in-app inbox row delivered to a Member. Written by the notify_member
+    side-effect dispatcher whenever an action declares notify_member in its
+    side_effects list. Members read their own inbox at /inbox; stewards can
+    write rows on behalf of anyone (operational use).
+  title_property: title
+  permissions:
+    # M4.1: members see ONLY their own inbox (member_self resolves
+    # recipient_member_id against actor.userId in the row-ownership check
+    # in lib/ontology/ctx.ts). Stewards have unfiltered read for ops.
+    read: ["steward", "member_self"]
+    write: ["steward", "member_self"]
+  properties:
+    id:
+      type: uuid
+      primary_key: true
+    recipient_member_id:
+      type: ref
+      target: Member
+    kind:
+      type: string
+      description: Action type or category that produced this notification
+    title:
+      type: string
+    body:
+      type: string
+    link_url:
+      type: string
+      required: false
+    created_at:
+      ref: created_at
+    read_at:
+      type: timestamp
+      required: false

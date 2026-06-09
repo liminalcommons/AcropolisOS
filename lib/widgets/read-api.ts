@@ -21,6 +21,7 @@
 //   (e) SELECT-only — no insert/update/delete anywhere in this file.
 
 import { getTableName, sql } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import type { Database } from "@/lib/db/client";
 import type { Actor } from "@/lib/ctx";
 import { actorMatchesTokens, buildObjectPermissionsMap } from "@/lib/ontology/ctx";
@@ -167,11 +168,22 @@ export interface ReadOnlyDataApi {
    * SELECT all columns for a given ontology type ordered in DB order.
    * Useful for calendar widgets that bucket results by a date field in-memory.
    * Unknown types or invalid date fields return [].
+   *
+   * Optional rowActionColumns parameter for forward-compat with future
+   * row_actions support on the calendar kind (derive-board.ts §116-129; the
+   * calendar branch is a future row_actions candidate, where data_table already
+   * is). When provided, they are merged into the projection (set-union with
+   * [dateField, "id"]) so the row affordances always have the hidden columns
+   * (row id + resolver choices + confirm source) they read from — mirroring the
+   * data_table path's hidden-column discipline (commit 80d76c3) and guarding the
+   * latent regression where calendar row_actions would render with undefined
+   * pathways. Unknown columns are dropped by the same field whitelist.
    */
   byDate(
     type: string,
     dateField: string,
     limit?: number,
+    rowActionColumns?: string[],
   ): Promise<Record<string, unknown>[]>;
 
   /**
@@ -379,7 +391,7 @@ export function createReadOnlyDataApi(
     },
 
     // ── byDate ─────────────────────────────────────────────────────────────────
-    async byDate(type, dateField, limit = 50) {
+    async byDate(type, dateField, limit = 50, rowActionColumns) {
       const resolved = resolveType(type);
       if (!resolved) return [];
       // PERMISSION GATE (fail-closed): same safe-empty as unknown type; pre-SQL.
@@ -390,12 +402,38 @@ export function createReadOnlyDataApi(
       if (!allowed.has(dateField)) return [];
 
       const safeLimit = Math.min(Math.max(1, limit), 200);
-      const table = tableFor(resolved);
+      const table = tableFor(resolved) as unknown as Record<string, PgColumn>;
 
-      // drizzle typed select — no raw column list needed
+      // COLUMN-PROJECTION DISCIPLINE: byDate buckets rows by a single date field
+      // in-memory — it needs ONLY that field plus the id. Project EXACTLY those
+      // columns instead of SELECT * so a many-field type (Member, Event) does
+      // not stream every column over the wire. This mirrors the composition
+      // layer's hidden-column discipline (commit 80d76c3): the read layer fetches
+      // precisely what the widget consumes, nothing more. dateField is already
+      // verified against the ontology field whitelist above, and resolveType
+      // guarantees a real table object, so table[dateField] / table.id are
+      // defined Drizzle columns. Stable key order [dateField, "id", ...] is preserved.
+      //
+      // Optional rowActionColumns parameter for forward-compat with future
+      // row_actions support on the calendar kind (derive-board.ts §116-129). When
+      // provided, merges them into the projection (set-union with [dateField, "id"])
+      // so the affordances always have the columns they read from — identical
+      // discipline to the data_table path (rowActionColumns() in derive-board.ts).
+      // Each requested column is run through the SAME ontology field whitelist
+      // (safeColumns) so an unknown column can never reach SQL; only validated,
+      // already-present-in-table columns are projected.
+      const projectionCols: string[] = [dateField, "id"];
+      if (rowActionColumns && rowActionColumns.length > 0) {
+        for (const c of safeColumns(resolved, rowActionColumns)) {
+          if (!projectionCols.includes(c)) projectionCols.push(c);
+        }
+      }
+      const projection: Record<string, PgColumn> = {};
+      for (const c of projectionCols) projection[c] = table[c];
+
       const rows = await db
-        .select()
-        .from(table)
+        .select(projection)
+        .from(table as unknown as AnyTable)
         .limit(safeLimit) as Record<string, unknown>[];
 
       return rows;
@@ -417,9 +455,30 @@ export function createReadOnlyDataApi(
       if (!resolved || !canReadType(resolved)) return NULL_METRICS;
 
       // ALL agent_blocker rows (the KPIs span open + closed). Typed drizzle select.
+      //
+      // COLUMN-PROJECTION DISCIPLINE: computeCommunityIntelligence consumes ONLY the
+      // MetricBlockerRow contract — 7 columns. agent_blocker carries many more
+      // (detail, blocked_work_ref, resolution_mode, pathways, input_schema,
+      // confirm_action, resolved_by_action_audit_id, id) the metric never reads.
+      // Project EXACTLY those 7 columns instead of SELECT * so a large steward
+      // board does not stream every blocker column over the wire. This mirrors
+      // byDate's projection and the composition layer's hidden-column discipline
+      // (commit 80d76c3): the read layer fetches precisely what the compute
+      // consumes, nothing more. resolveType guarantees a real table object, so each
+      // table[col] is a defined Drizzle column. Stable key order matches the
+      // MetricBlockerRow mapping below.
+      const blockerTable = tableFor(resolved) as unknown as Record<string, PgColumn>;
       const blockerRows = (await db
-        .select()
-        .from(tableFor(resolved))
+        .select({
+          status: blockerTable.status,
+          created_at: blockerTable.created_at,
+          resolved_at: blockerTable.resolved_at,
+          resolved_via_pathway_id: blockerTable.resolved_via_pathway_id,
+          reason_kind: blockerTable.reason_kind,
+          blocked_actor_id: blockerTable.blocked_actor_id,
+          summary: blockerTable.summary,
+        })
+        .from(blockerTable as unknown as AnyTable)
         .limit(2000)) as Record<string, unknown>[];
       const toIso = (v: unknown): string | null =>
         v instanceof Date ? v.toISOString() : typeof v === "string" ? v : null;

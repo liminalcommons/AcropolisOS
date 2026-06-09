@@ -29,7 +29,7 @@ import { readOrgDashboard, adminDefaultBoard } from "@/lib/org-dashboard/store";
 import { resolveApprovedViews } from "@/lib/views/resolve";
 import { mergeApprovedIntoFloor } from "@/lib/views/merge";
 import { PgApprovedViewsRegistry } from "@/lib/views/registry-pg";
-import { buildCanReadType } from "@/lib/widgets/read-api";
+import { buildCanReadType, createReadOnlyDataApi } from "@/lib/widgets/read-api";
 import { addableWidgets } from "@/lib/widgets/arrange";
 import { readOrgProfile } from "@/lib/org-profile/store";
 import { OrgNameEditor } from "@/components/org/org-name-editor";
@@ -124,32 +124,33 @@ export default async function Home({
       previewing ? (requested as string) : undefined,
     );
 
-    let widgets: ResolvedWidget[] = [];
-    try {
-      let descriptors: unknown[];
-      if (previewing) {
-        // Preview another role's slice — the DERIVED board for that lens.
-        descriptors = deriveDefaultBoard(ontology, canReadType, { admin: false });
+    // No board-level catch: readOrgDashboard is fail-soft, the optional blocker
+    // count keeps its own .catch(() => 0), and per-widget binding failures are
+    // already status:"error" widgets (lib/widgets). A genuine DB/ontology outage
+    // here PROPAGATES to app/error.tsx — an empty board must never mask a broken
+    // one (the totality-of-states keystone).
+    let descriptors: unknown[];
+    if (previewing) {
+      descriptors = deriveDefaultBoard(ontology, canReadType, { admin: false });
+    } else {
+      const stored = await readOrgDashboard();
+      if (stored.widgets.length > 0) {
+        descriptors = stored.widgets;
       } else {
-        // The steward's own board: stored composition wins, else the derived
-        // admin floor (veto-queue + per-type metrics/tables) + org approved views.
-        const stored = await readOrgDashboard();
-        if (stored.widgets.length > 0) {
-          descriptors = stored.widgets;
-        } else {
-          const floor = adminDefaultBoard(ontology, canReadType);
-          const approved = await resolveApprovedViews(
-            new PgApprovedViewsRegistry(db),
-            { id: actor.userId, role: actor.role },
-            canReadType,
-          );
-          descriptors = mergeApprovedIntoFloor(floor, approved);
-        }
+        const api = createReadOnlyDataApi(db, canReadType, ontology);
+        const blockerCount = await api.count("agent_blocker").catch(() => 0);
+        const floor = adminDefaultBoard(ontology, canReadType, {
+          hasBlockerHistory: blockerCount > 0,
+        });
+        const approved = await resolveApprovedViews(
+          new PgApprovedViewsRegistry(db),
+          { id: actor.userId, role: actor.role },
+          canReadType,
+        );
+        descriptors = mergeApprovedIntoFloor(floor, approved);
       }
-      widgets = await resolveDescriptors(db, descriptors, canReadType);
-    } catch {
-      // Non-fatal — renders empty state if resolution fails.
     }
+    const widgets: ResolvedWidget[] = await resolveDescriptors(db, descriptors, canReadType);
 
     const orgProfile = await readOrgProfile();
 
@@ -168,7 +169,7 @@ export default async function Home({
           </div>
 
           {previewing ? (
-            <p className="text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2">
+            <p className="text-xs text-warning/90 bg-warning/10 border border-warning/30 rounded-md px-3 py-2">
               Viewing as <span className="font-medium">{effectiveRole}</span>.{" "}
               <Link href="/" className="underline hover:text-amber-200">
                 Back to your board
@@ -232,17 +233,14 @@ export default async function Home({
 
   const me = memberRows[0];
   const canReadType = buildCanReadType(actor, ontology);
-  let widgets: ResolvedWidget[] = [];
-  try {
-    widgets = await resolvePerUserDashboard(
-      db,
-      { id: me.id, tier_role: me.tier_role },
-      canReadType,
-      new PgApprovedViewsRegistry(db),
-    );
-  } catch {
-    // Non-fatal — renders empty dashboard if resolution fails.
-  }
+  // No catch: a genuine resolution failure PROPAGATES to app/error.tsx rather
+  // than rendering a misleading empty slice (totality-of-states keystone).
+  const widgets: ResolvedWidget[] = await resolvePerUserDashboard(
+    db,
+    { id: me.id, tier_role: me.tier_role },
+    canReadType,
+    new PgApprovedViewsRegistry(db),
+  );
 
   return (
     <div className="font-sans">

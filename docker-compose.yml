@@ -50,7 +50,11 @@ services:
       # installs (e.g. AUTH_URL=https://acropolisos.example.com behind a
       # reverse proxy).
       AUTH_TRUST_HOST: "true"
-      AUTH_URL: "http://localhost:3030"
+      # Behind the cloudflared tunnel (acropolisos.castalia.one). AuthJS uses this
+      # as the canonical base, so post-login redirects + session cookies land on
+      # the public host instead of localhost:3030 (which a remote browser can't
+      # reach). Revert to http://localhost:3030 for purely-local use.
+      AUTH_URL: "https://acropolisos.castalia.one"
       # Inngest client defaults to "cloud mode" and complains about a
       # missing signing key on every request. We ship a self-hosted Inngest
       # dev server in this compose, so dev mode is correct here.
@@ -88,6 +92,19 @@ services:
       # the baked seed/ dir. Bind-mount so the dev container sees them without an
       # image rebuild (the Dockerfile COPYs scenarios/ for prod images).
       - ./scenarios:/app/scenarios
+      # Install-manifest files, read-only. The Dockerfile runner stage COPYs only
+      # source dirs (and routes docker-entrypoint.sh to /usr/local/bin), so none
+      # of these five live in /app of the runtime image. The in-container install
+      # suite (lib/install/compose.test.ts) reads them via readManifest(); without
+      # these mounts it could only pass after a transient `docker cp`, which is a
+      # non-reproducible green. Mounting them read-only makes any `compose up`
+      # reproduce the suite with zero cp. `:ro` so the container never mutates the
+      # operator's manifests.
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
+      - ./Dockerfile:/app/Dockerfile:ro
+      - ./docker-entrypoint.sh:/app/docker-entrypoint.sh:ro
+      - ./.dockerignore:/app/.dockerignore:ro
+      - ./.env.example:/app/.env.example:ro
       # Protect the compiled .next/ dir from host-side shadowing.
       - nexttmp:/app/.next
     ports:
@@ -103,6 +120,47 @@ services:
       timeout: 3s
       retries: 12
       start_period: 20s
+
+  # Discord Gateway worker (Phase E) — an ALWAYS-ON, INBOUND-ONLY service that
+  # gives Discord full Telegram parity. It holds DISCORD_BOT_TOKEN at runtime and
+  # opens a persistent Gateway websocket (Guilds + GuildMessages + MessageContent
+  # intents), depositing each guild message into raw_inbox via the SAME data-only
+  # ingest path the Telegram webhook uses. Reuses the app image (discord.js is a
+  # prod dep, tsx a devDep — both already installed) and shares the same Postgres.
+  #
+  # INERT WHEN UNSET: with no DISCORD_BOT_TOKEN in .env the worker logs
+  # "Discord Gateway idle (no token)" and idles without connecting or crashing
+  # (workers/discord-gateway/index.ts main()), mirroring the webhook inert-503
+  # ethos. The token is supplied ONLY via the gitignored .env (env_file) — it is
+  # NEVER hardcoded here. Set it + enable MESSAGE_CONTENT, then recreate this
+  # service: docker compose up -d --no-deps acropolisos-discord-gateway
+  acropolisos-discord-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: acropolisos-discord-gateway
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://acropolisos:acropolisos@postgres:5432/acropolisos
+      NODE_ENV: development
+      # main() only fires when this flag is set, so a plain import (vitest/tsc)
+      # stays side-effect-free; the worker process sets it to actually connect.
+      WORKER_ENTRY: discord-gateway
+    # DISCORD_BOT_TOKEN comes from .env ONLY (gitignored). When absent the worker
+    # is inert. No token is ever written here.
+    env_file:
+      - .env
+    # Run the worker from source via tsx (resolves the @/ tsconfig path alias).
+    command: npx tsx workers/discord-gateway/index.ts
+    volumes:
+      # The worker + its @/lib imports + the path-alias tsconfig, bind-mounted so
+      # host edits are picked up without an image rebuild (dev parity with app).
+      - ./workers:/app/workers
+      - ./lib:/app/lib
+      - ./tsconfig.json:/app/tsconfig.json
 
   inngest:
     image: inngest/inngest:latest

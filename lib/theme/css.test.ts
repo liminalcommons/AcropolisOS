@@ -12,6 +12,6 @@ describe("tokenSetToCssVars", () => {
   });
   it("produces exactly one var per token key", () => {
     const vars = tokenSetToCssVars(BASE_TOKENS);
-    expect(Object.keys(vars)).toHaveLength(18);
+    expect(Object.keys(vars)).toHaveLength(25);
   });
 });

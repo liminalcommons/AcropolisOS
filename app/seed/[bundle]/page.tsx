@@ -86,7 +86,7 @@ export default async function BundleIndexPage({
           <tbody>
             {tables.map((t) => (
               <tr key={t.table_name} className="border-t border-border">
-                <td className="py-2 pr-3 font-mono text-emerald-300">
+                <td className="py-2 pr-3 font-mono text-success">
                   {t.table_name}
                 </td>
                 <td className="py-2 pr-3 font-mono text-foreground">
@@ -96,7 +96,7 @@ export default async function BundleIndexPage({
                   {t.row_count > 0 ? (
                     <Link
                       href={`/seed/${bundle}/${t.table_name}`}
-                      className="text-emerald-400 hover:text-emerald-300"
+                      className="text-success hover:text-emerald-300"
                     >
                       open →
                     </Link>

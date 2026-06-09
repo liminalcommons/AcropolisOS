@@ -109,8 +109,11 @@ export async function findDuplicates(
   ]));
   const colList = selectCols.map((c) => `"${c}"`).join(", ");
 
+  // ORDER BY "id" ASC makes the candidate set deterministic across runs — an
+  // unordered LIMIT 2000 returned rows in physical heap order, so tie-scored
+  // candidates ranked differently run to run (non-reproducible dedup).
   const rows = await db.execute(
-    sql.raw(`SELECT ${colList} FROM "${tableName}" LIMIT 2000`),
+    sql.raw(`SELECT ${colList} FROM "${tableName}" ORDER BY "id" ASC LIMIT 2000`),
   ) as unknown as Array<Record<string, unknown>>;
 
   // rows may come back as { rows: [...] } (drizzle postgres.js shape) or as the array itself
@@ -162,7 +165,8 @@ export async function findDuplicates(
     }
   }
 
-  // Sort by score desc, cap at 5
-  scored.sort((a, b) => b.score - a.score);
+  // Sort by score desc, tie-break by id asc so equal-score candidates have a
+  // stable, reproducible order (independent of DB row arrival), then cap at 5.
+  scored.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
   return scored.slice(0, 5);
 }

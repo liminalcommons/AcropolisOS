@@ -2,6 +2,7 @@ import { isSetupComplete } from "@/lib/setup/state";
 import { getSetupFile } from "@/lib/setup/config";
 import { FileUserStore } from "@/lib/auth/users";
 import { getUsersFile } from "@/lib/auth/config";
+import { mintMagicLink } from "@/lib/auth/magic-link";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -54,6 +55,27 @@ export async function POST(req: Request): Promise<Response> {
       { error: err instanceof Error ? err.message : String(err) },
       { status: 500 },
     );
+  }
+
+  // Auto-login the freshly-created first steward so the wizard proceeds without
+  // a separate manual sign-in. This is the ONLY auth-flow shortcut, and it is
+  // reachable only on this success path — the countStewards() === 0 guard above
+  // means a session is never established for anyone but the steward we just
+  // created. We mint a single-use magic link for that email and hand the token
+  // to next-auth signIn (the same authorize() the public magic-link path uses);
+  // signIn writes the session cookie via the Next cookies() store. Best-effort:
+  // a failure here (e.g. no request context) must not block steward creation,
+  // so the steward can always fall back to /signin.
+  try {
+    const origin = new URL(req.url).origin;
+    const { token } = await mintMagicLink({ email: user.email, baseUrl: origin });
+    // Lazy import: @/lib/auth eagerly constructs NextAuth (which pulls in
+    // next/server). Importing it here, only on this success path, keeps the
+    // route's module graph free of that dependency for the validation/409 paths.
+    const { signIn } = await import("@/lib/auth");
+    await signIn("credentials", { magicToken: token, redirect: false });
+  } catch {
+    // Swallow: the steward exists; sign-in can still happen manually at /signin.
   }
 
   return Response.json({ id: user.id, email: user.email, role: user.role });

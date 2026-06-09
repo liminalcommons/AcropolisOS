@@ -9,6 +9,17 @@ describe("tokens", () => {
       expect(BASE_TOKENS[k].length).toBeGreaterThan(0);
     }
   });
+  it("the vocabulary holds the 25 closed-color keys incl. semantic status", () => {
+    expect(TOKEN_KEYS).toHaveLength(25);
+    for (const k of [
+      "destructive-foreground",
+      "success", "success-foreground",
+      "warning", "warning-foreground",
+      "info", "info-foreground",
+    ] as const) {
+      expect(TOKEN_KEYS).toContain(k);
+    }
+  });
   it("isValidTokenSet accepts BASE_TOKENS", () => {
     expect(isValidTokenSet(BASE_TOKENS)).toBe(true);
   });

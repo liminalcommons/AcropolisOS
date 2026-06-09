@@ -1,0 +1,17 @@
+member:
+  kind: agent
+  properties:
+    name:
+      ref: name
+    email:
+      ref: email
+    since:
+      ref: since
+  description: A member of the community
+  permissions:
+    read:
+      - steward
+      - member
+    write:
+      - steward
+  title_property: name

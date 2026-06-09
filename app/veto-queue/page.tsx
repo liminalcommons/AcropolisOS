@@ -80,10 +80,10 @@ export default async function VetoQueuePage(): Promise<React.ReactElement> {
           <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Agent autonomy</p>
           {hasSplit ? (
             <p className="mt-1 text-sm text-foreground">
-              <span className="font-semibold text-emerald-400">{autoApplied}</span> routine{" "}
+              <span className="font-semibold text-success">{autoApplied}</span> routine{" "}
               {autoApplied === 1 ? "action" : "actions"} auto-applied{" "}
               <span className="text-muted-foreground">·</span>{" "}
-              <span className="font-semibold text-amber-300">{escalated}</span> escalated to you
+              <span className="font-semibold text-warning">{escalated}</span> escalated to you
             </p>
           ) : (
             <p className="mt-1 text-sm text-muted-foreground">No agent decisions recorded yet.</p>

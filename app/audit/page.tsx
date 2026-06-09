@@ -76,7 +76,7 @@ function OntologyTab({ rows }: { rows: AuditRow[] }): React.ReactElement {
             <td className="py-2 pr-3">
               {r.subject_type === "proposal" ? (
                 <Link
-                  className="text-emerald-400 hover:text-emerald-300"
+                  className="text-success hover:text-emerald-300"
                   href={`/proposals/${r.subject_id}`}
                 >
                   open
@@ -231,7 +231,7 @@ export default async function AuditPage({
               data-active={tab === t ? "true" : undefined}
               className={
                 tab === t
-                  ? "border-b-2 border-emerald-400 px-3 py-2 text-sm font-medium text-emerald-300"
+                  ? "border-b-2 border-emerald-400 px-3 py-2 text-sm font-medium text-success"
                   : "px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
               }
             >

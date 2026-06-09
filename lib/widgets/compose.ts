@@ -22,6 +22,7 @@ import {
   CATALOG_KINDS,
   WIDGET_CATALOG,
   validateWidgetConfig,
+  describeValidationError,
   type CatalogKind,
   type MetricData,
   type DataTableData,
@@ -45,11 +46,38 @@ export type ComposeDashboardResult =
   | { status: "ok"; persisted: number }
   | { status: "validation_error"; errors: Array<{ index: number; kind: string; error: string; detail?: unknown }> };
 
+// The single async-state discriminant the renderer dispatches on — the keystone
+// of the "totality of states" pillar. Set ONCE in the resolution seam so no
+// screen re-derives or swallows it:
+//   ok    — data present and non-empty
+//   empty — resolved cleanly, but the backing collection has no rows/entries/buckets
+//   drift — stored config no longer validates against the ontology (paired with
+//           validation_error) — the steward must SEE and fix the broken view
+//   error — the data binding threw at resolve time (paired with `error`) — one
+//           widget's failure no longer drops it or nukes the whole board
+export type WidgetStatus = "ok" | "empty" | "drift" | "error";
+
 export interface ResolvedWidget {
   id: string;
   kind: CatalogKind;
   config: unknown;
-  data: MetricData | DataTableData | RosterData | CalendarData;
+  status: WidgetStatus;
+  // Generic, VIEWER-SAFE message for a status:"error" widget. NEVER the raw
+  // exception (that is console.error'd server-side only) — no SQL/internal leak.
+  error?: { message: string };
+  // `null` on a non-OK widget — either structural drift (paired with
+  // validation_error: a type renamed/removed, a field deleted) OR a runtime load
+  // failure (status:"error", paired with `error`: the data binding threw). Either
+  // way the widget is SURFACED as a data-less error card, never silently dropped,
+  // so the steward SEES the broken/failed view (governance over silent mutation).
+  // Non-null on status "ok"/"empty".
+  data: MetricData | DataTableData | RosterData | CalendarData | null;
+  // Set when this widget's stored config failed validateWidgetConfig against the
+  // current ontology. Plain serializable strings only (the Zod-issue detail is
+  // NOT carried) so the error card hydrates without circular-ref / non-clonable
+  // payloads. `kind` is the validateWidgetConfig error code (e.g. "unknown_type",
+  // "unknown_columns"); `error` is a human-readable, type-naming message.
+  validation_error?: { kind: string; error: string };
   title?: string;
   // Populated only for data_table widgets opted into row_actions: the
   // ontology-derived one-click actions (e.g. dismiss_blocker → blocker_id) the
@@ -223,9 +251,24 @@ export async function resolveDashboard(
 
     const entry = WIDGET_CATALOG[kind];
 
-    // Re-validate config from storage (defensive — garbage in storage is skipped)
+    // Re-validate config from storage. On failure DO NOT drop the widget — a
+    // stored config that no longer validates is STRUCTURAL DRIFT (a type renamed/
+    // removed, a field deleted). Surface it as a data-less error widget so the
+    // steward SEES the broken view instead of it silently vanishing (governance
+    // over silent mutation).
     const validation = validateWidgetConfig(kind, descriptor.config, ontology);
-    if (!validation.ok) continue;
+    if (!validation.ok) {
+      resolved.push({
+        id: descriptor.id,
+        kind,
+        config: descriptor.config,
+        data: null,
+        status: "drift",
+        validation_error: describeValidationError(validation),
+        title: descriptor.title,
+      });
+      continue;
+    }
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -235,12 +278,45 @@ export async function resolveDashboard(
         kind,
         config: descriptor.config,
         data,
+        status: isEmptyWidgetData(kind, data) ? "empty" : "ok",
         title: descriptor.title,
       });
-    } catch {
-      // Skip widgets whose queryBinding throws — don't crash the whole dashboard
+    } catch (e) {
+      console.error(`[widget:${kind}] resolve failed`, e);
+      resolved.push({
+        id: descriptor.id,
+        kind,
+        config: descriptor.config,
+        data: null,
+        status: "error",
+        error: { message: "This widget could not be loaded." },
+        title: descriptor.title,
+      });
     }
   }
 
   return resolved;
+}
+
+// Is a SUCCESSFULLY-resolved widget's data structurally empty? metric kinds are
+// never "empty" (a count of 0 is a measurement); collection kinds are empty when
+// their backing array/map is empty. Pure — no IO, no ontology. Used by the seam
+// to set status:"empty" vs "ok".
+export function isEmptyWidgetData(
+  kind: CatalogKind,
+  data: MetricData | DataTableData | RosterData | CalendarData,
+): boolean {
+  switch (kind) {
+    case "metric":
+    case "intelligence_metric":
+      return false;
+    case "data_table":
+      return (data as DataTableData).rows.length === 0;
+    case "roster":
+      return (data as RosterData).entries.length === 0;
+    case "calendar":
+      return Object.keys((data as CalendarData).buckets).length === 0;
+    default:
+      return false;
+  }
 }

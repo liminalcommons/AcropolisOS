@@ -30,4 +30,12 @@ describe("validateContrast", () => {
     expect(r.ok).toBe(false);
     expect(r.failures.some((f) => f.pair === "foreground/background")).toBe(true);
   });
+  it("validates each semantic-status fg/bg pair (in the floor)", () => {
+    for (const pair of ["success", "warning", "info", "destructive"]) {
+      const bad = { ...BASE_TOKENS, [`${pair}-foreground`]: BASE_TOKENS[pair as keyof typeof BASE_TOKENS] };
+      const r = validateContrast(bad);
+      expect(r.ok, `${pair} pair not in floor`).toBe(false);
+      expect(r.failures.some((f) => f.pair === `${pair}-foreground/${pair}`)).toBe(true);
+    }
+  });
 });

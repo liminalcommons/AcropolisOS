@@ -7,12 +7,12 @@
 // and marks setup complete (409 if it already is — single-org installs lock).
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { ScenarioChoice } from "@/lib/setup/scenario-choices";
+import { decideInstallOutcome } from "./scenario-install-outcome";
 
-type Toast =
-  | { kind: "idle" }
-  | { kind: "ok"; message: string }
-  | { kind: "error"; message: string };
+// Success now navigates to the board, so the only toast left is an error one.
+type Toast = { kind: "idle" } | { kind: "error"; message: string };
 
 export function ScenarioPicker({
   choices,
@@ -21,6 +21,7 @@ export function ScenarioPicker({
   choices: ScenarioChoice[];
   alreadyComplete: boolean;
 }) {
+  const router = useRouter();
   const [selected, setSelected] = useState(
     choices.find((c) => c.default)?.name ?? choices[0]?.name ?? "",
   );
@@ -38,24 +39,13 @@ export function ScenarioPicker({
         const body = (await res.json().catch(() => ({}))) as {
           error?: unknown;
         };
-        if (res.ok) {
-          setToast({
-            kind: "ok",
-            message: `Installed "${selected}". Reload the app to see it.`,
-          });
-        } else if (res.status === 409) {
-          setToast({
-            kind: "error",
-            message: "This deployment is already set up — the scenario is locked.",
-          });
+        const outcome = decideInstallOutcome(res, body, selected);
+        if (outcome.kind === "navigate") {
+          // Install already ran codegen + migrations and marked setup complete;
+          // take the steward straight to the home board (no manual reload).
+          router.push(outcome.to);
         } else {
-          setToast({
-            kind: "error",
-            message:
-              typeof body.error === "string"
-                ? body.error
-                : `Install failed (${res.status})`,
-          });
+          setToast(outcome.toast);
         }
       } catch (err) {
         setToast({
@@ -123,14 +113,10 @@ export function ScenarioPicker({
               : "Install scenario"}
         </button>
       </div>
-      {toast.kind !== "idle" && (
+      {toast.kind === "error" && (
         <p
           role="status"
-          className={`mt-1 rounded border px-3 py-2 text-xs ${
-            toast.kind === "ok"
-              ? "border-emerald-800 bg-emerald-950/30 text-emerald-300"
-              : "border-rose-800 bg-rose-950/30 text-rose-300"
-          }`}
+          className="mt-1 rounded border border-rose-800 bg-rose-950/30 px-3 py-2 text-xs text-rose-300"
         >
           {toast.message}
         </p>

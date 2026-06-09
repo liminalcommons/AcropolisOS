@@ -1,5 +1,14 @@
 import { PromptButton } from "./prompt-button";
 
+// The core loop, made visible before any interaction. Domain-agnostic —
+// this is the substrate's universal "what happens next?", not org-specific copy.
+const JOURNEY_STEPS = [
+  "Chat with agent",
+  "Review proposal",
+  "Approve",
+  "Your board grows",
+] as const;
+
 const PROMPT_SEEDS: { label: string; prompt: string }[] = [
   {
     label: "A small housing co-op",
@@ -35,6 +44,32 @@ export function EmptyHome(): React.ReactElement {
           Tell the agent what your community is — members, assets, decisions —
           and it will propose a starter ontology you can accept or refine.
         </p>
+
+        {/* User-journey breadcrumb — the core loop made visible up front. */}
+        <ol
+          data-journey="breadcrumb"
+          className="mt-6 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs"
+        >
+          {JOURNEY_STEPS.map((step, i) => (
+            <li
+              key={step}
+              className="flex items-center gap-2"
+            >
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/40 px-2.5 py-1 text-muted-foreground">
+                <span className="font-mono text-[10px] text-primary">
+                  {i + 1}
+                </span>
+                {step}
+              </span>
+              {i < JOURNEY_STEPS.length - 1 && (
+                <span aria-hidden="true" className="text-muted-foreground/50">
+                  →
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           {PROMPT_SEEDS.map((seed) => (
             <PromptButton

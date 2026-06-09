@@ -53,6 +53,10 @@ import {
   pickPendingConfirmation,
   type ChatLikeMessage,
 } from "./chat/action-confirmation-state";
+import {
+  getPendingDiscussPrompt,
+  clearPendingDiscussPrompt,
+} from "@/lib/decisions/discuss-prompt-state";
 
 interface DroppedFile {
   name: string;
@@ -173,6 +177,25 @@ export function ChatPanel({
     };
     window.addEventListener("acropolisos:prompt", handler);
     return () => window.removeEventListener("acropolisos:prompt", handler);
+  }, []);
+
+  // Consume any prompt parked in sessionStorage by "Discuss with the agent"
+  // (decision-focus). The acropolisos:open-chat → acropolisos:prompt pair is
+  // racy when the dock was collapsed (this panel was unmounted, so it never
+  // heard the event). Reading the parked prompt on mount closes that gap
+  // without the setTimeout gamble. We clear it so a later mount doesn't refill.
+  useEffect(() => {
+    const pending = getPendingDiscussPrompt();
+    if (!pending) return;
+    clearPendingDiscussPrompt();
+    setInput(pending);
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (ta) {
+        ta.focus();
+        ta.setSelectionRange(pending.length, pending.length);
+      }
+    });
   }, []);
 
   const pollLatestProposal = useCallback(async (): Promise<void> => {

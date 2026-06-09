@@ -5,8 +5,9 @@
 // Sections:
 //   1. Violet "ask the agent" card — chat input linking to /dashboard/ask
 //      with the user's message pre-filled as a query string.
-//   2. OAuth chips row — 6 disabled stubs (n8n integration deferred to F2-step2).
-//   3. Functional file-drop strip — CSV/JSON → raw_inbox via /api/connect/upload.
+//   2. Channels entry — active link → /channels (live Telegram/Discord intake).
+//   3. OAuth chips row — 6 disabled stubs (n8n integration deferred to F2-step2).
+//   4. Functional file-drop strip — CSV/JSON → raw_inbox via /api/connect/upload.
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -63,7 +64,34 @@ export default async function ConnectPage(): Promise<React.ReactElement> {
           <ConnectAskCard />
         </section>
 
-        {/* ── Section 2: OAuth chips ── */}
+        {/* ── Section 2: Channels (live messaging intake) ── */}
+        <section className="space-y-3">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
+            Connect a messaging channel
+          </p>
+          <Link
+            href="/channels"
+            className="group flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:border-ring hover:bg-card/80"
+          >
+            <span aria-hidden="true" className="text-base">💬</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-foreground">
+                Channels
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Bind Telegram &amp; Discord groups so messages flow into the inbox.
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className="text-muted-foreground transition-colors group-hover:text-foreground"
+            >
+              →
+            </span>
+          </Link>
+        </section>
+
+        {/* ── Section 3: OAuth chips ── */}
         <section className="space-y-3">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">
             Or skip the chat — one-click for common sources
@@ -86,7 +114,7 @@ export default async function ConnectPage(): Promise<React.ReactElement> {
           </div>
         </section>
 
-        {/* ── Section 3: File drop strip ── */}
+        {/* ── Section 4: File drop strip ── */}
         <section className="space-y-3">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">
             Drop a file
