@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { signInWithLogto } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +19,12 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 /**
  * /signin is fully SERVER-RENDERED — no client component, no hydration
- * dependency. The Logto door is a real <form> POST to the Auth.js signin
- * endpoint carrying the CSRF token read from the cookie jar, so it works even
- * when client JS fails to hydrate (which it currently does app-wide — see the
- * hydration investigation). A plain form submit is a top-level navigation the
- * browser always honors.
+ * dependency. The Logto door is a <form> bound to a server action that calls
+ * Auth.js signIn() — Auth.js owns the CSRF handshake there, so it works for a
+ * completely fresh browser (a hand-rolled POST to /api/auth/signin/logto
+ * failed with MissingCSRF because nothing on this page ever SET the csrf
+ * cookie it scraped). A form submit is a top-level navigation the browser
+ * always honors, hydrated or not.
  */
 export default async function SignInPage({
   searchParams,
@@ -38,14 +39,6 @@ export default async function SignInPage({
     ? (ERROR_MESSAGES[errorParam] ?? "Sign-in failed. Please try again.")
     : null;
   const logtoEnabled = logtoConfigured();
-
-  // Auth.js stores the CSRF token in an httpOnly cookie as `<token>|<hash>`;
-  // the signin POST validates the submitted token against it. Read it here so
-  // the server-rendered form carries a matching value.
-  const jar = await cookies();
-  const csrf =
-    (jar.get("__Host-authjs.csrf-token") ?? jar.get("authjs.csrf-token"))
-      ?.value.split("|")[0] ?? "";
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -66,8 +59,7 @@ export default async function SignInPage({
           ) : null}
 
           {logtoEnabled ? (
-            <form method="POST" action="/api/auth/signin/logto">
-              <input type="hidden" name="csrfToken" value={csrf} />
+            <form action={signInWithLogto}>
               <input type="hidden" name="callbackUrl" value={callbackUrl} />
               <button
                 type="submit"
