@@ -1,0 +1,5 @@
+[
+  {"id": "wta-001", "label": "Sofía Mendieta — work-trade May/Jun 2026", "guest": "g-011", "bed_comp": "b-026", "hours_per_week": 20, "start_date": "2026-05-20", "end_date": "2026-07-01", "status": "active", "notes": "Returning work-trader; previously here Sep-Nov 2025"},
+  {"id": "wta-002", "label": "Tomáš Novák — work-trade May/Jun 2026", "guest": "g-012", "bed_comp": "b-027", "hours_per_week": 25, "start_date": "2026-05-15", "end_date": "2026-06-25", "status": "active", "notes": "Lead kitchen role; reliable; might extend"},
+  {"id": "wta-003", "label": "Anna Vogt — work-trade Apr-Jun 2026 (graduated to staff)", "guest": null, "bed_comp": "b-026", "hours_per_week": 20, "start_date": "2026-02-15", "end_date": "2026-04-15", "status": "completed", "notes": "Hired as paid staff after agreement completed — see hm-004"}
+]

@@ -1,0 +1,7 @@
+[
+  {"id": "ev-001", "title": "Welcome drink + house tour", "starts_at": "2026-06-01T19:00:00Z", "duration_hours": 1, "attendance_cap": 30, "organizer": "hm-004", "description": "Daily welcome — meet other guests, learn the house rules", "status": "completed"},
+  {"id": "ev-002", "title": "Old Town walking tour", "starts_at": "2026-06-03T10:30:00Z", "duration_hours": 3, "attendance_cap": 12, "organizer": "hm-002", "description": "Free walking tour, tips welcome", "status": "completed"},
+  {"id": "ev-003", "title": "Pasta night (family dinner)", "starts_at": "2026-06-04T20:00:00Z", "duration_hours": 2, "attendance_cap": 16, "organizer": "hm-006", "description": "Tomáš cooking — 8 EUR contribution, bring drinks", "status": "scheduled"},
+  {"id": "ev-004", "title": "Tapas night with Sofía", "starts_at": "2026-06-06T20:00:00Z", "duration_hours": 3, "attendance_cap": 20, "organizer": "hm-005", "description": "Cooking takeover from work-trader; signups at reception", "status": "scheduled"},
+  {"id": "ev-005", "title": "Sunday movie night", "starts_at": "2026-06-07T21:00:00Z", "duration_hours": 2, "attendance_cap": 25, "organizer": "hm-003", "description": "Projector in common room, popcorn provided", "status": "scheduled"}
+]

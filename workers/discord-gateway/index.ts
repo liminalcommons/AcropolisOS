@@ -162,6 +162,13 @@ export async function main(): Promise<void> {
   const token = process.env.DISCORD_BOT_TOKEN;
   if (!token) {
     console.log(IDLE_LOG);
+    // Idle FOREVER instead of returning: under compose `restart: unless-stopped`
+    // a clean exit restart-loops the container every few seconds — a fresh
+    // install (no token) would show a perpetually-"Restarting" service. A bare
+    // pending promise does NOT keep Node alive (the event loop drains with no
+    // active handles), so park on a max-delay interval — a real, ref'd handle.
+    setInterval(() => {}, 2_147_483_647);
+    await new Promise(() => {});
     return;
   }
 

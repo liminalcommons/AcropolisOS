@@ -38,6 +38,10 @@ COPY --from=builder /app/next.config.ts ./
 COPY --from=builder /app/next-env.d.ts ./
 COPY --from=builder /app/postcss.config.mjs ./
 COPY --from=builder /app/tsconfig.json ./
+# vitest.config.ts carries the @/ alias — without it, in-container `npx vitest
+# run` (the documented quality gate) fails to collect every test importing @/lib.
+COPY --from=builder /app/vitest.config.ts ./
+COPY --from=builder /app/workers ./workers
 COPY --from=builder /app/middleware.ts ./
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/package-lock.json* ./

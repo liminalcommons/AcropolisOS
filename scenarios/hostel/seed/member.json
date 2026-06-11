@@ -1,0 +1,8 @@
+[
+  {"id": "hm-001", "full_name": "Lucía Aranzubia", "email": "lucia@solana.es", "phone": "+34611112233", "tier_role": "manager", "started_at": "2022-04-01", "notes": "Owner-operator"},
+  {"id": "hm-002", "full_name": "Pablo Rey", "email": "pablo@solana.es", "phone": "+34611445566", "tier_role": "supervisor", "started_at": "2023-06-15", "notes": "Lead reception, lives on-site"},
+  {"id": "hm-003", "full_name": "Sara Mendoza", "email": "sara@solana.es", "phone": "+34622778899", "tier_role": "staff", "started_at": "2024-03-20", "notes": "Cleaning lead"},
+  {"id": "hm-004", "full_name": "Anna Vogt", "email": "anna.vogt@guest.local", "phone": "+49170555121", "tier_role": "staff", "started_at": "2026-04-15", "notes": "Work-trader graduated to staff after 8 weeks"},
+  {"id": "hm-005", "full_name": "Sofía Mendieta", "email": "sofia.m@example.org", "phone": "+541125998877", "tier_role": "work_trader", "started_at": "2026-05-20", "notes": "Active work-trader; mirrors Guest g-011. Member row enables Shift.claimed_by to point at her."},
+  {"id": "hm-006", "full_name": "Tomáš Novák", "email": "tomas.n@example.org", "phone": "+420776112233", "tier_role": "work_trader", "started_at": "2026-05-15", "notes": "Active work-trader; mirrors Guest g-012. Lead kitchen role."}
+]

@@ -50,11 +50,14 @@ services:
       # installs (e.g. AUTH_URL=https://acropolisos.example.com behind a
       # reverse proxy).
       AUTH_TRUST_HOST: "true"
-      # Behind the cloudflared tunnel (acropolisos.castalia.one). AuthJS uses this
-      # as the canonical base, so post-login redirects + session cookies land on
-      # the public host instead of localhost:3030 (which a remote browser can't
-      # reach). Revert to http://localhost:3030 for purely-local use.
-      AUTH_URL: "https://acropolisos.castalia.one"
+      # AuthJS canonical base. Defaults to localhost so a fresh `docker compose
+      # up` signs in out of the box; hosted installs (reverse proxy / tunnel,
+      # e.g. https://acropolisos.castalia.one) set AUTH_URL in the project .env
+      # so post-login redirects + session cookies land on the public host.
+      # NOTE: ${...} here is compose-time interpolation read from the project
+      # .env — a hard-coded `environment:` literal would override env_file and
+      # deadlock sign-in on every fresh local install.
+      AUTH_URL: "${AUTH_URL:-http://localhost:3030}"
       # Inngest client defaults to "cloud mode" and complains about a
       # missing signing key on every request. We ship a self-hosted Inngest
       # dev server in this compose, so dev mode is correct here.

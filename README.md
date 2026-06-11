@@ -6,8 +6,9 @@ Self-hostable AI-first ontology platform for small communities (50–200 people)
 > TypeScript reimagining. See [`CHANGELOG.md`](CHANGELOG.md) for the lineage
 > from earlier Python-based iterations (v1–v4).
 
-**Design spec:** [`docs/superpowers/specs/2026-05-15-acropolisos-design.md`](../../docs/superpowers/specs/2026-05-15-acropolisos-design.md) (commit `fcfe553b4`)
-**PRD:** [`tasks/prd-acropolisos.md`](../../tasks/prd-acropolisos.md)
+**Design specs:** [`docs/superpowers/specs/`](docs/superpowers/specs/) — start with
+[`2026-05-26-acropolisos-m3-autonomous-community-intelligence-design.md`](docs/superpowers/specs/2026-05-26-acropolisos-m3-autonomous-community-intelligence-design.md)
+**Delivery report:** [`DELIVERY_REPORT.md`](DELIVERY_REPORT.md)
 
 ## Stack
 

@@ -1,0 +1,222 @@
+[
+  {
+    "id": "sh-001",
+    "label": "Mon reception 08-14",
+    "kind": "reception",
+    "starts_at": "2026-06-01T08:00:00Z",
+    "duration_hours": 6,
+    "claimed_by": "hm-002",
+    "status": "done",
+    "notes": "",
+    "member_id": "hm-002"
+  },
+  {
+    "id": "sh-002",
+    "label": "Mon reception 14-22",
+    "kind": "reception",
+    "starts_at": "2026-06-01T14:00:00Z",
+    "duration_hours": 8,
+    "claimed_by": "hm-004",
+    "status": "done",
+    "notes": "",
+    "member_id": "hm-004"
+  },
+  {
+    "id": "sh-003",
+    "label": "Mon night audit 22-08",
+    "kind": "night_audit",
+    "starts_at": "2026-06-01T22:00:00Z",
+    "duration_hours": 10,
+    "claimed_by": "hm-002",
+    "status": "done",
+    "notes": "Sleeps on call",
+    "member_id": "hm-002"
+  },
+  {
+    "id": "sh-004",
+    "label": "Mon cleaning 10-14",
+    "kind": "cleaning",
+    "starts_at": "2026-06-01T10:00:00Z",
+    "duration_hours": 4,
+    "claimed_by": "hm-003",
+    "status": "done",
+    "notes": "",
+    "member_id": "hm-003"
+  },
+  {
+    "id": "sh-005",
+    "label": "Mon breakfast 07-10",
+    "kind": "breakfast",
+    "starts_at": "2026-06-01T07:00:00Z",
+    "duration_hours": 3,
+    "claimed_by": "hm-006",
+    "status": "done",
+    "notes": "Tomáš (work-trader)",
+    "member_id": "hm-006"
+  },
+  {
+    "id": "sh-006",
+    "label": "Tue reception 08-14",
+    "kind": "reception",
+    "starts_at": "2026-06-02T08:00:00Z",
+    "duration_hours": 6,
+    "claimed_by": "hm-002",
+    "status": "done",
+    "notes": "",
+    "member_id": "hm-002"
+  },
+  {
+    "id": "sh-007",
+    "label": "Tue reception 14-22",
+    "kind": "reception",
+    "starts_at": "2026-06-02T14:00:00Z",
+    "duration_hours": 8,
+    "claimed_by": "hm-005",
+    "status": "done",
+    "notes": "Sofía (work-trader)",
+    "member_id": "hm-005"
+  },
+  {
+    "id": "sh-008",
+    "label": "Tue cleaning 10-14",
+    "kind": "cleaning",
+    "starts_at": "2026-06-02T10:00:00Z",
+    "duration_hours": 4,
+    "claimed_by": "hm-003",
+    "status": "done",
+    "notes": "",
+    "member_id": "hm-003"
+  },
+  {
+    "id": "sh-009",
+    "label": "Tue breakfast 07-10",
+    "kind": "breakfast",
+    "starts_at": "2026-06-02T07:00:00Z",
+    "duration_hours": 3,
+    "claimed_by": "hm-006",
+    "status": "done",
+    "notes": "",
+    "member_id": "hm-006"
+  },
+  {
+    "id": "sh-010",
+    "label": "Wed reception 08-14",
+    "kind": "reception",
+    "starts_at": "2026-06-03T08:00:00Z",
+    "duration_hours": 6,
+    "claimed_by": "hm-004",
+    "status": "done",
+    "notes": "",
+    "member_id": "hm-004"
+  },
+  {
+    "id": "sh-011",
+    "label": "Wed cleaning 10-14",
+    "kind": "cleaning",
+    "starts_at": "2026-06-03T10:00:00Z",
+    "duration_hours": 4,
+    "claimed_by": "hm-005",
+    "status": "done",
+    "notes": "",
+    "member_id": "hm-005"
+  },
+  {
+    "id": "sh-012",
+    "label": "Wed laundry 14-17",
+    "kind": "laundry",
+    "starts_at": "2026-06-03T14:00:00Z",
+    "duration_hours": 3,
+    "claimed_by": "hm-005",
+    "status": "done",
+    "notes": "",
+    "member_id": "hm-005"
+  },
+  {
+    "id": "sh-013",
+    "label": "Thu reception 08-14",
+    "kind": "reception",
+    "starts_at": "2026-06-04T08:00:00Z",
+    "duration_hours": 6,
+    "claimed_by": "hm-002",
+    "status": "done",
+    "notes": "",
+    "member_id": "hm-002"
+  },
+  {
+    "id": "sh-014",
+    "label": "Thu cleaning 10-14",
+    "kind": "cleaning",
+    "starts_at": "2026-06-04T10:00:00Z",
+    "duration_hours": 4,
+    "claimed_by": "hm-003",
+    "status": "in_progress",
+    "notes": "",
+    "member_id": "hm-003"
+  },
+  {
+    "id": "sh-015",
+    "label": "Thu breakfast 07-10",
+    "kind": "breakfast",
+    "starts_at": "2026-06-04T07:00:00Z",
+    "duration_hours": 3,
+    "claimed_by": "hm-006",
+    "status": "done",
+    "notes": "",
+    "member_id": "hm-006"
+  },
+  {
+    "id": "sh-016",
+    "label": "Fri reception 08-14",
+    "kind": "reception",
+    "starts_at": "2026-06-05T08:00:00Z",
+    "duration_hours": 6,
+    "claimed_by": "hm-004",
+    "status": "claimed",
+    "notes": "",
+    "member_id": "hm-004"
+  },
+  {
+    "id": "sh-017",
+    "label": "Fri reception 14-22",
+    "kind": "reception",
+    "starts_at": "2026-06-05T14:00:00Z",
+    "duration_hours": 8,
+    "claimed_by": null,
+    "status": "open",
+    "notes": "Anna offsite — needs cover",
+    "member_id": "hm-002"
+  },
+  {
+    "id": "sh-018",
+    "label": "Fri night audit 22-08",
+    "kind": "night_audit",
+    "starts_at": "2026-06-05T22:00:00Z",
+    "duration_hours": 10,
+    "claimed_by": "hm-002",
+    "status": "claimed",
+    "notes": "",
+    "member_id": "hm-002"
+  },
+  {
+    "id": "sh-019",
+    "label": "Sat tapas night (host)",
+    "kind": "social",
+    "starts_at": "2026-06-06T20:00:00Z",
+    "duration_hours": 3,
+    "claimed_by": "hm-005",
+    "status": "claimed",
+    "notes": "Sofía hosting — kitchen takeover",
+    "member_id": "hm-005"
+  },
+  {
+    "id": "sh-020",
+    "label": "Sat cleaning 10-14",
+    "kind": "cleaning",
+    "starts_at": "2026-06-06T10:00:00Z",
+    "duration_hours": 4,
+    "claimed_by": null,
+    "status": "open",
+    "notes": "High-turnover Saturday — needs 2 people",
+    "member_id": "hm-002"
+  }
+]

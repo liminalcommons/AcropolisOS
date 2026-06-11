@@ -1,0 +1,14 @@
+[
+  {"id": "bk-001", "label": "Lena Petrov / D3-A2 / Jun 1-7", "guest": "g-001", "bed": "b-016", "from_date": "2026-06-01", "to_date": "2026-06-07", "rate_per_night": 22, "currency": "EUR", "source": "direct", "status": "checked_in"},
+  {"id": "bk-002", "label": "Hugo Sanderson / D2-A1 / Jun 1-3", "guest": "g-002", "bed": "b-007", "from_date": "2026-06-01", "to_date": "2026-06-03", "rate_per_night": 19, "currency": "EUR", "source": "hostelworld", "status": "completed"},
+  {"id": "bk-003", "label": "Marta Esposito / P1 / Jun 2-9", "guest": "g-003", "bed": "b-021", "from_date": "2026-06-02", "to_date": "2026-06-09", "rate_per_night": 58, "currency": "EUR", "source": "booking_com", "status": "checked_in"},
+  {"id": "bk-004", "label": "Joon-ho Park / D2-B1 / Jun 2-5", "guest": "g-004", "bed": "b-009", "from_date": "2026-06-02", "to_date": "2026-06-05", "rate_per_night": 19, "currency": "EUR", "source": "hostelworld", "status": "checked_in"},
+  {"id": "bk-005", "label": "Fatima El-Amin / D3-B1 / Jun 3-8", "guest": "g-005", "bed": "b-017", "from_date": "2026-06-03", "to_date": "2026-06-08", "rate_per_night": 22, "currency": "EUR", "source": "direct", "status": "checked_in"},
+  {"id": "bk-006", "label": "Caleb Rosenthal / D1-A1 / Jun 3-6", "guest": "g-006", "bed": "b-001", "from_date": "2026-06-03", "to_date": "2026-06-06", "rate_per_night": 21, "currency": "EUR", "source": "walk_in", "status": "checked_in"},
+  {"id": "bk-007", "label": "Nia Adesanya / D3-C1 / Jun 4-7", "guest": "g-007", "bed": "b-019", "from_date": "2026-06-04", "to_date": "2026-06-07", "rate_per_night": 22, "currency": "EUR", "source": "direct", "status": "checked_in"},
+  {"id": "bk-008", "label": "Magnus Tellefsen / P2-1 / Jun 4-11", "guest": "g-008", "bed": "b-022", "from_date": "2026-06-04", "to_date": "2026-06-11", "rate_per_night": 35, "currency": "EUR", "source": "booking_com", "status": "checked_in"},
+  {"id": "bk-009", "label": "Beatriz Carvalho / D2-C1 / Jun 5-8", "guest": "g-009", "bed": "b-011", "from_date": "2026-06-05", "to_date": "2026-06-08", "rate_per_night": 19, "currency": "EUR", "source": "hostelworld", "status": "confirmed"},
+  {"id": "bk-010", "label": "Daniyar Tursunov / D2-C2 / Jun 5-12", "guest": "g-010", "bed": "b-012", "from_date": "2026-06-05", "to_date": "2026-06-12", "rate_per_night": 19, "currency": "EUR", "source": "booking_com", "status": "no_show"},
+  {"id": "bk-011", "label": "Sofía Mendieta / S1-3 / WORK-TRADE / May 20 - Jul 1", "guest": "g-011", "bed": "b-026", "from_date": "2026-05-20", "to_date": "2026-07-01", "rate_per_night": 0, "currency": "EUR", "source": "work_trade", "status": "checked_in"},
+  {"id": "bk-012", "label": "Tomáš Novák / S1-4 / WORK-TRADE / May 15 - Jun 25", "guest": "g-012", "bed": "b-027", "from_date": "2026-05-15", "to_date": "2026-06-25", "rate_per_night": 0, "currency": "EUR", "source": "work_trade", "status": "checked_in"}
+]

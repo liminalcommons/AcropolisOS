@@ -1,0 +1,19 @@
+[
+  {"guest": "g-001", "event": "ev-001"},
+  {"guest": "g-002", "event": "ev-001"},
+  {"guest": "g-001", "event": "ev-002"},
+  {"guest": "g-003", "event": "ev-002"},
+  {"guest": "g-004", "event": "ev-002"},
+  {"guest": "g-005", "event": "ev-002"},
+  {"guest": "g-006", "event": "ev-002"},
+  {"guest": "g-001", "event": "ev-003"},
+  {"guest": "g-003", "event": "ev-003"},
+  {"guest": "g-005", "event": "ev-003"},
+  {"guest": "g-007", "event": "ev-003"},
+  {"guest": "g-008", "event": "ev-003"},
+  {"guest": "g-001", "event": "ev-004"},
+  {"guest": "g-003", "event": "ev-004"},
+  {"guest": "g-005", "event": "ev-004"},
+  {"guest": "g-008", "event": "ev-004"},
+  {"guest": "g-009", "event": "ev-004"}
+]

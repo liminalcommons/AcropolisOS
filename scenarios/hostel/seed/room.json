@@ -1,0 +1,8 @@
+[
+  {"id": "r-001", "code": "D1", "kind": "dorm_mixed", "capacity": 6, "floor": 1, "notes": "Quietest dorm, away from street"},
+  {"id": "r-002", "code": "D2", "kind": "dorm_mixed", "capacity": 8, "floor": 1, "notes": "Largest dorm; street-facing"},
+  {"id": "r-003", "code": "D3", "kind": "dorm_female", "capacity": 6, "floor": 2, "notes": ""},
+  {"id": "r-004", "code": "P1", "kind": "private", "capacity": 2, "floor": 2, "notes": "Double bed; en-suite"},
+  {"id": "r-005", "code": "P2", "kind": "private", "capacity": 2, "floor": 2, "notes": "Twin; shared bath"},
+  {"id": "r-006", "code": "S1", "kind": "staff", "capacity": 4, "floor": 3, "notes": "Staff + work-trader sleeping room"}
+]
