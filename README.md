@@ -44,6 +44,37 @@ The compose stack bind-mounts `./ontology`, `./functions`, `./uploads`, and
 image. Postgres data persists in the `pgdata` named volume; the steward's
 setup marker lives in `appdata` at `/app/data`.
 
+Local sign-in works out of the box (`AUTH_URL` defaults to
+`http://localhost:3030`); hosted installs set `AUTH_URL` in `.env` to their
+public origin.
+
+## Milestone 3 repro (Autonomous Community Intelligence)
+
+Full demo from a fresh clone — seeds a hostel community, a governed decision
+lifecycle, a 300-member scale community, then runs the end-to-end narrative:
+
+```bash
+cp .env.example .env                 # set AUTH_SECRET (any base64 string) + LLM_API_KEY
+docker compose up                    # → http://localhost:3030/setup (first-run wizard)
+# Complete /setup, then sign in as steward@acropolisos.local / acropolis2026.
+docker exec acropolisos-app node scripts/seed-hostel.mjs
+docker exec acropolisos-app npx tsx scripts/seed-decision-lifecycle.ts
+docker exec acropolisos-app npx tsx scripts/seed-scale-community.ts
+docker exec acropolisos-app npx tsx scripts/demo-m3-narrative.ts
+```
+
+The steward board at `/` then shows the community-intelligence KPIs:
+**autonomy 73% · acceptance 100% · coverage 94% · accuracy 93%**
+(decision latency median 30 min). These values are deterministic for the
+seeded history and verified on independent fresh installs — full evidence in
+[`DELIVERY_REPORT.md`](DELIVERY_REPORT.md).
+
+Tests run in-container too (1653 green on a fresh clone):
+
+```bash
+docker exec acropolisos-app npx vitest run
+```
+
 ## Quality gates
 
 ```bash
