@@ -50,6 +50,8 @@ public origin.
 
 ## Milestone 3 repro (Autonomous Community Intelligence)
 
+![M3 demo — KPI board, decisions queue, ontology kinetic layer, proposal review, live agent Q&A](docs/media/acropolisos-m3-demo.gif)
+
 Full demo from a fresh clone — seeds a hostel community, a governed decision
 lifecycle, a 300-member scale community, then runs the end-to-end narrative:
 
