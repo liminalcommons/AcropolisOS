@@ -93,3 +93,7 @@ npm test
 - **Seeding a scenario (dev only):** `npm run codegen -- <bundle>` regenerates from `scenarios/<bundle>/ontology/`.
 
 > **Warning:** `npm run codegen` with no argument is **refused** — a bare run would regenerate from the `small-community` seed and **clobber** the richer live ontology. Always pass an explicit bundle name, e.g. `npm run codegen -- hostel`.
+
+## License
+
+[MIT](LICENSE) © Liminal Commons

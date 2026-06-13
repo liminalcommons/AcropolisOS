@@ -2,6 +2,7 @@
   "name": "@chora/acropolisos",
   "version": "5.0.0",
   "private": true,
+  "license": "MIT",
   "description": "acropolisOS v5 — self-hostable AI-first ontology platform for small communities",
   "scripts": {
     "dev": "next dev --port 3030",

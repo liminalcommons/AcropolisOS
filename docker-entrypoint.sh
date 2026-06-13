@@ -83,6 +83,24 @@ until PUSH_OUT=$(npx --no-install drizzle-kit push --force 2>&1); PUSH_RC=$?; ec
   sleep 2
 done
 
+# meeting_minute — a PLATFORM object type (ctx.ts guarantees it in every
+# ontology), but an object-type table push only creates on a fresh DB. When the
+# type was added to the platform contract AFTER an instance's DB already existed,
+# `drizzle-kit push` silently skips the new table on non-TTY stdin, so its
+# auto-composed board widget errors with "could not be loaded". Ensure it here,
+# AFTER push (so the FK target `event` exists), idempotently — a no-op on fresh
+# installs where push already created it, a heal on long-lived instances.
+echo "[entrypoint] ensuring meeting_minute platform table..."
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
+CREATE TABLE IF NOT EXISTS meeting_minute (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  title text NOT NULL,
+  body text NOT NULL,
+  event_id uuid NOT NULL REFERENCES event(id),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+SQL
+
 # Post-push schema verification — the ONLY reliable guard against drizzle-kit's
 # known behaviour of exiting 0 even when it silently skips a migration (e.g.
 # when it can't resolve a rename-vs-create prompt on a non-TTY). Even when
@@ -122,6 +140,10 @@ check_column "approved_views"     "descriptors"
 # it. Verifying a column here turns a missing table from a silent loss of the
 # allow-list into a loud boot failure.
 check_column "channel_bindings"   "external_id"
+# meeting_minute platform table (ensured above). Verifying it turns the
+# silent new-table skip into a loud boot failure on instances that predate
+# the type, instead of a perpetually-broken board widget.
+check_column "meeting_minute"     "event_id"
 
 if [ "$VERIFY_FAIL" -ne 0 ]; then
   echo "[entrypoint] FATAL: schema verification failed after push — one or more critical columns are absent." >&2
