@@ -120,3 +120,16 @@ docker exec acropolisos-app npx tsx scripts/seed-scale-community.ts      # 300 m
 docker exec acropolisos-app npx tsx scripts/demo-m3-narrative.ts         # full loop, asserted (the recording script)
 # Steward board at / then shows: autonomy 73% · acceptance 100% · coverage 94% · accuracy 93%
 ```
+
+---
+
+## Beyond Milestone 3 — Continued Development
+
+Milestone 3 is a delivery checkpoint, not an endpoint. Several communities we are
+part of now **depend on acropolisOS** in day-to-day operation, so the project will
+**continue to be improved and developed beyond this milestone** — driven by those
+communities' real needs rather than wound down at hand-off.
+
+**Keep an eye on the repository to receive updates:**
+[github.com/liminalcommons/AcropolisOS](https://github.com/liminalcommons/AcropolisOS)
+— watch / star the repo to follow ongoing releases.

@@ -94,6 +94,13 @@ npm test
 
 > **Warning:** `npm run codegen` with no argument is **refused** — a bare run would regenerate from the `small-community` seed and **clobber** the richer live ontology. Always pass an explicit bundle name, e.g. `npm run codegen -- hostel`.
 
+## Project status — actively developed
+
+Milestone 3 is a checkpoint, not an endpoint. Several communities we are part of
+now **depend on acropolisOS** in day-to-day use, so development **continues beyond
+Milestone 3** — driven by their real needs. **Watch / star this repo to receive
+updates** as new releases land.
+
 ## License
 
 [MIT](LICENSE) © Liminal Commons
